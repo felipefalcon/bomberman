@@ -5,7 +5,7 @@ import * as PIXI from 'pixi.js';
 
 // Load spritesheet from public path (e.g. /assets/player-spritesheet.png),
 // slice it into tileSize grid, detect non-empty tiles and return frames + mapping.
-export async function loadPlayerSprites(url = '/assets/player-spritesheet.png', tileSize = 32) {
+export async function loadPlayerSprites(url = `${import.meta.env.BASE_URL}assets/player-spritesheet.png`, tileSize = 32) {
   // load image
   const img = new Image();
   img.crossOrigin = 'anonymous';
