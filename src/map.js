@@ -15,7 +15,8 @@ export class TileMap {
     this.tilesetMapping = null;
     this.blockTexture = null;
     this.pillarTexture = null;
-    this.debugMode = false; // Desabilitado para debug
+    this.debugMode = false;
+    this.spriteMap = new Map(); // Track block/pillar sprites by tile position
 
     this._initPromise = this._init();
   }
@@ -70,94 +71,77 @@ export class TileMap {
         const isPilar = t === 1 && !isBorderWall;
         const isCrate = t === 2;
 
-        if (isPilar && this.pillarTexture) {
-          // Use pillar texture for internal walls
-          sprite = new PIXI.Sprite(this.pillarTexture);
-          sprite.anchor.set(0, 0); // Ensure anchor is at top-left
-          sprite.position.set(x * this.tileSize, y * this.tileSize);
-          sprite.scale.set(2, 2); // Scale from 16x16 to 32x32
-          sprite.roundPixels = true; // Pixel-perfect rendering
-          this.container.addChild(sprite);
-        } else if (isCrate && this.blockTexture) {
-          // Use block texture for destructible crates
-          sprite = new PIXI.Sprite(this.blockTexture);
-          sprite.anchor.set(0, 0); // Ensure anchor is at top-left
-          sprite.position.set(x * this.tileSize, y * this.tileSize);
-          sprite.scale.set(2, 2); // Scale from 16x16 to 32x32
-          sprite.roundPixels = true; // Pixel-perfect rendering
-          this.container.addChild(sprite);
-        } else if (this.tilesetFrames && this.tilesetFrames.length > 0) {
-          // Use tileset for border walls, floor, and fallback for pilars/crates
-          let frameIndex = 0;
-          if (t === 1) {
-            // Cantos (verificar primeiro)
-            if (x === 0 && y === 0) {
-              frameIndex = 1; // canto topo-esquerdo
-            } else if (x === this.cols - 1 && y === 0) {
-              frameIndex = 4; // canto topo-direito
-            } else if (x === 0 && y === this.rows - 1) {
-              frameIndex = 25; // canto fundo-esquerdo
-            } else if (x === this.cols - 1 && y === this.rows - 1) {
-              frameIndex = 28; // canto fundo-direito
-            }
-            // Paredes
-            else if (y === 0) {
-              frameIndex = 2; // parede topo
-            } else if (x === 0) {
-              frameIndex = 13; // parede esquerda
-            } else if (y === this.rows - 1) {
-              frameIndex = 26; // parede fundo
-            } else if (x === this.cols - 1) {
-              frameIndex = 16; // parede direita
-            } else {
-              frameIndex = 2; // pilares internos (fallback)
-            }
-          } else if (t === 2) {
-            frameIndex = 6; // crate (fallback)
+        // Always render ground/floor first
+        let frameIndex = 0;
+        if (t === 1) {
+          // Border walls (cantos e paredes)
+          if (x === 0 && y === 0) {
+            frameIndex = 1; // canto topo-esquerdo
+          } else if (x === this.cols - 1 && y === 0) {
+            frameIndex = 4; // canto topo-direito
+          } else if (x === 0 && y === this.rows - 1) {
+            frameIndex = 25; // canto fundo-esquerdo
+          } else if (x === this.cols - 1 && y === this.rows - 1) {
+            frameIndex = 28; // canto fundo-direito
+          } else if (y === 0) {
+            frameIndex = 2; // parede topo
+          } else if (x === 0) {
+            frameIndex = 13; // parede esquerda
+          } else if (y === this.rows - 1) {
+            frameIndex = 26; // parede fundo
+          } else if (x === this.cols - 1) {
+            frameIndex = 16; // parede direita
           } else {
-            frameIndex = 8; // chão
+            frameIndex = 8; // fallback: piso para pilares internos
           }
+        } else if (t === 2) {
+          frameIndex = 8; // crate: render floor under it
+        } else {
+          frameIndex = 8; // chão normal
+        }
 
+        if (this.tilesetFrames && this.tilesetFrames.length > 0) {
           sprite = new PIXI.Sprite(this.tilesetFrames[frameIndex]);
           sprite.x = x * this.tileSize;
           sprite.y = y * this.tileSize;
-          // Scale from 16x16 to 32x32
           sprite.scale.set(this.tileSize / 16, this.tileSize / 16);
-          sprite.roundPixels = true; // Pixel-perfect rendering
+          sprite.roundPixels = true;
           this.container.addChild(sprite);
+        }
 
-          // Debug: Renderizar número do frame
-          if (this.debugMode) {
-            const debugText = new PIXI.Text({
-              text: frameIndex.toString(),
-              style: {
-                fontFamily: 'Arial',
-                fontSize: 8,
-                fill: 0xffffff,
-                stroke: { color: 0x000000, width: 1 },
-              },
-            });
-            debugText.x = x * this.tileSize + 2;
-            debugText.y = y * this.tileSize + 2;
-            this.container.addChild(debugText);
-          }
-        } else {
-          // Fallback to graphics if tileset not loaded
-          const g = new PIXI.Graphics();
-          if (t === 1) {
-            g.rect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-            g.fill(0x666666);
-            g.stroke({ color: 0x444444, width: 1 });
-          } else if (t === 2) {
-            g.rect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-            g.fill(0x8B4513);
-            g.stroke({ color: 0x5A2E0C, width: 1 });
-          } else {
-            g.rect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-            g.fill(0xCCAA88);
-            g.stroke({ color: 0xB28A63, width: 1 });
-          }
-          this.container.addChild(g);
+        // Then render pillar or block on top of the ground
+        if (isPilar && this.pillarTexture) {
+          sprite = new PIXI.Sprite(this.pillarTexture);
+          sprite.anchor.set(0, 0);
+          sprite.position.set(x * this.tileSize, y * this.tileSize);
+          sprite.scale.set(2, 2);
+          sprite.roundPixels = true;
+          this.container.addChild(sprite);
+          this.spriteMap.set(`${x},${y}`, sprite); // Track pillar sprite
+        } else if (isCrate && this.blockTexture) {
+          sprite = new PIXI.Sprite(this.blockTexture);
+          sprite.anchor.set(0, 0);
+          sprite.position.set(x * this.tileSize, y * this.tileSize);
+          sprite.scale.set(2, 2);
+          sprite.roundPixels = true;
+          this.container.addChild(sprite);
+          this.spriteMap.set(`${x},${y}`, sprite); // Track block sprite
+        }
+
+        // Debug: Renderizar número do frame
+        if (this.debugMode && frameIndex !== undefined) {
+          const debugText = new PIXI.Text({
+            text: frameIndex.toString(),
+            style: {
+              fontFamily: 'Arial',
+              fontSize: 8,
+              fill: 0xffffff,
+              stroke: { color: 0x000000, width: 1 },
+            },
+          });
+          debugText.x = x * this.tileSize + 2;
+          debugText.y = y * this.tileSize + 2;
+          this.container.addChild(debugText);
         }
 
         this.tiles[y][x] = t;
@@ -186,27 +170,16 @@ export class TileMap {
 
   destroyTile(tx, ty) {
     if (!this.isDestructible(tx, ty)) return false;
-    this.tiles[ty][tx] = 0;
-    const index = ty * this.cols + tx;
-    const child = this.container.children[index];
-    if (child) this.container.removeChild(child);
-
-    // Create floor sprite or graphics
-    let sprite = null;
-    if (this.tilesetFrames && this.tilesetFrames.length > 0) {
-      sprite = new PIXI.Sprite(this.tilesetFrames[8]); // floor tile (frame 8)
-      sprite.x = tx * this.tileSize;
-      sprite.y = ty * this.tileSize;
-      sprite.scale.set(this.tileSize / 16, this.tileSize / 16);
-      sprite.roundPixels = true; // Pixel-perfect rendering
-    } else {
-      sprite = new PIXI.Graphics();
-      sprite.rect(tx * this.tileSize, ty * this.tileSize, this.tileSize, this.tileSize);
-      sprite.fill(0xCCAA88);
-      sprite.stroke({ color: 0xB28A63, width: 1 });
+    
+    // Remove block sprite if it exists
+    const spriteKey = `${tx},${ty}`;
+    const blockSprite = this.spriteMap.get(spriteKey);
+    if (blockSprite) {
+      this.container.removeChild(blockSprite);
+      this.spriteMap.delete(spriteKey);
     }
-
-    this.container.addChildAt(sprite, index);
+    
+    this.tiles[ty][tx] = 0;
     return true;
   }
 }

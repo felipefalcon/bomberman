@@ -4,30 +4,23 @@
 import * as PIXI from 'pixi.js';
 
 export async function loadPillarTexture(url = `${import.meta.env.BASE_URL}assets/pillar_1.png`) {
-  // load image
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = url;
+  try {
+    const texture = await PIXI.Assets.load(url);
+    
+    if (!texture) {
+      console.warn('Pillar texture not loaded');
+      return null;
+    }
 
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error('Failed to load pillar texture at ' + url));
-  });
+    // Set pixel-perfect rendering
+    if (texture.source) {
+      texture.source.scaleMode = 'nearest';
+    }
 
-  // draw to offscreen canvas
-  const canvas = document.createElement('canvas');
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-
-  // Don't apply color-key transparency - preserve original colors
-
-  const texture = PIXI.Texture.from(canvas);
-  if (texture.source) {
-    texture.source.scaleMode = 'nearest';
+    console.log('pillarLoader: loaded pillar texture', { width: texture.width, height: texture.height });
+    return texture;
+  } catch (error) {
+    console.error('Error loading pillar texture:', error);
+    return null;
   }
-
-  console.log('pillarLoader: loaded pillar texture', { width: img.width, height: img.height });
-  return texture;
 }

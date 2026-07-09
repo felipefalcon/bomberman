@@ -236,7 +236,7 @@ export class Game {
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.stage.removeChild(bomb.sprite);
 
-    const center = { tx: bomb.tx, ty: bomb.ty };
+    const center = { tx: bomb.tx, ty: bomb.ty, isCenter: true };
     this._createExplosion(center);
     this._destroyTileAt(center.tx, center.ty);
 
@@ -250,7 +250,7 @@ export class Game {
       const tx = bomb.tx + dir.dx;
       const ty = bomb.ty + dir.dy;
       if (!this.map.isWall(tx, ty)) {
-        this._createExplosion({ tx, ty });
+        this._createExplosion({ tx, ty, isCenter: false });
         this._destroyTileAt(tx, ty);
       }
     }
@@ -268,25 +268,70 @@ export class Game {
       ty: cell.ty,
       timer: 20,
       hasDamagedMonsters: false,
-      sprite: this._createExplosionSprite(cell.tx, cell.ty),
+      sprite: this._createExplosionSprite(cell.tx, cell.ty, cell.isCenter),
     };
     this.explosions.push(explosion);
     this.stage.addChild(explosion.sprite);
   }
 
-  _createExplosionSprite(tx, ty) {
+  _createExplosionSprite(tx, ty, isCenter = false) {
+    const container = new PIXI.Container();
+    const tileSize = this.tileSize;
+    
+    // Position container at the tile
+    container.x = tx * tileSize;
+    container.y = ty * tileSize;
+    
+    // Create single fire layer at this tile only, centered
     const gfx = new PIXI.Graphics();
-    gfx.rect(0, 0, this.tileSize, this.tileSize);
-    gfx.fill({ color: 0xFFCC33, alpha: 0.8 });
-    gfx.x = tx * this.tileSize;
-    gfx.y = ty * this.tileSize;
-    return gfx;
+    gfx.x = tileSize / 2;
+    gfx.y = tileSize / 2;
+    container.addChild(gfx);
+
+    // Animation state
+    container.userData = {
+      animFrame: 0,
+      sprites: [gfx],
+      isCenter: isCenter
+    };
+
+    return container;
   }
 
   _updateExplosions(delta) {
     const expire = [];
     for (const explosion of this.explosions) {
       explosion.timer -= delta;
+      
+      // Update explosion animation
+      const userData = explosion.sprite.userData;
+      userData.animFrame += 0.15; // Animation speed
+      
+      // Draw animated fire
+      for (const gfx of userData.sprites) {
+        gfx.clear();
+        
+        // Vary size and color based on animation frame
+        const frame = Math.floor(userData.animFrame) % 3;
+        const baseSize = this.tileSize * 0.8;
+        let size = baseSize + Math.sin(userData.animFrame * 0.3) * (baseSize * 0.15);
+        
+        // Color progression: yellow -> orange -> red
+        let color;
+        if (frame === 0) color = 0xFFFF00; // Yellow
+        else if (frame === 1) color = 0xFF8800; // Orange
+        else color = 0xFF3300; // Red
+        
+        // All explosions: pixelated squares
+        gfx.rect(-size / 2, -size / 2, size, size);
+        gfx.fill({ color: color, alpha: 0.9 });
+        
+        // Add glow effect
+        const glowSize = size * 1.3;
+        gfx.rect(-glowSize / 2, -glowSize / 2, glowSize, glowSize);
+        gfx.fill({ color: color, alpha: 0.3 });
+      }
+      
       if (this.player && !explosion.hasDamagedPlayer && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
         explosion.hasDamagedPlayer = true;
         this.player.takeDamage();

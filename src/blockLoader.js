@@ -4,30 +4,23 @@
 import * as PIXI from 'pixi.js';
 
 export async function loadBlockTexture(url = `${import.meta.env.BASE_URL}assets/block_1.png`) {
-  // load image
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = url;
+  try {
+    const texture = await PIXI.Assets.load(url);
+    
+    if (!texture) {
+      console.warn('Block texture not loaded');
+      return null;
+    }
 
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error('Failed to load block texture at ' + url));
-  });
+    // Set pixel-perfect rendering
+    if (texture.source) {
+      texture.source.scaleMode = 'nearest';
+    }
 
-  // draw to offscreen canvas
-  const canvas = document.createElement('canvas');
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-
-  // Don't apply color-key transparency - preserve original colors
-
-  const texture = PIXI.Texture.from(canvas);
-  if (texture.source) {
-    texture.source.scaleMode = 'nearest';
+    console.log('blockLoader: loaded block texture', { width: texture.width, height: texture.height });
+    return texture;
+  } catch (error) {
+    console.error('Error loading block texture:', error);
+    return null;
   }
-
-  console.log('blockLoader: loaded block texture', { width: img.width, height: img.height });
-  return texture;
 }
