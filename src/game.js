@@ -63,7 +63,7 @@ export class Game {
   _placeBomb() {
     const tx = Math.floor(this.player.sprite.x / this.tileSize);
     const ty = Math.floor(this.player.sprite.y / this.tileSize);
-    if (this.map.isWall(tx, ty)) return;
+    if (this.map.isBlocked(tx, ty)) return;
     if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return;
 
     const bomb = {
@@ -105,6 +105,7 @@ export class Game {
 
     const center = { tx: bomb.tx, ty: bomb.ty };
     this._createExplosion(center);
+    this._destroyTileAt(center.tx, center.ty);
 
     const directions = [
       { dx: 1, dy: 0 },
@@ -117,7 +118,14 @@ export class Game {
       const ty = bomb.ty + dir.dy;
       if (!this.map.isWall(tx, ty)) {
         this._createExplosion({ tx, ty });
+        this._destroyTileAt(tx, ty);
       }
+    }
+  }
+
+  _destroyTileAt(tx, ty) {
+    if (this.map.isDestructible(tx, ty)) {
+      this.map.destroyTile(tx, ty);
     }
   }
 

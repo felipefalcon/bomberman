@@ -85,7 +85,7 @@ export class Player {
     for (const c of corners) {
       const tx = Math.floor(c.x / this.tileSize);
       const ty = Math.floor(c.y / this.tileSize);
-      if (map.isWall(tx, ty)) return true;
+      if (map.isBlocked(tx, ty)) return true;
     }
     return false;
   }
