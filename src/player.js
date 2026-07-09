@@ -28,7 +28,11 @@ export class Player {
       this.sprite.endFill();
     }
 
-    if (!this.sprite.anchor) this.sprite.anchor = new Point(0.5, 0.5);
+    if (this.sprite.anchor && typeof this.sprite.anchor.set === 'function') {
+      this.sprite.anchor.set(0.5, 0.5);
+    } else {
+      this.sprite.anchor = new Point(0.5, 0.5);
+    }
     this.sprite.x = x;
     this.sprite.y = y;
 
@@ -103,7 +107,7 @@ export class Player {
     const frames = (this.mapping[anim] || []).map(i => this.textures[i]).filter(Boolean);
     if (frames.length === 0) return;
 
-    if (this.sprite instanceof PIXI.AnimatedSprite) {
+    if (this.sprite instanceof AnimatedSprite) {
       // replace textures if different
       const current = this.sprite.textures;
       if (current.length !== frames.length || current[0] !== frames[0]) {
