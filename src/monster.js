@@ -14,9 +14,8 @@ export class Monster {
     this.sprite = new Graphics();
 
     const half = this.tileSize / 2;
-    this.sprite.beginFill(0xCC0000);
-    this.sprite.drawRect(-half + 4, -half + 4, this.tileSize - 8, this.tileSize - 8);
-    this.sprite.endFill();
+    this.sprite.rect(-half + 4, -half + 4, this.tileSize - 8, this.tileSize - 8);
+    this.sprite.fill(0xCC0000);
 
     this.sprite.x = tx * this.tileSize + half;
     this.sprite.y = ty * this.tileSize + half;

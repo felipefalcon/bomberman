@@ -1,4 +1,4 @@
-import { AnimatedSprite, Graphics, Point } from 'pixi.js';
+import { AnimatedSprite, Graphics } from 'pixi.js';
 
 export class Player {
   // textures: optional array of PIXI.Texture frames
@@ -24,15 +24,12 @@ export class Player {
       this.sprite.scale.set(1, 1);
     } else {
       this.sprite = new Graphics();
-      this.sprite.beginFill(0x33cc33);
-      this.sprite.drawRect(-this.halfSize, -this.halfSize, this.tileSize, this.tileSize);
-      this.sprite.endFill();
+      this.sprite.rect(-this.halfSize, -this.halfSize, this.tileSize, this.tileSize);
+      this.sprite.fill(0x33cc33);
     }
 
     if (this.sprite.anchor && typeof this.sprite.anchor.set === 'function') {
       this.sprite.anchor.set(0.5, 0.5);
-    } else {
-      this.sprite.anchor = new Point(0.5, 0.5);
     }
     this.sprite.x = x;
     this.sprite.y = y;

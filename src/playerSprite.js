@@ -43,14 +43,16 @@ export async function loadPlayerSprites(url = '/assets/player-spritesheet.png', 
   const cols = Math.floor(img.width / tileSize);
   const rows = Math.floor(img.height / tileSize);
 
-  const base = new PIXI.BaseTexture(canvas);
-  base.scaleMode = PIXI.SCALE_MODES.NEAREST;
+  const sheetTexture = PIXI.Texture.from(canvas);
+  if (sheetTexture.source) {
+    sheetTexture.source.scaleMode = 'nearest';
+  }
   const frames = [];
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const rect = new PIXI.Rectangle(c * tileSize, r * tileSize, tileSize, tileSize);
-      frames.push(new PIXI.Texture(base, rect));
+      frames.push(new PIXI.Texture({ source: sheetTexture.source, frame: rect }));
     }
   }
 
