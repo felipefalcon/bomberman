@@ -5,6 +5,7 @@ export class Player {
   // mapping: optional animation mapping object
   constructor(x, y, tileSize = 32, textures = null, mapping = null) {
     this.tileSize = tileSize;
+    this.spriteScale = 1.5; // Scale multiplier for rendering (1.5 = 48x48, 2 = 64x64)
     this.speed = 2.6; // pixels per tick (multiplied by delta)
     this.halfSize = this.tileSize / 2;
     // collision hitbox slightly smaller than visual — default 26x26
@@ -21,7 +22,7 @@ export class Player {
       this.sprite.animationSpeed = 0.15;
       this.sprite.loop = true;
       this.sprite.play();
-      this.sprite.scale.set(1, 1);
+      this.sprite.scale.set(this.spriteScale, this.spriteScale);
     } else {
       this.sprite = new Graphics();
       this.sprite.rect(-this.halfSize, -this.halfSize, this.tileSize, this.tileSize);
@@ -138,12 +139,16 @@ export class Player {
         this.sprite.textures = animationFrames;
         this.sprite.play();
       }
+      // always ensure anchor is centered
+      if (this.sprite.anchor) {
+        this.sprite.anchor.set(0.5, 0.5);
+      }
     }
 
     if (shouldFlip) {
-      this.sprite.scale.x = -1;
+      this.sprite.scale.x = -this.spriteScale;
     } else if (this.sprite.scale.x < 0) {
-      this.sprite.scale.x = 1;
+      this.sprite.scale.x = this.spriteScale;
     }
   }
 
