@@ -3,6 +3,9 @@ import { TileMap } from './map.js';
 import { Player } from './player.js';
 import { Monster } from './monster.js';
 import { loadPlayerSprites } from './playerSprite.js';
+import { loadEnemySprites } from './enemySprite.js';
+import { loadBombSprite } from './bombLoader.js';
+import { AnimationDebugger } from './animationDebugger.js';
 
 export class Game {
   constructor(app) {
@@ -18,6 +21,13 @@ export class Game {
     this.explosions = [];
     this.monsters = [];
     this.livesText = null;
+    this.playerFrames = null;
+    this.playerMapping = null;
+    this.enemyFrames = null;
+    this.enemyMapping = null;
+    this.bombFrames = null;
+    this.bombMapping = null;
+    this.debugger = null;
   }
 
   start() {
@@ -51,8 +61,6 @@ export class Game {
     this.livesText.y = 6;
     this.stage.addChild(this.livesText);
 
-    this._spawnMonsters(3);
-
     // simple keyboard state
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
     window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
@@ -61,18 +69,51 @@ export class Game {
     const startX = this.tileSize * 1.5;
     const startY = this.tileSize * 1.5;
 
-    // Try to load spritesheet from public assets (place player-spritesheet.png in public/assets)
-    const sheetUrl = `${import.meta.env.BASE_URL}assets/player-spritesheet.png`;
-    loadPlayerSprites(sheetUrl, this.tileSize)
+    // Load both player and enemy spritesheets in parallel
+    const playerPromise = loadPlayerSprites(`${import.meta.env.BASE_URL}assets/player-spritesheet.png`, this.tileSize)
       .then(({ frames, mapping }) => {
+        this.playerFrames = frames;
+        this.playerMapping = mapping;
+        console.log('Game: Player spritesheet loaded');
         this.player = new Player(startX, startY, this.tileSize, frames, mapping);
         this.stage.addChild(this.player.sprite);
       })
       .catch((err) => {
-        console.warn('Could not load spritesheet from', sheetUrl, 'using placeholder. Error:', err);
+        console.warn('Could not load player spritesheet, using placeholder. Error:', err);
         this.player = new Player(startX, startY, this.tileSize);
         this.stage.addChild(this.player.sprite);
       });
+
+    const enemyPromise = this.map._initPromise.then(async () => {
+      try {
+        const { frames, mapping } = await loadEnemySprites();
+        this.enemyFrames = frames;
+        this.enemyMapping = mapping;
+        console.log('Game: Enemy spritesheet loaded');
+        this._spawnMonsters(3);
+      } catch (err) {
+        console.warn('Could not load enemy spritesheet, using placeholder. Error:', err);
+        this.enemyFrames = null;
+        this.enemyMapping = null;
+      }
+    });
+
+    const bombPromise = loadBombSprite()
+      .then(({ frames, mapping }) => {
+        this.bombFrames = frames;
+        this.bombMapping = mapping;
+        console.log('Game: Bomb sprite loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load bomb sprite, using placeholder. Error:', err);
+        this.bombFrames = null;
+        this.bombMapping = null;
+      });
+
+    Promise.all([playerPromise, enemyPromise, bombPromise]).then(() => {
+      console.log('Game: All spritesheets loaded');
+      // Debugger disabled for now
+    });
 
     this.app.ticker.add(this.update.bind(this));
   }
@@ -114,12 +155,39 @@ export class Game {
   }
 
   _createBombSprite(tx, ty) {
+    let sprite;
+    
+    if (this.bombFrames && this.bombFrames.length > 0 && this.bombMapping?.bomb) {
+      // Use animated sprite with ping-pong animation
+      const frameIndices = this.bombMapping.bomb;
+      const textures = frameIndices.map(i => this.bombFrames[i]).filter(Boolean);
+      
+      if (textures.length > 0) {
+        sprite = new PIXI.AnimatedSprite(textures);
+        sprite.animationSpeed = 0.15;
+        sprite.play();
+        // Scale from 16x16 to 32x32 (2x scale)
+        sprite.scale.set(2);
+        sprite.anchor.set(0, 0);
+      } else {
+        sprite = this._createBombGraphics();
+      }
+    } else {
+      // Fallback to Graphics
+      sprite = this._createBombGraphics();
+    }
+    
+    sprite.x = tx * this.tileSize;
+    sprite.y = ty * this.tileSize;
+    sprite.roundPixels = true;
+    return sprite;
+  }
+
+  _createBombGraphics() {
     const bomb = new PIXI.Graphics();
     const radius = this.tileSize / 2 - 3;
     bomb.circle(this.tileSize / 2, this.tileSize / 2, radius);
     bomb.fill(0x000000);
-    bomb.x = tx * this.tileSize;
-    bomb.y = ty * this.tileSize;
     return bomb;
   }
 
@@ -139,7 +207,7 @@ export class Game {
   _spawnMonsters(count) {
     const spawnTiles = this._findMonsterSpawnTiles(count);
     for (const { tx, ty } of spawnTiles) {
-      const monster = new Monster(tx, ty, this.tileSize);
+      const monster = new Monster(tx, ty, this.tileSize, this.enemyFrames, this.enemyMapping);
       this.monsters.push(monster);
       this.stage.addChild(monster.sprite);
     }
