@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { TileMap } from './map.js';
 import { Player } from './player.js';
+import { Monster } from './monster.js';
 import { loadPlayerSprites } from './playerSprite.js';
 
 export class Game {
@@ -13,6 +14,7 @@ export class Game {
     this.lastZ = false;
     this.bombs = [];
     this.explosions = [];
+    this.monsters = [];
     this.livesText = null;
   }
 
@@ -33,6 +35,8 @@ export class Game {
     this.livesText.x = 4;
     this.livesText.y = 4;
     this.stage.addChild(this.livesText);
+
+    this._spawnMonsters(3);
 
     // simple keyboard state
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
@@ -64,6 +68,7 @@ export class Game {
       this._processBombInput();
     }
     this._updateBombs(delta);
+    this._updateMonsters(delta);
     this._updateExplosions(delta);
   }
 
@@ -114,6 +119,34 @@ export class Game {
     }
   }
 
+  _spawnMonsters(count) {
+    const spawnTiles = this._findMonsterSpawnTiles(count);
+    for (const { tx, ty } of spawnTiles) {
+      const monster = new Monster(tx, ty, this.tileSize);
+      this.monsters.push(monster);
+      this.stage.addChild(monster.sprite);
+    }
+  }
+
+  _findMonsterSpawnTiles(count) {
+    const positions = [];
+    for (let ty = 1; ty < this.map.rows - 1; ty++) {
+      for (let tx = 1; tx < this.map.cols - 1; tx++) {
+        const isStartArea = (tx === 1 && ty === 1) || (tx === 2 && ty === 1) || (tx === 1 && ty === 2);
+        if (isStartArea) continue;
+        if (this.map.isBlocked(tx, ty)) continue;
+        const distanceFromStart = Math.abs(tx - 1) + Math.abs(ty - 1);
+        if (distanceFromStart < 6) continue;
+        positions.push({ tx, ty });
+      }
+    }
+    for (let i = positions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [positions[i], positions[j]] = [positions[j], positions[i]];
+    }
+    return positions.slice(0, count);
+  }
+
   _explodeBomb(bomb) {
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.stage.removeChild(bomb.sprite);
@@ -149,6 +182,7 @@ export class Game {
       tx: cell.tx,
       ty: cell.ty,
       timer: 20,
+      hasDamagedMonsters: false,
       sprite: this._createExplosionSprite(cell.tx, cell.ty),
     };
     this.explosions.push(explosion);
@@ -177,6 +211,17 @@ export class Game {
           this._handlePlayerDeath();
         }
       }
+      if (!explosion.hasDamagedMonsters) {
+        const hitMonsters = this.monsters.filter((monster) => monster.isOnTile(explosion.tx, explosion.ty));
+        if (hitMonsters.length > 0) {
+          explosion.hasDamagedMonsters = true;
+          for (const monster of hitMonsters) {
+            if (!monster.takeDamage()) {
+              this._removeMonster(monster);
+            }
+          }
+        }
+      }
       if (explosion.timer <= 0) {
         expire.push(explosion);
       }
@@ -185,6 +230,29 @@ export class Game {
       this.stage.removeChild(explosion.sprite);
       this.explosions = this.explosions.filter((e) => e !== explosion);
     }
+  }
+
+  _updateMonsters(delta) {
+    for (const monster of this.monsters.slice()) {
+      monster.update(delta, this.map, this.bombs);
+      if (this.player && monster.isOnTile(Math.floor(this.player.sprite.x / this.tileSize), Math.floor(this.player.sprite.y / this.tileSize))) {
+        if (!monster.lastPlayerTouch) {
+          monster.lastPlayerTouch = true;
+          this.player.takeDamage();
+          this._refreshLivesText();
+          if (this.player.lives <= 0) {
+            this._handlePlayerDeath();
+          }
+        }
+      } else {
+        monster.lastPlayerTouch = false;
+      }
+    }
+  }
+
+  _removeMonster(monster) {
+    this.stage.removeChild(monster.sprite);
+    this.monsters = this.monsters.filter((m) => m !== monster);
   }
 
   _isPlayerOnTile(tx, ty) {
