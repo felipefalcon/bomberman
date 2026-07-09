@@ -60,7 +60,7 @@ export class Game {
     const startY = this.tileSize * 1.5;
 
     // Try to load spritesheet from public assets (place player-spritesheet.png in public/assets)
-    const sheetUrl = '/assets/player-spritesheet.png';
+    const sheetUrl = `${import.meta.env.BASE_URL}assets/player-spritesheet.png`;
     loadPlayerSprites(sheetUrl, this.tileSize)
       .then(({ frames, mapping }) => {
         this.player = new Player(startX, startY, this.tileSize, frames, mapping);
