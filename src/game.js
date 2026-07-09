@@ -3,6 +3,10 @@ import { TileMap } from './map.js';
 import { Player } from './player.js';
 import { Monster } from './monster.js';
 import { loadPlayerSprites } from './playerSprite.js';
+import { loadEnemySprites } from './enemySprite.js';
+import { loadBombSprite } from './bombLoader.js';
+import { AnimationDebugger } from './animationDebugger.js';
+import { AudioManager } from './audioManager.js';
 
 export class Game {
   constructor(app) {
@@ -16,8 +20,17 @@ export class Game {
     this.lastZ = false;
     this.bombs = [];
     this.explosions = [];
+    this.destroyingBlocks = []; // Blocks being animated during destruction
     this.monsters = [];
     this.livesText = null;
+    this.playerFrames = null;
+    this.playerMapping = null;
+    this.enemyFrames = null;
+    this.enemyMapping = null;
+    this.bombFrames = null;
+    this.bombMapping = null;
+    this.debugger = null;
+    this.audioManager = new AudioManager();
   }
 
   start() {
@@ -51,8 +64,6 @@ export class Game {
     this.livesText.y = 6;
     this.stage.addChild(this.livesText);
 
-    this._spawnMonsters(3);
-
     // simple keyboard state
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
     window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
@@ -61,18 +72,82 @@ export class Game {
     const startX = this.tileSize * 1.5;
     const startY = this.tileSize * 1.5;
 
-    // Try to load spritesheet from public assets (place player-spritesheet.png in public/assets)
-    const sheetUrl = `${import.meta.env.BASE_URL}assets/player-spritesheet.png`;
-    loadPlayerSprites(sheetUrl, this.tileSize)
+    // Load both player and enemy spritesheets in parallel
+    const playerPromise = loadPlayerSprites(`${import.meta.env.BASE_URL}assets/player-spritesheet.png`, this.tileSize)
       .then(({ frames, mapping }) => {
+        this.playerFrames = frames;
+        this.playerMapping = mapping;
+        console.log('Game: Player spritesheet loaded');
         this.player = new Player(startX, startY, this.tileSize, frames, mapping);
         this.stage.addChild(this.player.sprite);
       })
       .catch((err) => {
-        console.warn('Could not load spritesheet from', sheetUrl, 'using placeholder. Error:', err);
+        console.warn('Could not load player spritesheet, using placeholder. Error:', err);
         this.player = new Player(startX, startY, this.tileSize);
         this.stage.addChild(this.player.sprite);
       });
+
+    const enemyPromise = this.map._initPromise.then(async () => {
+      try {
+        const { frames, mapping } = await loadEnemySprites();
+        this.enemyFrames = frames;
+        this.enemyMapping = mapping;
+        console.log('Game: Enemy spritesheet loaded');
+        this._spawnMonsters(3);
+      } catch (err) {
+        console.warn('Could not load enemy spritesheet, using placeholder. Error:', err);
+        this.enemyFrames = null;
+        this.enemyMapping = null;
+      }
+    });
+
+    const bombPromise = loadBombSprite()
+      .then(({ frames, mapping }) => {
+        this.bombFrames = frames;
+        this.bombMapping = mapping;
+        console.log('Game: Bomb sprite loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load bomb sprite, using placeholder. Error:', err);
+        this.bombFrames = null;
+        this.bombMapping = null;
+      });
+
+    const musicPromise = this.audioManager.loadMusic(`${import.meta.env.BASE_URL}assets/18 Where it All Began.mp3`)
+      .then(() => {
+        console.log('Game: Background music loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load background music. Error:', err);
+      });
+
+    const explosionSoundPromise = this.audioManager.loadSoundEffect('explosion', `${import.meta.env.BASE_URL}assets/SB5 Sound Effects (12).wav`)
+      .then(() => {
+        console.log('Game: Explosion sound loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load explosion sound. Error:', err);
+      });
+
+    const damageSoundPromise = this.audioManager.loadSoundEffect('damage', `${import.meta.env.BASE_URL}assets/SB5 Sound Effects (100).wav`)
+      .then(() => {
+        console.log('Game: Damage sound loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load damage sound. Error:', err);
+      });
+
+    const gameOverSoundPromise = this.audioManager.loadSoundEffect('gameOver', `${import.meta.env.BASE_URL}assets/10 Bad Luck.mp3`)
+      .then(() => {
+        console.log('Game: Game Over sound loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load game over sound. Error:', err);
+      });
+
+    Promise.all([playerPromise, enemyPromise, bombPromise, musicPromise, explosionSoundPromise, damageSoundPromise, gameOverSoundPromise]).then(() => {
+      console.log('Game: All assets loaded');
+    });
 
     this.app.ticker.add(this.update.bind(this));
   }
@@ -85,6 +160,7 @@ export class Game {
       this._processBombInput();
     }
     this._updateBombs(tickDelta);
+    this._updateDestroyingBlocks(tickDelta);
     this._updateMonsters(tickDelta);
     this._updateExplosions(tickDelta);
   }
@@ -114,12 +190,39 @@ export class Game {
   }
 
   _createBombSprite(tx, ty) {
+    let sprite;
+    
+    if (this.bombFrames && this.bombFrames.length > 0 && this.bombMapping?.bomb) {
+      // Use animated sprite with ping-pong animation
+      const frameIndices = this.bombMapping.bomb;
+      const textures = frameIndices.map(i => this.bombFrames[i]).filter(Boolean);
+      
+      if (textures.length > 0) {
+        sprite = new PIXI.AnimatedSprite(textures);
+        sprite.animationSpeed = 0.15;
+        sprite.play();
+        // Scale from 16x16 to 32x32 (2x scale)
+        sprite.scale.set(2);
+        sprite.anchor.set(0, 0);
+      } else {
+        sprite = this._createBombGraphics();
+      }
+    } else {
+      // Fallback to Graphics
+      sprite = this._createBombGraphics();
+    }
+    
+    sprite.x = tx * this.tileSize;
+    sprite.y = ty * this.tileSize;
+    sprite.roundPixels = true;
+    return sprite;
+  }
+
+  _createBombGraphics() {
     const bomb = new PIXI.Graphics();
     const radius = this.tileSize / 2 - 3;
     bomb.circle(this.tileSize / 2, this.tileSize / 2, radius);
     bomb.fill(0x000000);
-    bomb.x = tx * this.tileSize;
-    bomb.y = ty * this.tileSize;
     return bomb;
   }
 
@@ -127,6 +230,13 @@ export class Game {
     const expire = [];
     for (const bomb of this.bombs) {
       bomb.timer -= delta;
+      
+      // Play explosion sound early (when timer reaches ~40 ticks before explosion)
+      if (bomb.timer <= 40 && !bomb.soundPlayed) {
+        bomb.soundPlayed = true;
+        this.audioManager.playSoundEffect('explosion');
+      }
+      
       if (bomb.timer <= 0) {
         expire.push(bomb);
       }
@@ -139,7 +249,7 @@ export class Game {
   _spawnMonsters(count) {
     const spawnTiles = this._findMonsterSpawnTiles(count);
     for (const { tx, ty } of spawnTiles) {
-      const monster = new Monster(tx, ty, this.tileSize);
+      const monster = new Monster(tx, ty, this.tileSize, this.enemyFrames, this.enemyMapping);
       this.monsters.push(monster);
       this.stage.addChild(monster.sprite);
     }
@@ -168,7 +278,7 @@ export class Game {
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.stage.removeChild(bomb.sprite);
 
-    const center = { tx: bomb.tx, ty: bomb.ty };
+    const center = { tx: bomb.tx, ty: bomb.ty, isCenter: true };
     this._createExplosion(center);
     this._destroyTileAt(center.tx, center.ty);
 
@@ -182,7 +292,7 @@ export class Game {
       const tx = bomb.tx + dir.dx;
       const ty = bomb.ty + dir.dy;
       if (!this.map.isWall(tx, ty)) {
-        this._createExplosion({ tx, ty });
+        this._createExplosion({ tx, ty, isCenter: false });
         this._destroyTileAt(tx, ty);
       }
     }
@@ -190,7 +300,20 @@ export class Game {
 
   _destroyTileAt(tx, ty) {
     if (this.map.isDestructible(tx, ty)) {
-      this.map.destroyTile(tx, ty);
+      const sprite = this.map.destroyTile(tx, ty);
+      
+      // Add to destroying blocks for animation
+      if (sprite) {
+        this.destroyingBlocks.push({
+          sprite: sprite,
+          duration: 15, // animation duration in ticks
+          elapsed: 0,
+          originalScale: sprite.scale.x
+        });
+      }
+      
+      // Remove any explosion on this tile to prevent further damage
+      this.explosions = this.explosions.filter(exp => !(exp.tx === tx && exp.ty === ty));
     }
   }
 
@@ -200,25 +323,76 @@ export class Game {
       ty: cell.ty,
       timer: 20,
       hasDamagedMonsters: false,
-      sprite: this._createExplosionSprite(cell.tx, cell.ty),
+      sprite: this._createExplosionSprite(cell.tx, cell.ty, cell.isCenter),
     };
     this.explosions.push(explosion);
     this.stage.addChild(explosion.sprite);
   }
 
-  _createExplosionSprite(tx, ty) {
+  _createExplosionSprite(tx, ty, isCenter = false) {
+    const container = new PIXI.Container();
+    const tileSize = this.tileSize;
+    
+    // Position container at the tile
+    container.x = tx * tileSize;
+    container.y = ty * tileSize;
+    
+    // Create single fire layer at this tile only, centered
     const gfx = new PIXI.Graphics();
-    gfx.rect(0, 0, this.tileSize, this.tileSize);
-    gfx.fill({ color: 0xFFCC33, alpha: 0.8 });
-    gfx.x = tx * this.tileSize;
-    gfx.y = ty * this.tileSize;
-    return gfx;
+    gfx.x = tileSize / 2;
+    gfx.y = tileSize / 2;
+    container.addChild(gfx);
+
+    // Animation state
+    container.userData = {
+      animFrame: 0,
+      sprites: [gfx],
+      isCenter: isCenter
+    };
+
+    return container;
   }
 
   _updateExplosions(delta) {
     const expire = [];
     for (const explosion of this.explosions) {
       explosion.timer -= delta;
+      
+      // Update explosion animation
+      const userData = explosion.sprite.userData;
+      userData.animFrame += 0.15; // Animation speed
+      
+      // Draw animated fire
+      for (const gfx of userData.sprites) {
+        gfx.clear();
+        
+        // Vary size and color based on animation frame
+        const frame = Math.floor(userData.animFrame) % 3;
+        const baseSize = this.tileSize * 0.8;
+        let size = baseSize + Math.sin(userData.animFrame * 0.3) * (baseSize * 0.15);
+        
+        // Color progression: yellow -> orange -> red
+        let color;
+        if (frame === 0) color = 0xFFFF00; // Yellow
+        else if (frame === 1) color = 0xFF8800; // Orange
+        else color = 0xFF3300; // Red
+        
+        // All explosions: pixelated squares
+        gfx.rect(-size / 2, -size / 2, size, size);
+        gfx.fill({ color: color, alpha: 0.9 });
+        
+        // Add glow effect
+        const glowSize = size * 1.3;
+        gfx.rect(-glowSize / 2, -glowSize / 2, glowSize, glowSize);
+        gfx.fill({ color: color, alpha: 0.3 });
+      }
+      
+      // Play damage warning sound 30 ticks after explosion appears
+      if (this.player && !explosion.soundPlayedForPlayer && explosion.timer <= 30 && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
+        explosion.soundPlayedForPlayer = true;
+        this.audioManager.playSoundEffect('damage');
+      }
+      
       if (this.player && !explosion.hasDamagedPlayer && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
         explosion.hasDamagedPlayer = true;
         this.player.takeDamage();
@@ -248,6 +422,41 @@ export class Game {
     }
   }
 
+  _updateDestroyingBlocks(delta) {
+    const toRemove = [];
+    
+    for (const block of this.destroyingBlocks) {
+      block.elapsed += delta;
+      const progress = Math.min(block.elapsed / block.duration, 1);
+      
+      // Animation: colors change like explosion (yellow -> orange -> red)
+      const colorFrame = Math.floor(progress * 3) % 3;
+      let color;
+      if (colorFrame === 0) color = 0xFFFF00; // Yellow
+      else if (colorFrame === 1) color = 0xFF8800; // Orange
+      else color = 0xFF3300; // Red
+      
+      // Apply tint to block
+      block.sprite.tint = color;
+      
+      // Scale effect: grow then shrink
+      const scaleFactor = 1 + Math.sin(progress * Math.PI) * 0.3;
+      block.sprite.scale.set(block.originalScale * scaleFactor);
+      
+      // Fade out at the end
+      block.sprite.alpha = 1 - (progress * progress); // quadratic fade
+      
+      if (progress >= 1) {
+        // Remove from stage and mark for removal
+        this.stage.removeChild(block.sprite);
+        toRemove.push(block);
+      }
+    }
+    
+    // Remove completed animations
+    this.destroyingBlocks = this.destroyingBlocks.filter(b => !toRemove.includes(b));
+  }
+
   _updateMonsters(delta) {
     for (const monster of this.monsters.slice()) {
       monster.update(delta, this.map, this.bombs);
@@ -255,6 +464,7 @@ export class Game {
         if (!monster.lastPlayerTouch) {
           monster.lastPlayerTouch = true;
           this.player.takeDamage();
+          this.audioManager.playSoundEffect('damage');
           this._refreshLivesText();
           if (this.player.lives <= 0) {
             this._handlePlayerDeath();
@@ -283,6 +493,9 @@ export class Game {
   }
 
   _handlePlayerDeath() {
+    this.audioManager.stop(); // Stop background music
+    this.audioManager.playSoundEffect('gameOver');
+    
     if (this.player) {
       this.player.sprite.tint = 0xff0000;
       this.keys = {};
