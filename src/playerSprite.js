@@ -57,12 +57,12 @@ export async function loadPlayerSprites(url = `${import.meta.env.BASE_URL}assets
   }
 
   // Spritesheet layout:
-  // row 0 = walkDown (first 8 frames)
-  // row 1 = walkRight (first 8 frames)
-  // row last = walkUp (first 8 frames)
+  // row 0 = walkDown (5 frames)
+  // row 1 = walkRight (5 frames)
+  // row last = walkUp (5 frames)
   // walkLeft uses walkRight frames mirrored
   const mapping = {};
-  const frameCountPerRow = Math.min(8, cols);
+  const frameCountPerRow = 5;
   const hasUpRow = rows >= 3;
 
   const downFrames = Array.from({ length: frameCountPerRow }, (_, i) => i);
@@ -72,16 +72,16 @@ export async function loadPlayerSprites(url = `${import.meta.env.BASE_URL}assets
     : [];
 
   mapping.walkDown = downFrames;
-  mapping.idleDown = [downFrames[0]];
+  mapping.idleDown = [downFrames[2]];
 
   mapping.walkRight = rightFrames;
-  mapping.idleRight = [rightFrames[0]];
+  mapping.idleRight = [rightFrames[2]];
 
   mapping.walkLeft = rightFrames;
-  mapping.idleLeft = [rightFrames[0]];
+  mapping.idleLeft = [rightFrames[2]];
 
   mapping.walkUp = hasUpRow ? upFrames : [];
-  mapping.idleUp = hasUpRow ? [upFrames[0]] : [];
+  mapping.idleUp = hasUpRow ? [upFrames[2]] : [];
 
   console.log('playerSprite: loaded spritesheet', { width: img.width, height: img.height, cols, rows, frames: frames.length });
   return { frames, cols, rows, mapping };
