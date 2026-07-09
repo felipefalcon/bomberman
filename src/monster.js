@@ -11,6 +11,8 @@ export class Monster {
     this.lives = 1;
     this.target = null;
     this.direction = null;
+    this.isTrapped = false;
+    this.lastAnimationFacing = null; // Track last animation to avoid redundant updates
     this.spriteScale = 1.5; // Scale multiplier for rendering (1.5 = 48x48)
     this.animationSpeed = 0.15;
     
@@ -47,7 +49,18 @@ export class Monster {
     if (!this.target) {
       this._chooseTarget(map, bombs);
     }
-    if (!this.target) return;
+    
+    // If trapped, keep animating down
+    if (this.isTrapped) {
+      this._updateAnimation({ dx: 0, dy: 1 }); // Down direction
+      return;
+    }
+    
+    // Always update animation, even if no target
+    if (!this.target) {
+      this._updateAnimation(null); // Pass null to show "parado" animation
+      return;
+    }
 
     const half = this.tileSize / 2;
     const targetX = this.target.tx * this.tileSize + half;
@@ -95,24 +108,32 @@ export class Monster {
         newFacing = 'down';
         frames = this.mapping.walkDown;
       }
+    } else {
+      // When stopped, always animate down
+      newFacing = 'down';
+      frames = this.mapping.walkDown;
     }
 
-    if (newFacing && newFacing !== facing && frames && frames.length > 0) {
-      this._facing = newFacing;
+    if (newFacing && frames && frames.length > 0) {
+      // Only update animation if facing changed (don't restart every frame)
+      if (newFacing !== this.lastAnimationFacing) {
+        this.lastAnimationFacing = newFacing;
+        this._facing = newFacing;
 
-      // Convert to ping-pong animation
-      const ppFrames = this._toPingPongFrames(frames);
-      const textureFrames = ppFrames.map(i => {
-        if (i < 0 || i >= this.textures.length) {
-          console.warn(`Invalid frame index ${i}, textures length: ${this.textures.length}`);
-          return this.textures[0];
+        // Convert to ping-pong animation
+        const ppFrames = this._toPingPongFrames(frames);
+        const textureFrames = ppFrames.map(i => {
+          if (i < 0 || i >= this.textures.length) {
+            console.warn(`Invalid frame index ${i}, textures length: ${this.textures.length}`);
+            return this.textures[0];
+          }
+          return this.textures[i];
+        }).filter(Boolean);
+
+        if (textureFrames.length > 0 && this.sprite instanceof AnimatedSprite) {
+          this.sprite.textures = textureFrames;
+          this.sprite.gotoAndPlay(0);
         }
-        return this.textures[i];
-      }).filter(Boolean);
-
-      if (textureFrames.length > 0 && this.sprite instanceof AnimatedSprite) {
-        this.sprite.textures = textureFrames;
-        this.sprite.gotoAndPlay(0);
       }
     }
 
@@ -143,6 +164,7 @@ export class Monster {
       const forward = { tx: this.tx + this.direction.dx, ty: this.ty + this.direction.dy, direction: this.direction };
       if (!map.isBlocked(forward.tx, forward.ty) && !bombs.some((bomb) => bomb.tx === forward.tx && bomb.ty === forward.ty)) {
         this.target = forward;
+        this.isTrapped = false;
         return;
       }
     }
@@ -155,7 +177,13 @@ export class Monster {
         return true;
       });
 
-    if (choices.length === 0) return;
+    if (choices.length === 0) {
+      // Trapped in all directions - mark as trapped
+      this.isTrapped = true;
+      return;
+    }
+    
+    this.isTrapped = false;
     const next = choices[Math.floor(Math.random() * choices.length)];
     this.target = next;
   }
