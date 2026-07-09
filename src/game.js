@@ -6,6 +6,7 @@ import { loadPlayerSprites } from './playerSprite.js';
 import { loadEnemySprites } from './enemySprite.js';
 import { loadBombSprite } from './bombLoader.js';
 import { AnimationDebugger } from './animationDebugger.js';
+import { AudioManager } from './audioManager.js';
 
 export class Game {
   constructor(app) {
@@ -29,6 +30,7 @@ export class Game {
     this.bombFrames = null;
     this.bombMapping = null;
     this.debugger = null;
+    this.audioManager = new AudioManager();
   }
 
   start() {
@@ -111,9 +113,40 @@ export class Game {
         this.bombMapping = null;
       });
 
-    Promise.all([playerPromise, enemyPromise, bombPromise]).then(() => {
-      console.log('Game: All spritesheets loaded');
-      // Debugger disabled for now
+    const musicPromise = this.audioManager.loadMusic(`${import.meta.env.BASE_URL}assets/18 Where it All Began.mp3`)
+      .then(() => {
+        console.log('Game: Background music loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load background music. Error:', err);
+      });
+
+    const explosionSoundPromise = this.audioManager.loadSoundEffect('explosion', `${import.meta.env.BASE_URL}assets/SB5 Sound Effects (12).wav`)
+      .then(() => {
+        console.log('Game: Explosion sound loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load explosion sound. Error:', err);
+      });
+
+    const damageSoundPromise = this.audioManager.loadSoundEffect('damage', `${import.meta.env.BASE_URL}assets/SB5 Sound Effects (100).wav`)
+      .then(() => {
+        console.log('Game: Damage sound loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load damage sound. Error:', err);
+      });
+
+    const gameOverSoundPromise = this.audioManager.loadSoundEffect('gameOver', `${import.meta.env.BASE_URL}assets/10 Bad Luck.mp3`)
+      .then(() => {
+        console.log('Game: Game Over sound loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load game over sound. Error:', err);
+      });
+
+    Promise.all([playerPromise, enemyPromise, bombPromise, musicPromise, explosionSoundPromise, damageSoundPromise, gameOverSoundPromise]).then(() => {
+      console.log('Game: All assets loaded');
     });
 
     this.app.ticker.add(this.update.bind(this));
@@ -197,6 +230,13 @@ export class Game {
     const expire = [];
     for (const bomb of this.bombs) {
       bomb.timer -= delta;
+      
+      // Play explosion sound early (when timer reaches ~40 ticks before explosion)
+      if (bomb.timer <= 40 && !bomb.soundPlayed) {
+        bomb.soundPlayed = true;
+        this.audioManager.playSoundEffect('explosion');
+      }
+      
       if (bomb.timer <= 0) {
         expire.push(bomb);
       }
@@ -347,6 +387,12 @@ export class Game {
         gfx.fill({ color: color, alpha: 0.3 });
       }
       
+      // Play damage warning sound 30 ticks after explosion appears
+      if (this.player && !explosion.soundPlayedForPlayer && explosion.timer <= 30 && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
+        explosion.soundPlayedForPlayer = true;
+        this.audioManager.playSoundEffect('damage');
+      }
+      
       if (this.player && !explosion.hasDamagedPlayer && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
         explosion.hasDamagedPlayer = true;
         this.player.takeDamage();
@@ -418,6 +464,7 @@ export class Game {
         if (!monster.lastPlayerTouch) {
           monster.lastPlayerTouch = true;
           this.player.takeDamage();
+          this.audioManager.playSoundEffect('damage');
           this._refreshLivesText();
           if (this.player.lives <= 0) {
             this._handlePlayerDeath();
@@ -446,6 +493,9 @@ export class Game {
   }
 
   _handlePlayerDeath() {
+    this.audioManager.stop(); // Stop background music
+    this.audioManager.playSoundEffect('gameOver');
+    
     if (this.player) {
       this.player.sprite.tint = 0xff0000;
       this.keys = {};

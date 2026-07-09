@@ -37,15 +37,39 @@ export class Player {
 
     this.lives = 3;
     this._facing = 'down';
+    this.blinkTimer = 0;
+    this.isBlinking = false;
+    this.blinkDuration = 60; // 3 blinks (6 frames) * 10 ticks each
   }
 
   takeDamage() {
     if (this.lives <= 0) return false;
     this.lives -= 1;
+    this.startBlink();
     return this.lives > 0;
   }
 
+  startBlink() {
+    this.isBlinking = true;
+    this.blinkTimer = 0;
+  }
+
   update(delta, keys, map, bombs = []) {
+    // Handle blink effect when taking damage
+    if (this.isBlinking) {
+      this.blinkTimer += delta;
+      
+      // Alternate between 50% and 100% opacity every 10 ticks
+      const blinkPhase = Math.floor((this.blinkTimer / 10) % 2);
+      this.sprite.alpha = blinkPhase === 0 ? 0.5 : 1;
+      
+      // End blink after duration
+      if (this.blinkTimer >= this.blinkDuration) {
+        this.isBlinking = false;
+        this.sprite.alpha = 1;
+      }
+    }
+    
     let vx = 0, vy = 0;
     if (keys['arrowup'] || keys['w']) vy = -1;
     if (keys['arrowdown'] || keys['s']) vy = 1;
