@@ -13,11 +13,23 @@ export class Game {
     this.lastZ = false;
     this.bombs = [];
     this.explosions = [];
+    this.livesText = null;
   }
 
   start() {
     this.map = new TileMap(this.app, this.tileSize, 13, 11);
     this.stage.addChild(this.map.container);
+
+    this.livesText = new PIXI.Text('Lives: 3', {
+      fontFamily: 'Arial',
+      fontSize: 16,
+      fill: 0xffffff,
+      stroke: 0x000000,
+      strokeThickness: 3,
+    });
+    this.livesText.x = 4;
+    this.livesText.y = 4;
+    this.stage.addChild(this.livesText);
 
     // simple keyboard state
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
@@ -45,7 +57,7 @@ export class Game {
 
   update(delta) {
     if (this.player) {
-      this.player.update(delta, this.keys, this.map);
+      this.player.update(delta, this.keys, this.map, this.bombs);
       this._processBombInput();
     }
     this._updateBombs(delta);
@@ -154,6 +166,14 @@ export class Game {
     const expire = [];
     for (const explosion of this.explosions) {
       explosion.timer -= delta;
+      if (this.player && !explosion.hasDamagedPlayer && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
+        explosion.hasDamagedPlayer = true;
+        this.player.takeDamage();
+        this._refreshLivesText();
+        if (this.player.lives <= 0) {
+          this._handlePlayerDeath();
+        }
+      }
       if (explosion.timer <= 0) {
         expire.push(explosion);
       }
@@ -162,6 +182,36 @@ export class Game {
       this.stage.removeChild(explosion.sprite);
       this.explosions = this.explosions.filter((e) => e !== explosion);
     }
+  }
+
+  _isPlayerOnTile(tx, ty) {
+    const playerTx = Math.floor(this.player.sprite.x / this.tileSize);
+    const playerTy = Math.floor(this.player.sprite.y / this.tileSize);
+    return playerTx === tx && playerTy === ty;
+  }
+
+  _refreshLivesText() {
+    if (!this.livesText || !this.player) return;
+    this.livesText.text = `Lives: ${this.player.lives}`;
+  }
+
+  _handlePlayerDeath() {
+    if (this.player) {
+      this.player.sprite.tint = 0xff0000;
+      this.keys = {};
+    }
+    const gameOver = new PIXI.Text('Game Over', {
+      fontFamily: 'Arial',
+      fontSize: 28,
+      fill: 0xff0000,
+      stroke: 0x000000,
+      strokeThickness: 4,
+    });
+    gameOver.anchor.set(0.5, 0.5);
+    gameOver.x = (this.tileSize * 13) / 2;
+    gameOver.y = (this.tileSize * 11) / 2;
+    this.stage.addChild(gameOver);
+    this.app.ticker.stop();
   }
 }
 

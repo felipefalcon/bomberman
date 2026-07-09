@@ -37,10 +37,17 @@ export class Player {
     this.sprite.x = x;
     this.sprite.y = y;
 
+    this.lives = 3;
     this._facing = 'down';
   }
 
-  update(delta, keys, map) {
+  takeDamage() {
+    if (this.lives <= 0) return false;
+    this.lives -= 1;
+    return this.lives > 0;
+  }
+
+  update(delta, keys, map, bombs = []) {
     let vx = 0, vy = 0;
     if (keys['arrowup'] || keys['w']) vy = -1;
     if (keys['arrowdown'] || keys['s']) vy = 1;
@@ -58,23 +65,31 @@ export class Player {
     // decide animation based on input
     this._updateAnimation(vx, vy);
 
-    this._tryMove(moveX, moveY, map);
+    this._tryMove(moveX, moveY, map, bombs);
   }
 
-  _tryMove(dx, dy, map) {
+  _tryMove(dx, dy, map, bombs) {
     // Axis-separated movement for smoother sliding along walls
     if (dx !== 0) {
       const nx = this.sprite.x + dx;
-      if (!this._collidesAt(nx, this.sprite.y, map)) this.sprite.x = nx;
+      if (!this._collidesAt(nx, this.sprite.y, map, bombs)) this.sprite.x = nx;
     }
     if (dy !== 0) {
       const ny = this.sprite.y + dy;
-      if (!this._collidesAt(this.sprite.x, ny, map)) this.sprite.y = ny;
+      if (!this._collidesAt(this.sprite.x, ny, map, bombs)) this.sprite.y = ny;
     }
   }
 
-  _collidesAt(cx, cy, map) {
+  _collidesAt(cx, cy, map, bombs) {
     // check collision box corners using collisionHalf
+    const currentCorners = [
+      { x: this.sprite.x - this.collisionHalf, y: this.sprite.y - this.collisionHalf },
+      { x: this.sprite.x + this.collisionHalf - 1, y: this.sprite.y - this.collisionHalf },
+      { x: this.sprite.x - this.collisionHalf, y: this.sprite.y + this.collisionHalf - 1 },
+      { x: this.sprite.x + this.collisionHalf - 1, y: this.sprite.y + this.collisionHalf - 1 },
+    ];
+    const currentTiles = new Set(currentCorners.map((c) => `${Math.floor(c.x / this.tileSize)},${Math.floor(c.y / this.tileSize)}`));
+
     const corners = [
       { x: cx - this.collisionHalf, y: cy - this.collisionHalf },
       { x: cx + this.collisionHalf - 1, y: cy - this.collisionHalf },
@@ -86,6 +101,14 @@ export class Player {
       const tx = Math.floor(c.x / this.tileSize);
       const ty = Math.floor(c.y / this.tileSize);
       if (map.isBlocked(tx, ty)) return true;
+
+      const bomb = bombs.find((bomb) => bomb.tx === tx && bomb.ty === ty);
+      if (bomb) {
+        if (currentTiles.has(`${tx},${ty}`)) {
+          continue;
+        }
+        return true;
+      }
     }
     return false;
   }
