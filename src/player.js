@@ -21,6 +21,7 @@ export class Player {
       this.sprite.animationSpeed = 0.15;
       this.sprite.loop = true;
       this.sprite.play();
+      this.sprite.scale.set(1, 1);
     } else {
       this.sprite = new Graphics();
       this.sprite.beginFill(0x33cc33);
@@ -107,6 +108,8 @@ export class Player {
     const frames = (this.mapping[anim] || []).map(i => this.textures[i]).filter(Boolean);
     if (frames.length === 0) return;
 
+    const shouldFlip = this._facing === 'left';
+
     if (this.sprite instanceof AnimatedSprite) {
       // replace textures if different
       const current = this.sprite.textures;
@@ -114,6 +117,12 @@ export class Player {
         this.sprite.textures = frames;
         this.sprite.gotoAndPlay(0);
       }
+    }
+
+    if (shouldFlip) {
+      this.sprite.scale.x = -1;
+    } else if (this.sprite.scale.x < 0) {
+      this.sprite.scale.x = 1;
     }
   }
 }

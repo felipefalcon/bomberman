@@ -16,75 +16,70 @@ export async function loadPlayerSprites(url = '/assets/player-spritesheet.png', 
     img.onerror = () => reject(new Error('Failed to load spritesheet at ' + url));
   });
 
-  // draw to offscreen canvas to inspect pixels
+  // draw to offscreen canvas to inspect pixels and apply color-key transparency
   const canvas = document.createElement('canvas');
   canvas.width = img.width;
   canvas.height = img.height;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
 
+  // detect background color from top-left pixel and make it transparent
+  const bgData = ctx.getImageData(0, 0, 1, 1).data;
+  const bgColor = { r: bgData[0], g: bgData[1], b: bgData[2], a: bgData[3] };
+  const tolerance = 45;
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const dr = Math.abs(pixels[i] - bgColor.r);
+    const dg = Math.abs(pixels[i + 1] - bgColor.g);
+    const db = Math.abs(pixels[i + 2] - bgColor.b);
+    const da = Math.abs(pixels[i + 3] - bgColor.a);
+    if (dr + dg + db + da < tolerance) {
+      pixels[i + 3] = 0;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+
   const cols = Math.floor(img.width / tileSize);
   const rows = Math.floor(img.height / tileSize);
 
-  const base = new PIXI.BaseTexture(img);
+  const base = new PIXI.BaseTexture(canvas);
   base.scaleMode = PIXI.SCALE_MODES.NEAREST;
   const frames = [];
-  const nonEmpty = [];
-
-  // helper to test if a tile is non-empty by sampling pixels
-  function tileNonEmpty(tx, ty) {
-    const startX = tx * tileSize;
-    const startY = ty * tileSize;
-    // sample a small grid inside the tile
-    const step = Math.max(2, Math.floor(tileSize / 8));
-    const sampleSize = 0;
-    const data = ctx.getImageData(startX, startY, tileSize, tileSize).data;
-    // compare to the pixel at (0,0) which is likely background
-    const r0 = data[0], g0 = data[1], b0 = data[2], a0 = data[3];
-    let diff = 0;
-    for (let y = 0; y < tileSize; y += step) {
-      for (let x = 0; x < tileSize; x += step) {
-        const idx = (y * tileSize + x) * 4;
-        const r = data[idx], g = data[idx+1], b = data[idx+2], a = data[idx+3];
-        // if alpha significantly different or color different
-        if (Math.abs(r - r0) > 8 || Math.abs(g - g0) > 8 || Math.abs(b - b0) > 8 || Math.abs(a - a0) > 16) {
-          diff++;
-          if (diff > 2) return true;
-        }
-      }
-    }
-    return false;
-  }
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const rect = new PIXI.Rectangle(c * tileSize, r * tileSize, tileSize, tileSize);
       frames.push(new PIXI.Texture(base, rect));
-      const isNonEmpty = tileNonEmpty(c, r);
-      nonEmpty.push(isNonEmpty);
     }
   }
 
-  // Build simple mapping: group non-empty frames per row and assign directions
+  // Spritesheet layout:
+  // row 0 = walkDown (first 8 frames)
+  // row 1 = walkRight (first 8 frames)
+  // row last = walkUp (first 8 frames)
+  // walkLeft uses walkRight frames mirrored
   const mapping = {};
-  const directions = ['Down', 'Left', 'Right', 'Up'];
-  for (let r = 0; r < rows && r < directions.length; r++) {
-    const rowFrames = [];
-    for (let c = 0; c < cols; c++) {
-      const idx = r * cols + c;
-      if (nonEmpty[idx]) rowFrames.push(idx);
-    }
-    if (rowFrames.length > 0) {
-      mapping['walk' + directions[r]] = rowFrames;
-      mapping['idle' + directions[r]] = [rowFrames[Math.floor(rowFrames.length / 2)]];
-    }
-  }
+  const frameCountPerRow = Math.min(8, cols);
+  const hasUpRow = rows >= 3;
 
-  // fallback: if no mapping detected, use first few frames
-  if (Object.keys(mapping).length === 0) {
-    mapping.walkDown = [0,1,2].filter(i => i < frames.length);
-    mapping.idleDown = [mapping.walkDown[0] || 0];
-  }
+  const downFrames = Array.from({ length: frameCountPerRow }, (_, i) => i);
+  const rightFrames = Array.from({ length: frameCountPerRow }, (_, i) => cols + i);
+  const upFrames = hasUpRow
+    ? Array.from({ length: frameCountPerRow }, (_, i) => (rows - 1) * cols + i)
+    : [];
+
+  mapping.walkDown = downFrames;
+  mapping.idleDown = [downFrames[0]];
+
+  mapping.walkRight = rightFrames;
+  mapping.idleRight = [rightFrames[0]];
+
+  mapping.walkLeft = rightFrames;
+  mapping.idleLeft = [rightFrames[0]];
+
+  mapping.walkUp = hasUpRow ? upFrames : [];
+  mapping.idleUp = hasUpRow ? [upFrames[0]] : [];
 
   console.log('playerSprite: loaded spritesheet', { width: img.width, height: img.height, cols, rows, frames: frames.length });
   return { frames, cols, rows, mapping };
