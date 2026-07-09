@@ -2,8 +2,8 @@ import * as PIXI from 'pixi.js';
 import { Game } from './game.js';
 
 const GAME_ZOOM = 2; // adjust game zoom here
-const LOGICAL_WIDTH = 13 * 32;
-const LOGICAL_HEIGHT = 11 * 32;
+const LOGICAL_WIDTH = 17 * 32;
+const LOGICAL_HEIGHT = 13 * 32;
 
 async function bootstrap() {
   if (document.fonts?.load) {
