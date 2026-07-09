@@ -169,17 +169,18 @@ export class TileMap {
   }
 
   destroyTile(tx, ty) {
-    if (!this.isDestructible(tx, ty)) return false;
+    if (!this.isDestructible(tx, ty)) return null;
     
-    // Remove block sprite if it exists
+    // Get block sprite if it exists
     const spriteKey = `${tx},${ty}`;
     const blockSprite = this.spriteMap.get(spriteKey);
+    
     if (blockSprite) {
-      this.container.removeChild(blockSprite);
+      // Mark as destroyed but keep sprite for animation
       this.spriteMap.delete(spriteKey);
     }
     
     this.tiles[ty][tx] = 0;
-    return true;
+    return blockSprite || null; // Return the sprite so caller can apply effects
   }
 }

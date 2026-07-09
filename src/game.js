@@ -19,6 +19,7 @@ export class Game {
     this.lastZ = false;
     this.bombs = [];
     this.explosions = [];
+    this.destroyingBlocks = []; // Blocks being animated during destruction
     this.monsters = [];
     this.livesText = null;
     this.playerFrames = null;
@@ -126,6 +127,7 @@ export class Game {
       this._processBombInput();
     }
     this._updateBombs(tickDelta);
+    this._updateDestroyingBlocks(tickDelta);
     this._updateMonsters(tickDelta);
     this._updateExplosions(tickDelta);
   }
@@ -258,7 +260,20 @@ export class Game {
 
   _destroyTileAt(tx, ty) {
     if (this.map.isDestructible(tx, ty)) {
-      this.map.destroyTile(tx, ty);
+      const sprite = this.map.destroyTile(tx, ty);
+      
+      // Add to destroying blocks for animation
+      if (sprite) {
+        this.destroyingBlocks.push({
+          sprite: sprite,
+          duration: 15, // animation duration in ticks
+          elapsed: 0,
+          originalScale: sprite.scale.x
+        });
+      }
+      
+      // Remove any explosion on this tile to prevent further damage
+      this.explosions = this.explosions.filter(exp => !(exp.tx === tx && exp.ty === ty));
     }
   }
 
@@ -359,6 +374,41 @@ export class Game {
       this.stage.removeChild(explosion.sprite);
       this.explosions = this.explosions.filter((e) => e !== explosion);
     }
+  }
+
+  _updateDestroyingBlocks(delta) {
+    const toRemove = [];
+    
+    for (const block of this.destroyingBlocks) {
+      block.elapsed += delta;
+      const progress = Math.min(block.elapsed / block.duration, 1);
+      
+      // Animation: colors change like explosion (yellow -> orange -> red)
+      const colorFrame = Math.floor(progress * 3) % 3;
+      let color;
+      if (colorFrame === 0) color = 0xFFFF00; // Yellow
+      else if (colorFrame === 1) color = 0xFF8800; // Orange
+      else color = 0xFF3300; // Red
+      
+      // Apply tint to block
+      block.sprite.tint = color;
+      
+      // Scale effect: grow then shrink
+      const scaleFactor = 1 + Math.sin(progress * Math.PI) * 0.3;
+      block.sprite.scale.set(block.originalScale * scaleFactor);
+      
+      // Fade out at the end
+      block.sprite.alpha = 1 - (progress * progress); // quadratic fade
+      
+      if (progress >= 1) {
+        // Remove from stage and mark for removal
+        this.stage.removeChild(block.sprite);
+        toRemove.push(block);
+      }
+    }
+    
+    // Remove completed animations
+    this.destroyingBlocks = this.destroyingBlocks.filter(b => !toRemove.includes(b));
   }
 
   _updateMonsters(delta) {
