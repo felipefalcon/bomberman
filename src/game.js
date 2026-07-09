@@ -9,6 +9,10 @@ export class Game {
     this.stage = app.stage;
     this.tileSize = 32;
     this.keys = {};
+    this.bombFuseTicks = 180; // 3 seconds at 60 FPS
+    this.lastZ = false;
+    this.bombs = [];
+    this.explosions = [];
   }
 
   start() {
@@ -40,7 +44,116 @@ export class Game {
   }
 
   update(delta) {
-    if (this.player) this.player.update(delta, this.keys, this.map);
+    if (this.player) {
+      this.player.update(delta, this.keys, this.map);
+      this._processBombInput();
+    }
+    this._updateBombs(delta);
+    this._updateExplosions(delta);
+  }
+
+  _processBombInput() {
+    const zPressed = !!this.keys['z'];
+    if (zPressed && !this.lastZ) {
+      this._placeBomb();
+    }
+    this.lastZ = zPressed;
+  }
+
+  _placeBomb() {
+    const tx = Math.floor(this.player.sprite.x / this.tileSize);
+    const ty = Math.floor(this.player.sprite.y / this.tileSize);
+    if (this.map.isWall(tx, ty)) return;
+    if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return;
+
+    const bomb = {
+      tx,
+      ty,
+      timer: this.bombFuseTicks,
+      sprite: this._createBombSprite(tx, ty),
+    };
+    this.bombs.push(bomb);
+    this.stage.addChild(bomb.sprite);
+  }
+
+  _createBombSprite(tx, ty) {
+    const bomb = new PIXI.Graphics();
+    bomb.beginFill(0x000000);
+    bomb.drawRect(0, 0, this.tileSize, this.tileSize);
+    bomb.endFill();
+    bomb.x = tx * this.tileSize;
+    bomb.y = ty * this.tileSize;
+    return bomb;
+  }
+
+  _updateBombs(delta) {
+    const expire = [];
+    for (const bomb of this.bombs) {
+      bomb.timer -= delta;
+      if (bomb.timer <= 0) {
+        expire.push(bomb);
+      }
+    }
+    for (const bomb of expire) {
+      this._explodeBomb(bomb);
+    }
+  }
+
+  _explodeBomb(bomb) {
+    this.bombs = this.bombs.filter((b) => b !== bomb);
+    this.stage.removeChild(bomb.sprite);
+
+    const center = { tx: bomb.tx, ty: bomb.ty };
+    this._createExplosion(center);
+
+    const directions = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+    ];
+    for (const dir of directions) {
+      const tx = bomb.tx + dir.dx;
+      const ty = bomb.ty + dir.dy;
+      if (!this.map.isWall(tx, ty)) {
+        this._createExplosion({ tx, ty });
+      }
+    }
+  }
+
+  _createExplosion(cell) {
+    const explosion = {
+      tx: cell.tx,
+      ty: cell.ty,
+      timer: 20,
+      sprite: this._createExplosionSprite(cell.tx, cell.ty),
+    };
+    this.explosions.push(explosion);
+    this.stage.addChild(explosion.sprite);
+  }
+
+  _createExplosionSprite(tx, ty) {
+    const gfx = new PIXI.Graphics();
+    gfx.beginFill(0xFFCC33, 0.8);
+    gfx.drawRect(0, 0, this.tileSize, this.tileSize);
+    gfx.endFill();
+    gfx.x = tx * this.tileSize;
+    gfx.y = ty * this.tileSize;
+    return gfx;
+  }
+
+  _updateExplosions(delta) {
+    const expire = [];
+    for (const explosion of this.explosions) {
+      explosion.timer -= delta;
+      if (explosion.timer <= 0) {
+        expire.push(explosion);
+      }
+    }
+    for (const explosion of expire) {
+      this.stage.removeChild(explosion.sprite);
+      this.explosions = this.explosions.filter((e) => e !== explosion);
+    }
   }
 }
 
