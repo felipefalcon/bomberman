@@ -1,0 +1,16 @@
+{
+  "name": "bomberman",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pixi.js": "^7.2.1"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
