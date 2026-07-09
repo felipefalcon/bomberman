@@ -26,7 +26,10 @@ export class Game {
       fill: 0xffffff,
       stroke: 0x000000,
       strokeThickness: 3,
+      resolution: 1,
     });
+    this.livesText.texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+    this.livesText.roundPixels = true;
     this.livesText.x = 4;
     this.livesText.y = 4;
     this.stage.addChild(this.livesText);
