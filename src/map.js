@@ -29,20 +29,17 @@ export class TileMap {
 
         const g = new PIXI.Graphics();
         if (t === 1) {
-          g.beginFill(0x666666);
-          g.lineStyle(1, 0x444444);
-          g.drawRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-          g.endFill();
+          g.rect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
+          g.fill(0x666666);
+          g.stroke({ color: 0x444444, width: 1 });
         } else if (t === 2) {
-          g.beginFill(0x8B4513);
-          g.lineStyle(1, 0x5A2E0C);
-          g.drawRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-          g.endFill();
+          g.rect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
+          g.fill(0x8B4513);
+          g.stroke({ color: 0x5A2E0C, width: 1 });
         } else {
-          g.beginFill(0xCCAA88);
-          g.lineStyle(1, 0xB28A63);
-          g.drawRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-          g.endFill();
+          g.rect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
+          g.fill(0xCCAA88);
+          g.stroke({ color: 0xB28A63, width: 1 });
         }
 
         this.container.addChild(g);
@@ -52,18 +49,22 @@ export class TileMap {
   }
 
   isWall(tx, ty) {
-    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return true;
+    if (!this._isValidTileCoord(tx, ty)) return true;
     return this.tiles[ty][tx] === 1;
   }
 
   isBlocked(tx, ty) {
-    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return true;
+    if (!this._isValidTileCoord(tx, ty)) return true;
     return this.tiles[ty][tx] === 1 || this.tiles[ty][tx] === 2;
   }
 
   isDestructible(tx, ty) {
-    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return false;
+    if (!this._isValidTileCoord(tx, ty)) return false;
     return this.tiles[ty][tx] === 2;
+  }
+
+  _isValidTileCoord(tx, ty) {
+    return Number.isInteger(tx) && Number.isInteger(ty) && tx >= 0 && ty >= 0 && tx < this.cols && ty < this.rows;
   }
 
   destroyTile(tx, ty) {
@@ -73,10 +74,9 @@ export class TileMap {
     const child = this.container.children[index];
     if (child) this.container.removeChild(child);
     const g = new PIXI.Graphics();
-    g.beginFill(0xCCAA88);
-    g.lineStyle(1, 0xB28A63);
-    g.drawRect(tx * this.tileSize, ty * this.tileSize, this.tileSize, this.tileSize);
-    g.endFill();
+    g.rect(tx * this.tileSize, ty * this.tileSize, this.tileSize, this.tileSize);
+    g.fill(0xCCAA88);
+    g.stroke({ color: 0xB28A63, width: 1 });
     this.container.addChildAt(g, index);
     return true;
   }

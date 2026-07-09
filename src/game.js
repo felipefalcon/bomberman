@@ -22,18 +22,31 @@ export class Game {
     this.map = new TileMap(this.app, this.tileSize, 13, 11);
     this.stage.addChild(this.map.container);
 
-    this.livesText = new PIXI.Text('Lives: 3', {
-      fontFamily: 'Arial',
-      fontSize: 16,
-      fill: 0xffffff,
-      stroke: 0x000000,
-      strokeThickness: 3,
-      resolution: 1,
+    PIXI.BitmapFont.install({
+      name: 'HUDFont',
+      chars: PIXI.BitmapFontManager.ASCII,
+      resolution: window.devicePixelRatio || 1,
+      padding: 8,
+      textureStyle: { scaleMode: 'nearest' },
+      style: {
+        fontFamily: 'Silkscreen, monospace',
+        fontSize: 8,
+        fill: 0xffffff,
+        stroke: { color: 0x000000, width: 2 },
+      },
     });
-    this.livesText.texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-    this.livesText.roundPixels = true;
-    this.livesText.x = 4;
-    this.livesText.y = 4;
+
+    this.livesText = new PIXI.BitmapText({
+      text: 'Lives: 3',
+      style: {
+        fontFamily: 'HUDFont',
+        fontSize: 8,
+        fill: 0xffffff,
+      },
+      roundPixels: true,
+    });
+    this.livesText.x = 6;
+    this.livesText.y = 6;
     this.stage.addChild(this.livesText);
 
     this._spawnMonsters(3);
@@ -63,13 +76,15 @@ export class Game {
   }
 
   update(delta) {
+    const tickDelta = typeof delta === 'number' ? delta : delta?.deltaTime ?? 1;
+
     if (this.player) {
-      this.player.update(delta, this.keys, this.map, this.bombs);
+      this.player.update(tickDelta, this.keys, this.map, this.bombs);
       this._processBombInput();
     }
-    this._updateBombs(delta);
-    this._updateMonsters(delta);
-    this._updateExplosions(delta);
+    this._updateBombs(tickDelta);
+    this._updateMonsters(tickDelta);
+    this._updateExplosions(tickDelta);
   }
 
   _processBombInput() {
@@ -98,9 +113,8 @@ export class Game {
 
   _createBombSprite(tx, ty) {
     const bomb = new PIXI.Graphics();
-    bomb.beginFill(0x000000);
-    bomb.drawRect(0, 0, this.tileSize, this.tileSize);
-    bomb.endFill();
+    bomb.rect(0, 0, this.tileSize, this.tileSize);
+    bomb.fill(0x000000);
     bomb.x = tx * this.tileSize;
     bomb.y = ty * this.tileSize;
     return bomb;
@@ -191,9 +205,8 @@ export class Game {
 
   _createExplosionSprite(tx, ty) {
     const gfx = new PIXI.Graphics();
-    gfx.beginFill(0xFFCC33, 0.8);
-    gfx.drawRect(0, 0, this.tileSize, this.tileSize);
-    gfx.endFill();
+    gfx.rect(0, 0, this.tileSize, this.tileSize);
+    gfx.fill({ color: 0xFFCC33, alpha: 0.8 });
     gfx.x = tx * this.tileSize;
     gfx.y = ty * this.tileSize;
     return gfx;
@@ -271,12 +284,14 @@ export class Game {
       this.player.sprite.tint = 0xff0000;
       this.keys = {};
     }
-    const gameOver = new PIXI.Text('Game Over', {
-      fontFamily: 'Arial',
-      fontSize: 28,
-      fill: 0xff0000,
-      stroke: 0x000000,
-      strokeThickness: 4,
+    const gameOver = new PIXI.Text({
+      text: 'Game Over',
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 28,
+        fill: 0xff0000,
+        stroke: { color: 0x000000, width: 4 },
+      },
     });
     gameOver.anchor.set(0.5, 0.5);
     gameOver.x = (this.tileSize * 13) / 2;
