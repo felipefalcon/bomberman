@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 
 export class TileMap {
-  constructor(app, tileSize = 32, cols = 13, rows = 11) {
+  constructor(app, tileSize = 32, cols = 17, rows = 13) {
     this.app = app;
     this.tileSize = tileSize;
     this.cols = cols;

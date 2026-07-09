@@ -9,6 +9,8 @@ export class Game {
     this.app = app;
     this.stage = app.stage;
     this.tileSize = 32;
+    this.mapCols = 17;
+    this.mapRows = 13;
     this.keys = {};
     this.bombFuseTicks = 180; // 3 seconds at 60 FPS
     this.lastZ = false;
@@ -19,7 +21,7 @@ export class Game {
   }
 
   start() {
-    this.map = new TileMap(this.app, this.tileSize, 13, 11);
+    this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows);
     this.stage.addChild(this.map.container);
 
     PIXI.BitmapFont.install({
@@ -113,7 +115,8 @@ export class Game {
 
   _createBombSprite(tx, ty) {
     const bomb = new PIXI.Graphics();
-    bomb.rect(0, 0, this.tileSize, this.tileSize);
+    const radius = this.tileSize / 2 - 3;
+    bomb.circle(this.tileSize / 2, this.tileSize / 2, radius);
     bomb.fill(0x000000);
     bomb.x = tx * this.tileSize;
     bomb.y = ty * this.tileSize;
@@ -284,18 +287,18 @@ export class Game {
       this.player.sprite.tint = 0xff0000;
       this.keys = {};
     }
-    const gameOver = new PIXI.Text({
+    const gameOver = new PIXI.BitmapText({
       text: 'Game Over',
       style: {
-        fontFamily: 'Arial',
-        fontSize: 28,
+        fontFamily: 'HUDFont',
+        fontSize: 12,
         fill: 0xff0000,
-        stroke: { color: 0x000000, width: 4 },
       },
+      anchor: 0.5,
+      roundPixels: true,
     });
-    gameOver.anchor.set(0.5, 0.5);
-    gameOver.x = (this.tileSize * 13) / 2;
-    gameOver.y = (this.tileSize * 11) / 2;
+    gameOver.x = (this.tileSize * this.mapCols) / 2;
+    gameOver.y = (this.tileSize * this.mapRows) / 2;
     this.stage.addChild(gameOver);
     this.app.ticker.stop();
   }

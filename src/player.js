@@ -127,15 +127,16 @@ export class Player {
 
     const frames = (this.mapping[anim] || []).map(i => this.textures[i]).filter(Boolean);
     if (frames.length === 0) return;
+    const animationFrames = anim.startsWith('walk') ? this._toPingPongFrames(frames) : frames;
 
     const shouldFlip = this._facing === 'left';
 
     if (this.sprite instanceof AnimatedSprite) {
       // replace textures if different
       const current = this.sprite.textures;
-      if (current.length !== frames.length || current[0] !== frames[0]) {
-        this.sprite.textures = frames;
-        this.sprite.gotoAndPlay(0);
+      if (current.length !== animationFrames.length || current[0] !== animationFrames[0]) {
+        this.sprite.textures = animationFrames;
+        this.sprite.play();
       }
     }
 
@@ -144,6 +145,17 @@ export class Player {
     } else if (this.sprite.scale.x < 0) {
       this.sprite.scale.x = 1;
     }
+  }
+
+  _toPingPongFrames(frames) {
+    if (frames.length <= 1) return frames;
+
+    // Ping-pong centered: 2-1-0-1-2-3-4-3 and loops back to 2
+    const middle = Math.floor(frames.length / 2);
+    const leftPart = frames.slice(0, middle + 1).reverse();
+    const rightPart = frames.slice(1);
+    const backPart = frames.slice(middle + 1, -1).reverse();
+    return leftPart.concat(rightPart).concat(backPart);
   }
 }
 
