@@ -71,11 +71,14 @@ export class Game {
       sidebarWidth: this.sidebarWidth,
       mapCols: this.mapCols,
       tileSize: this.tileSize,
+      itemFrames: this.itemFrames,
     });
     this.sidebarHud = new SidebarHud(this.stage, {
       sidebarWidth: this.sidebarWidth,
       mapRows: this.mapRows,
       tileSize: this.tileSize,
+      itemFrames: this.itemFrames,
+      itemMapping: this.itemMapping,
     });
 
     // simple keyboard state
@@ -165,6 +168,8 @@ export class Game {
       .then(({ frames, mapping }) => {
         this.itemFrames = frames;
         this.itemMapping = mapping;
+        this.topHud?.setItemIcons(this.itemFrames);
+        this.sidebarHud?.setItemIcons(this.itemFrames, this.itemMapping);
         console.log('Game: Items sprite loaded');
       })
       .catch((err) => {

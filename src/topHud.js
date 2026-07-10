@@ -1,14 +1,22 @@
 import * as PIXI from 'pixi.js';
 
 export class TopHud {
-  constructor(stage, { sidebarWidth, mapCols, tileSize }) {
+  constructor(stage, { sidebarWidth, mapCols, tileSize, itemFrames = null }) {
     this.stage = stage;
     this.sidebarWidth = sidebarWidth;
     this.mapCols = mapCols;
     this.tileSize = tileSize;
+    this.itemFrames = itemFrames;
     this.timerText = null;
     this.livesText = null;
+    this.playerIconContainer = null;
+    this.clockIconContainer = null;
     this.container = this._create();
+  }
+
+  setItemIcons(itemFrames) {
+    this.itemFrames = itemFrames;
+    this._refreshIcons();
   }
 
   setLives(value) {
@@ -42,7 +50,10 @@ export class TopHud {
 
     const livesPanel = this._createHudPanel(4, 3, 90, height - 6);
     container.addChild(livesPanel);
-    livesPanel.addChild(this._drawFaceIcon(11, 13));
+
+    this.playerIconContainer = new PIXI.Container();
+    this.playerIconContainer.addChild(this._createPlayerIcon());
+    livesPanel.addChild(this.playerIconContainer);
 
     this.livesText = new PIXI.BitmapText({
       text: '3',
@@ -55,7 +66,10 @@ export class TopHud {
 
     const timerPanel = this._createHudPanel(width - 86, 3, 82, height - 6);
     container.addChild(timerPanel);
-    timerPanel.addChild(this._drawClockIcon(10, 13, 0xff7a22));
+
+    this.clockIconContainer = new PIXI.Container();
+    this.clockIconContainer.addChild(this._createClockIcon());
+    timerPanel.addChild(this.clockIconContainer);
 
     this.timerText = new PIXI.BitmapText({
       text: '3:20',
@@ -84,6 +98,43 @@ export class TopHud {
     panel.addChild(bg);
 
     return panel;
+  }
+
+  _refreshIcons() {
+    if (this.playerIconContainer) {
+      this.playerIconContainer.removeChildren();
+      this.playerIconContainer.addChild(this._createPlayerIcon());
+    }
+
+    if (this.clockIconContainer) {
+      this.clockIconContainer.removeChildren();
+      this.clockIconContainer.addChild(this._createClockIcon());
+    }
+  }
+
+  _createPlayerIcon() {
+    const sprite = this._createItemIcon(19);
+    if (sprite) return sprite;
+    return this._drawFaceIcon(11, 13);
+  }
+
+  _createClockIcon() {
+    const sprite = this._createItemIcon(20);
+    if (sprite) return sprite;
+    return this._drawClockIcon(10, 13, 0xff7a22);
+  }
+
+  _createItemIcon(frameIndex) {
+    const texture = this.itemFrames?.[frameIndex];
+    if (!texture) return null;
+
+    const sprite = new PIXI.Sprite(texture);
+    sprite.width = 24;
+    sprite.height = 24;
+    sprite.x = 0;
+    sprite.y = -3;
+    sprite.roundPixels = true;
+    return sprite;
   }
 
   _drawClockIcon(cx, cy, bezelColor = 0xdddddd) {

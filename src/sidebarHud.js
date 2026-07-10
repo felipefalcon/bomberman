@@ -1,13 +1,21 @@
 import * as PIXI from 'pixi.js';
 
 export class SidebarHud {
-  constructor(stage, { sidebarWidth, mapRows, tileSize }) {
+  constructor(stage, { sidebarWidth, mapRows, tileSize, itemFrames = null, itemMapping = null }) {
     this.stage = stage;
     this.sidebarWidth = sidebarWidth;
     this.mapRows = mapRows;
     this.tileSize = tileSize;
+    this.itemFrames = itemFrames;
+    this.itemMapping = itemMapping;
     this.powerupSlots = {};
     this.container = this._create();
+  }
+
+  setItemIcons(itemFrames, itemMapping) {
+    this.itemFrames = itemFrames;
+    this.itemMapping = itemMapping;
+    this._refreshPowerupIcons();
   }
 
   update(player) {
@@ -29,22 +37,22 @@ export class SidebarHud {
     const height = this.mapRows * this.tileSize;
     const bg = new PIXI.Graphics();
     bg.rect(0, 0, this.sidebarWidth, height);
-    bg.fill(0x171717);
+    // bg.fill(0x171717);
     bg.rect(0, 0, this.sidebarWidth, height);
-    bg.stroke({ color: 0xd8d862, width: 1.5 });
+    // bg.stroke({ color: 0xd8d862, width: 1.5 });
     container.addChild(bg);
 
     const powerupRows = [
-      { key: 'bomb', draw: () => this._drawBombIcon(8, 9), withText: true },
-      { key: 'range', draw: () => this._drawRangeIcon(8, 9), withText: true },
-      { key: 'speed', draw: () => this._drawSpeedIcon(8, 9), withText: true },
-      { key: 'pierce', draw: () => this._drawPierceIcon(8, 9), withText: false },
-      { key: 'shield', draw: () => this._drawShieldIcon(8, 9), withText: false },
-      { key: 'detonator', draw: () => this._drawDetonatorIcon(8, 9), withText: false },
+      { key: 'bomb', fallbackDraw: () => this._drawBombIcon(8, 9), withText: true },
+      { key: 'range', fallbackDraw: () => this._drawRangeIcon(8, 9), withText: true },
+      { key: 'speed', fallbackDraw: () => this._drawSpeedIcon(8, 9), withText: true },
+      { key: 'pierce', fallbackDraw: () => this._drawPierceIcon(8, 9), withText: false },
+      { key: 'shield', fallbackDraw: () => this._drawShieldIcon(8, 9), withText: false },
+      { key: 'detonator', fallbackDraw: () => this._drawDetonatorIcon(8, 9), withText: false },
     ];
 
     powerupRows.forEach((row, index) => {
-      const slot = this._createPowerupSlot(0, index * this.tileSize, row.draw, row.withText);
+      const slot = this._createPowerupSlot(2, index * this.tileSize + 3, row.key, row.fallbackDraw, row.withText);
       container.addChild(slot.container);
       this.powerupSlots[row.key] = slot;
     });
@@ -52,7 +60,7 @@ export class SidebarHud {
     return container;
   }
 
-  _createPowerupSlot(x, y, drawIcon, withText) {
+  _createPowerupSlot(x, y, key, fallbackDraw, withText) {
     const container = new PIXI.Container();
     container.x = x;
     container.y = y;
@@ -60,15 +68,16 @@ export class SidebarHud {
 
     const bg = new PIXI.Graphics();
     bg.rect(0, 0, this.sidebarWidth, this.tileSize);
-    bg.fill(0x050505);
+    // bg.fill(0x050505);
     bg.rect(0, 0, this.sidebarWidth, this.tileSize);
-    bg.stroke({ color: 0x3e6de6, width: 1 });
+    // bg.stroke({ color: 0x3e6de6, width: 1 });
     bg.rect(0, 0, this.sidebarWidth, 3);
-    bg.fill(0xdf8d1f);
+    // bg.fill(0xdf8d1f);
     container.addChild(bg);
 
-    const icon = drawIcon();
-    container.addChild(icon);
+    const iconContainer = new PIXI.Container();
+    iconContainer.addChild(this._createPowerupIcon(key, fallbackDraw));
+    container.addChild(iconContainer);
 
     let text = null;
     if (withText) {
@@ -77,12 +86,42 @@ export class SidebarHud {
         style: { fontFamily: 'HUDFont', fontSize: 6, fill: 0xffffff },
         roundPixels: true,
       });
-      text.x = 3;
+      text.x = 6;
       text.y = 19;
       container.addChild(text);
     }
 
-    return { container, text };
+    return { container, text, key, fallbackDraw, iconContainer };
+  }
+
+  _refreshPowerupIcons() {
+    Object.values(this.powerupSlots).forEach((slot) => {
+      if (!slot.iconContainer) return;
+      slot.iconContainer.removeChildren();
+      slot.iconContainer.addChild(this._createPowerupIcon(slot.key, slot.fallbackDraw));
+    });
+  }
+
+  _createPowerupIcon(key, fallbackDraw) {
+    const texture = this._getPowerupTexture(key);
+    if (texture) {
+      const sprite = new PIXI.Sprite(texture);
+      sprite.x = 1;
+      sprite.y = 1;
+      sprite.roundPixels = true;
+      return sprite;
+    }
+
+    return fallbackDraw();
+  }
+
+  _getPowerupTexture(key) {
+    if (!this.itemFrames || !this.itemMapping) return null;
+
+    const frameIndex = this.itemMapping[key];
+    if (typeof frameIndex !== 'number') return null;
+
+    return this.itemFrames[frameIndex] || null;
   }
 
   _setPowerupSlotState(key, value, isActive) {
