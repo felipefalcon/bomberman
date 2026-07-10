@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 
 export class TopHud {
+  fontSize = 12;
   constructor(stage, { sidebarWidth, mapCols, tileSize, itemFrames = null }) {
     this.stage = stage;
     this.sidebarWidth = sidebarWidth;
@@ -41,14 +42,14 @@ export class TopHud {
 
     const frame = new PIXI.Graphics();
     frame.rect(0, 0, width, height);
-    frame.fill(0x171717);
+    frame.fill(0x203890);
     frame.rect(0, 0, width, height);
-    frame.stroke({ color: 0xd8d862, width: 1.5 });
+    frame.stroke({ color: 0x406000, width: 1 });
     frame.rect(1, 1, width - 2, height - 2);
-    frame.stroke({ color: 0x2957c8, width: 1 });
+    frame.stroke({ color: 0x58d800, width: 1 });
     container.addChild(frame);
 
-    const livesPanel = this._createHudPanel(4, 3, 90, height - 6);
+    const livesPanel = this._createHudPanel(8, 5, 90, height - 6);
     container.addChild(livesPanel);
 
     this.playerIconContainer = new PIXI.Container();
@@ -57,14 +58,14 @@ export class TopHud {
 
     this.livesText = new PIXI.BitmapText({
       text: '3',
-      style: { fontFamily: 'HUDFont', fontSize: 8, fill: 0xffffff },
+      style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
       roundPixels: true,
     });
-    this.livesText.x = 22;
-    this.livesText.y = 9;
+    this.livesText.x = 26;
+    this.livesText.y = 5;
     livesPanel.addChild(this.livesText);
 
-    const timerPanel = this._createHudPanel(width - 86, 3, 82, height - 6);
+    const timerPanel = this._createHudPanel((width /2) - 40, 5, 82, height - 6);
     container.addChild(timerPanel);
 
     this.clockIconContainer = new PIXI.Container();
@@ -73,11 +74,11 @@ export class TopHud {
 
     this.timerText = new PIXI.BitmapText({
       text: '3:20',
-      style: { fontFamily: 'HUDFont', fontSize: 8, fill: 0xffffff },
+      style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
       roundPixels: true,
     });
-    this.timerText.x = 20;
-    this.timerText.y = 9;
+    this.timerText.x = 32;
+    this.timerText.y = 5;
     timerPanel.addChild(this.timerText);
 
     return container;
@@ -90,11 +91,11 @@ export class TopHud {
 
     const bg = new PIXI.Graphics();
     bg.rect(0, 0, width, height);
-    bg.fill(0x050505);
+    // bg.fill(0x050505);
     bg.rect(0, 0, width, height);
-    bg.stroke({ color: 0x3e6de6, width: 1 });
+    // bg.stroke({ color: 0x3e6de6, width: 1 });
     bg.rect(0, 0, width, 3);
-    bg.fill(0xdf8d1f);
+    // bg.fill(0xdf8d1f);
     panel.addChild(bg);
 
     return panel;
@@ -132,7 +133,7 @@ export class TopHud {
     sprite.width = 24;
     sprite.height = 24;
     sprite.x = 0;
-    sprite.y = -3;
+    sprite.y = 0;
     sprite.roundPixels = true;
     return sprite;
   }

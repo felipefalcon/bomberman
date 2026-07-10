@@ -86,7 +86,7 @@ export class SidebarHud {
         style: { fontFamily: 'HUDFont', fontSize: 6, fill: 0xffffff },
         roundPixels: true,
       });
-      text.x = 6;
+      text.x = 7;
       text.y = 19;
       container.addChild(text);
     }
