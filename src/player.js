@@ -6,7 +6,9 @@ export class Player {
   constructor(x, y, tileSize = 32, textures = null, mapping = null) {
     this.tileSize = tileSize;
     this.spriteScale = 1.5; // Scale multiplier for rendering (1.5 = 48x48, 2 = 64x64)
-    this.speed = 2.6; // pixels per tick (multiplied by delta)
+    this.baseSpeed = 2.6;
+    this.speed = this.baseSpeed; // pixels per tick (multiplied by delta)
+    this.speedPowerups = 0;
     this.halfSize = this.tileSize / 2;
     // collision hitbox slightly smaller than visual — default 26x26
     this.hitboxSize = 26;
@@ -44,6 +46,8 @@ export class Player {
     this.activeBombs = 0; // Currently active bombs
     this.explosionRange = 1; // Explosion range in tiles
     this.canPierceBlocks = false; // Explosions can pass through blocks
+    this.hasShield = false;
+    this.hasDetonator = false;
   }
 
   takeDamage() {

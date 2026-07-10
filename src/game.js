@@ -9,12 +9,15 @@ import { loadBombSprite } from './bombLoader.js';
 import { loadItemSprites } from './itemsLoader.js';
 import { AnimationDebugger } from './animationDebugger.js';
 import { AudioManager } from './audioManager.js';
+import { TopHud } from './topHud.js';
+import { SidebarHud } from './sidebarHud.js';
 
 export class Game {
   constructor(app) {
     this.app = app;
     this.stage = app.stage;
     this.tileSize = 32;
+    this.sidebarWidth = 24;
     this.mapCols = 17;
     this.mapRows = 11;
     this.keys = {};
@@ -37,13 +40,13 @@ export class Game {
     this.debugger = null;
     this.audioManager = new AudioManager();
     this.timeRemaining = 200; // seconds
-    this.hudContainer = null;
-    this.bombCountText = null;
-    this.timerText = null;
+    this.topHud = null;
+    this.sidebarHud = null;
   }
 
   start() {
     this.gameContainer = new PIXI.Container();
+    this.gameContainer.x = this.sidebarWidth;
     this.gameContainer.y = this.tileSize; // offset down by 1 tile for HUD
     this.stage.addChild(this.gameContainer);
 
@@ -64,7 +67,16 @@ export class Game {
       },
     });
 
-    this._createHUD();
+    this.topHud = new TopHud(this.stage, {
+      sidebarWidth: this.sidebarWidth,
+      mapCols: this.mapCols,
+      tileSize: this.tileSize,
+    });
+    this.sidebarHud = new SidebarHud(this.stage, {
+      sidebarWidth: this.sidebarWidth,
+      mapRows: this.mapRows,
+      tileSize: this.tileSize,
+    });
 
     // simple keyboard state
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
@@ -82,11 +94,13 @@ export class Game {
         console.log('Game: Player spritesheet loaded');
         this.player = new Player(startX, startY, this.tileSize, frames, mapping);
         this.gameContainer.addChild(this.player.sprite);
+        this._refreshHUD();
       })
       .catch((err) => {
         console.warn('Could not load player spritesheet, using placeholder. Error:', err);
         this.player = new Player(startX, startY, this.tileSize);
         this.gameContainer.addChild(this.player.sprite);
+        this._refreshHUD();
       });
 
     const enemyPromise = this.map._initPromise.then(async () => {
@@ -462,7 +476,7 @@ export class Game {
       if (this.player && !explosion.hasDamagedPlayer && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
         explosion.hasDamagedPlayer = true;
         this.player.takeDamage();
-        this._refreshLivesText();
+        this._refreshHUD();
         if (this.player.lives <= 0) {
           this._handlePlayerDeath();
         }
@@ -559,6 +573,7 @@ export class Game {
     switch(type) {
       case 'speed':
         player.speed *= 1.2; // 20% speed boost
+        player.speedPowerups += 1;
         break;
       case 'bomb':
         player.maxBombs += 1;
@@ -576,6 +591,8 @@ export class Game {
         player.hasDetonator = true;
         break;
     }
+
+    this._refreshHUD();
   }
 
   _updateMonsters(delta) {
@@ -586,7 +603,7 @@ export class Game {
           monster.lastPlayerTouch = true;
           this.player.takeDamage();
           this.audioManager.playSoundEffect('damage');
-          this._refreshLivesText();
+          this._refreshHUD();
           if (this.player.lives <= 0) {
             this._handlePlayerDeath();
           }
@@ -608,132 +625,23 @@ export class Game {
     return playerTx === tx && playerTy === ty;
   }
 
+  _refreshHUD() {
+    this._refreshLivesText();
+    this._refreshPowerupHUD();
+  }
+
   _refreshLivesText() {
     if (!this.player) return;
-    if (this.livesText) this.livesText.text = `${this.player.lives}`;
-    if (this.bombCountText) this.bombCountText.text = `${this.player.maxBombs}`;
+    this.topHud?.setLives(this.player.lives);
+  }
+
+  _refreshPowerupHUD() {
+    if (!this.player) return;
+    this.sidebarHud?.update(this.player);
   }
 
   _refreshTimerText() {
-    if (!this.timerText) return;
-    const t = Math.max(0, Math.ceil(this.timeRemaining));
-    const mins = Math.floor(t / 60);
-    const secs = t % 60;
-    this.timerText.text = `${mins}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  _createHUD() {
-    this.hudContainer = new PIXI.Container();
-    this.stage.addChild(this.hudContainer);
-
-    const W = this.mapCols * this.tileSize;
-    const H = this.tileSize;
-
-    // Blue background bar
-    const bg = new PIXI.Graphics();
-    bg.rect(0, 0, W, H);
-    bg.fill(0x2244bb);
-    this.hudContainer.addChild(bg);
-
-    // Green border at bottom
-    const border = new PIXI.Graphics();
-    border.rect(0, H - 2, W, 2);
-    border.fill(0x44cc44);
-    this.hudContainer.addChild(border);
-
-    // Heart icon
-    this.hudContainer.addChild(this._drawHeart(4, H / 2));
-
-    // Lives text
-    this.livesText = new PIXI.BitmapText({
-      text: `${3}`,
-      style: { fontFamily: 'HUDFont', fontSize: 8 },
-      roundPixels: true,
-    });
-    this.livesText.x = 20;
-    this.livesText.y = H / 2 - 4;
-    this.hudContainer.addChild(this.livesText);
-
-    // Bomb icon
-    this.hudContainer.addChild(this._drawBombIcon(44, H / 2));
-
-    // Bomb count text
-    this.bombCountText = new PIXI.BitmapText({
-      text: '1',
-      style: { fontFamily: 'HUDFont', fontSize: 8 },
-      roundPixels: true,
-    });
-    this.bombCountText.x = 58;
-    this.bombCountText.y = H / 2 - 4;
-    this.hudContainer.addChild(this.bombCountText);
-
-    // Clock icon
-    this.hudContainer.addChild(this._drawClockIcon(W - 60, H / 2));
-
-    // Timer text
-    this.timerText = new PIXI.BitmapText({
-      text: '3:20',
-      style: { fontFamily: 'HUDFont', fontSize: 8 },
-      roundPixels: true,
-    });
-    this.timerText.x = W - 44;
-    this.timerText.y = H / 2 - 4;
-    this.hudContainer.addChild(this.timerText);
-
-    this._refreshTimerText();
-  }
-
-  _drawHeart(x, cy) {
-    const g = new PIXI.Graphics();
-    const p = 2;
-    const pat = [
-      [0,1,1,0,1,1,0],
-      [1,1,1,1,1,1,1],
-      [1,1,1,1,1,1,1],
-      [0,1,1,1,1,1,0],
-      [0,0,1,1,1,0,0],
-      [0,0,0,1,0,0,0],
-    ];
-    const h = pat.length * p;
-    const startY = Math.round(cy - h / 2);
-    g.fill(0xFF2222);
-    for (let r = 0; r < pat.length; r++) {
-      for (let c = 0; c < pat[r].length; c++) {
-        if (pat[r][c]) g.rect(x + c * p, startY + r * p, p, p);
-      }
-    }
-    return g;
-  }
-
-  _drawBombIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.circle(cx, cy, 7);
-    g.fill(0x111111);
-    g.circle(cx - 2, cy - 2, 2);
-    g.fill(0x555555);
-    g.moveTo(cx + 4, cy - 5);
-    g.lineTo(cx + 8, cy - 9);
-    g.stroke({ color: 0x886600, width: 2 });
-    g.circle(cx + 8, cy - 9, 2);
-    g.fill(0xFFAA00);
-    return g;
-  }
-
-  _drawClockIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.circle(cx, cy, 8);
-    g.fill(0xDDDDDD);
-    g.circle(cx, cy, 8);
-    g.stroke({ color: 0x555555, width: 1.5 });
-    g.moveTo(cx, cy);
-    g.lineTo(cx, cy - 5);
-    g.stroke({ color: 0x222222, width: 1.5 });
-    g.moveTo(cx, cy);
-    g.lineTo(cx + 4, cy + 1);
-    g.stroke({ color: 0x222222, width: 1.5 });
-    g.circle(cx, cy, 1.5);
-    g.fill(0x222222);
-    return g;
+    this.topHud?.setTimer(this.timeRemaining);
   }
 
   _handlePlayerDeath() {
