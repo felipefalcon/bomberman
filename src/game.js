@@ -39,8 +39,12 @@ export class Game {
   }
 
   start() {
+    this.gameContainer = new PIXI.Container();
+    this.gameContainer.y = this.tileSize; // offset down by 1 tile for HUD
+    this.stage.addChild(this.gameContainer);
+
     this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows);
-    this.stage.addChild(this.map.container);
+    this.gameContainer.addChild(this.map.container);
 
     PIXI.BitmapFont.install({
       name: 'HUDFont',
@@ -84,12 +88,12 @@ export class Game {
         this.playerMapping = mapping;
         console.log('Game: Player spritesheet loaded');
         this.player = new Player(startX, startY, this.tileSize, frames, mapping);
-        this.stage.addChild(this.player.sprite);
+        this.gameContainer.addChild(this.player.sprite);
       })
       .catch((err) => {
         console.warn('Could not load player spritesheet, using placeholder. Error:', err);
         this.player = new Player(startX, startY, this.tileSize);
-        this.stage.addChild(this.player.sprite);
+        this.gameContainer.addChild(this.player.sprite);
       });
 
     const enemyPromise = this.map._initPromise.then(async () => {
@@ -208,7 +212,7 @@ export class Game {
     };
     this.bombs.push(bomb);
     this.player.activeBombs += 1;
-    this.stage.addChild(bomb.sprite);
+    this.gameContainer.addChild(bomb.sprite);
   }
 
   _createBombSprite(tx, ty) {
@@ -273,7 +277,7 @@ export class Game {
     for (const { tx, ty } of spawnTiles) {
       const monster = new Monster(tx, ty, this.tileSize, this.enemyFrames, this.enemyMapping);
       this.monsters.push(monster);
-      this.stage.addChild(monster.sprite);
+      this.gameContainer.addChild(monster.sprite);
     }
   }
 
@@ -298,7 +302,7 @@ export class Game {
 
   _explodeBomb(bomb) {
     this.bombs = this.bombs.filter((b) => b !== bomb);
-    this.stage.removeChild(bomb.sprite);
+    this.gameContainer.removeChild(bomb.sprite);
     
     // Decrease active bomb count
     if (this.player && this.player.activeBombs > 0) {
@@ -373,7 +377,7 @@ export class Game {
     
     const powerup = new Powerup(tx, ty, this.tileSize, randomType, this.itemFrames[frameIndex]);
     this.powerups.push(powerup);
-    this.stage.addChild(powerup.sprite);
+    this.gameContainer.addChild(powerup.sprite);
   }
 
   _createExplosion(cell) {
@@ -385,7 +389,7 @@ export class Game {
       sprite: this._createExplosionSprite(cell.tx, cell.ty, cell.isCenter),
     };
     this.explosions.push(explosion);
-    this.stage.addChild(explosion.sprite);
+    this.gameContainer.addChild(explosion.sprite);
   }
 
   _createExplosionSprite(tx, ty, isCenter = false) {
@@ -475,7 +479,7 @@ export class Game {
       // Check for powerup collision
       const hitPowerups = this.powerups.filter((powerup) => powerup.isOnTile(explosion.tx, explosion.ty));
       for (const powerup of hitPowerups) {
-        this.stage.removeChild(powerup.sprite);
+        this.gameContainer.removeChild(powerup.sprite);
         this.powerups = this.powerups.filter((p) => p !== powerup);
       }
       
@@ -484,7 +488,7 @@ export class Game {
       }
     }
     for (const explosion of expire) {
-      this.stage.removeChild(explosion.sprite);
+      this.gameContainer.removeChild(explosion.sprite);
       this.explosions = this.explosions.filter((e) => e !== explosion);
     }
   }
@@ -515,7 +519,7 @@ export class Game {
       
       if (progress >= 1) {
         // Remove from stage and mark for removal
-        this.stage.removeChild(block.sprite);
+        this.gameContainer.removeChild(block.sprite);
         toRemove.push(block);
       }
     }
@@ -537,7 +541,7 @@ export class Game {
       )) {
         this._applyPowerup(this.player, powerup.type);
         toRemove.push(powerup);
-        this.stage.removeChild(powerup.sprite);
+        this.gameContainer.removeChild(powerup.sprite);
       }
     }
     
@@ -590,7 +594,7 @@ export class Game {
   }
 
   _removeMonster(monster) {
-    this.stage.removeChild(monster.sprite);
+    this.gameContainer.removeChild(monster.sprite);
     this.monsters = this.monsters.filter((m) => m !== monster);
   }
 
@@ -625,7 +629,7 @@ export class Game {
     });
     gameOver.x = (this.tileSize * this.mapCols) / 2;
     gameOver.y = (this.tileSize * this.mapRows) / 2;
-    this.stage.addChild(gameOver);
+    this.gameContainer.addChild(gameOver);
     this.app.ticker.stop();
   }
 }
