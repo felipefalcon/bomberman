@@ -52,7 +52,7 @@ export class SidebarHud {
     ];
 
     powerupRows.forEach((row, index) => {
-      const slot = this._createPowerupSlot(2, index * this.tileSize + 3, row.key, row.fallbackDraw, row.withText);
+      const slot = this._createPowerupSlot(2, index * 28, row.key, row.fallbackDraw, row.withText);
       container.addChild(slot.container);
       this.powerupSlots[row.key] = slot;
     });
