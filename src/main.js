@@ -2,7 +2,8 @@ import * as PIXI from 'pixi.js';
 import { Game } from './game.js';
 
 const GAME_ZOOM = 2; // adjust game zoom here
-const LOGICAL_WIDTH = 17 * 32;
+const SIDEBAR_WIDTH = 24;
+const LOGICAL_WIDTH = 17 * 32 + SIDEBAR_WIDTH;
 const LOGICAL_HEIGHT = 11 * 32 + 32; // +1 tile for HUD row
 
 async function bootstrap() {
@@ -23,6 +24,7 @@ async function bootstrap() {
 
   // nearest-neighbor rendering for pixel art
   app.canvas.style.imageRendering = 'pixelated';
+  app.canvas.style.transform = `translateX(-${(SIDEBAR_WIDTH * GAME_ZOOM) / 2}px)`;
 
   document.getElementById('game').appendChild(app.canvas);
 
