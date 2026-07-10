@@ -2,9 +2,11 @@ import * as PIXI from 'pixi.js';
 import { TileMap } from './map.js';
 import { Player } from './player.js';
 import { Monster } from './monster.js';
+import { Powerup } from './powerup.js';
 import { loadPlayerSprites } from './playerSprite.js';
 import { loadEnemySprites } from './enemySprite.js';
 import { loadBombSprite } from './bombLoader.js';
+import { loadItemSprites } from './itemsLoader.js';
 import { AnimationDebugger } from './animationDebugger.js';
 import { AudioManager } from './audioManager.js';
 
@@ -21,6 +23,7 @@ export class Game {
     this.bombs = [];
     this.explosions = [];
     this.destroyingBlocks = []; // Blocks being animated during destruction
+    this.powerups = [];
     this.monsters = [];
     this.livesText = null;
     this.playerFrames = null;
@@ -29,6 +32,8 @@ export class Game {
     this.enemyMapping = null;
     this.bombFrames = null;
     this.bombMapping = null;
+    this.itemFrames = null;
+    this.itemMapping = null;
     this.debugger = null;
     this.audioManager = new AudioManager();
   }
@@ -145,7 +150,19 @@ export class Game {
         console.warn('Could not load game over sound. Error:', err);
       });
 
-    Promise.all([playerPromise, enemyPromise, bombPromise, musicPromise, explosionSoundPromise, damageSoundPromise, gameOverSoundPromise]).then(() => {
+    const itemsPromise = loadItemSprites()
+      .then(({ frames, mapping }) => {
+        this.itemFrames = frames;
+        this.itemMapping = mapping;
+        console.log('Game: Items sprite loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load items sprite. Error:', err);
+        this.itemFrames = null;
+        this.itemMapping = null;
+      });
+
+    Promise.all([playerPromise, enemyPromise, bombPromise, musicPromise, explosionSoundPromise, damageSoundPromise, gameOverSoundPromise, itemsPromise]).then(() => {
       console.log('Game: All assets loaded');
     });
 
@@ -161,6 +178,7 @@ export class Game {
     }
     this._updateBombs(tickDelta);
     this._updateDestroyingBlocks(tickDelta);
+    this._updatePowerups(tickDelta);
     this._updateMonsters(tickDelta);
     this._updateExplosions(tickDelta);
   }
@@ -174,6 +192,9 @@ export class Game {
   }
 
   _placeBomb() {
+    // Check if player has reached max bomb limit
+    if (this.player.activeBombs >= this.player.maxBombs) return;
+    
     const tx = Math.floor(this.player.sprite.x / this.tileSize);
     const ty = Math.floor(this.player.sprite.y / this.tileSize);
     if (this.map.isBlocked(tx, ty)) return;
@@ -186,6 +207,7 @@ export class Game {
       sprite: this._createBombSprite(tx, ty),
     };
     this.bombs.push(bomb);
+    this.player.activeBombs += 1;
     this.stage.addChild(bomb.sprite);
   }
 
@@ -277,6 +299,11 @@ export class Game {
   _explodeBomb(bomb) {
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.stage.removeChild(bomb.sprite);
+    
+    // Decrease active bomb count
+    if (this.player && this.player.activeBombs > 0) {
+      this.player.activeBombs -= 1;
+    }
 
     const center = { tx: bomb.tx, ty: bomb.ty, isCenter: true };
     this._createExplosion(center);
@@ -288,12 +315,27 @@ export class Game {
       { dx: 0, dy: 1 },
       { dx: 0, dy: -1 },
     ];
+    
+    const range = this.player?.explosionRange || 1;
+    const canPierce = this.player?.canPierceBlocks || false;
+    
     for (const dir of directions) {
-      const tx = bomb.tx + dir.dx;
-      const ty = bomb.ty + dir.dy;
-      if (!this.map.isWall(tx, ty)) {
+      for (let i = 1; i <= range; i++) {
+        const tx = bomb.tx + dir.dx * i;
+        const ty = bomb.ty + dir.dy * i;
+        
+        if (this.map.isWall(tx, ty)) break; // Wall always stops explosion
+        
+        const isBlock = this.map.isDestructible(tx, ty);
+        
         this._createExplosion({ tx, ty, isCenter: false });
         this._destroyTileAt(tx, ty);
+        
+        // If not piercing and hit a block, stop here
+        if (isBlock && !canPierce) {
+          break;
+        }
+        // If piercing, explosion continues through all blocks
       }
     }
   }
@@ -312,9 +354,26 @@ export class Game {
         });
       }
       
+      // Chance to spawn a powerup
+      this._trySpawnPowerup(tx, ty);
+      
       // Remove any explosion on this tile to prevent further damage
       this.explosions = this.explosions.filter(exp => !(exp.tx === tx && exp.ty === ty));
     }
+  }
+
+  _trySpawnPowerup(tx, ty) {
+    // 30% chance to spawn a powerup when a block is destroyed
+    if (Math.random() > 0.3) return;
+    if (!this.itemFrames || !this.itemMapping) return;
+    
+    const powerupTypes = Object.keys(this.itemMapping);
+    const randomType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+    const frameIndex = this.itemMapping[randomType];
+    
+    const powerup = new Powerup(tx, ty, this.tileSize, randomType, this.itemFrames[frameIndex]);
+    this.powerups.push(powerup);
+    this.stage.addChild(powerup.sprite);
   }
 
   _createExplosion(cell) {
@@ -412,6 +471,14 @@ export class Game {
           }
         }
       }
+      
+      // Check for powerup collision
+      const hitPowerups = this.powerups.filter((powerup) => powerup.isOnTile(explosion.tx, explosion.ty));
+      for (const powerup of hitPowerups) {
+        this.stage.removeChild(powerup.sprite);
+        this.powerups = this.powerups.filter((p) => p !== powerup);
+      }
+      
       if (explosion.timer <= 0) {
         expire.push(explosion);
       }
@@ -455,6 +522,52 @@ export class Game {
     
     // Remove completed animations
     this.destroyingBlocks = this.destroyingBlocks.filter(b => !toRemove.includes(b));
+  }
+
+  _updatePowerups(delta) {
+    const toRemove = [];
+    
+    for (const powerup of this.powerups) {
+      powerup.update(delta);
+      
+      // Check collision with player
+      if (this.player && powerup.isOnTile(
+        Math.floor(this.player.sprite.x / this.tileSize),
+        Math.floor(this.player.sprite.y / this.tileSize)
+      )) {
+        this._applyPowerup(this.player, powerup.type);
+        toRemove.push(powerup);
+        this.stage.removeChild(powerup.sprite);
+      }
+    }
+    
+    // Remove collected powerups
+    this.powerups = this.powerups.filter(p => !toRemove.includes(p));
+  }
+
+  _applyPowerup(player, type) {
+    console.log(`Player collected: ${type}`);
+    
+    switch(type) {
+      case 'speed':
+        player.speed *= 1.2; // 20% speed boost
+        break;
+      case 'bomb':
+        player.maxBombs += 1;
+        break;
+      case 'range':
+        player.explosionRange += 1;
+        break;
+      case 'pierce':
+        player.canPierceBlocks = true;
+        break;
+      case 'shield':
+        player.hasShield = true;
+        break;
+      case 'detonator':
+        player.hasDetonator = true;
+        break;
+    }
   }
 
   _updateMonsters(delta) {

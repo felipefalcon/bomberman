@@ -40,6 +40,10 @@ export class Player {
     this.blinkTimer = 0;
     this.isBlinking = false;
     this.blinkDuration = 60; // 3 blinks (6 frames) * 10 ticks each
+    this.maxBombs = 1; // Maximum bombs can have at once
+    this.activeBombs = 0; // Currently active bombs
+    this.explosionRange = 1; // Explosion range in tiles
+    this.canPierceBlocks = false; // Explosions can pass through blocks
   }
 
   takeDamage() {
