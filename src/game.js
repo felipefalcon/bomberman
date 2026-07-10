@@ -16,7 +16,7 @@ export class Game {
     this.stage = app.stage;
     this.tileSize = 32;
     this.mapCols = 17;
-    this.mapRows = 13;
+    this.mapRows = 11;
     this.keys = {};
     this.bombFuseTicks = 180; // 3 seconds at 60 FPS
     this.lastZ = false;

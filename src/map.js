@@ -4,7 +4,7 @@ import { loadBlockTexture } from './blockLoader.js';
 import { loadPillarTexture } from './pillarLoader.js';
 
 export class TileMap {
-  constructor(app, tileSize = 32, cols = 17, rows = 13) {
+  constructor(app, tileSize = 32, cols = 17, rows = 11) {
     this.app = app;
     this.tileSize = tileSize;
     this.cols = cols;
