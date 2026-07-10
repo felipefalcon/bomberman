@@ -36,6 +36,10 @@ export class Game {
     this.itemMapping = null;
     this.debugger = null;
     this.audioManager = new AudioManager();
+    this.timeRemaining = 200; // seconds
+    this.hudContainer = null;
+    this.bombCountText = null;
+    this.timerText = null;
   }
 
   start() {
@@ -60,18 +64,7 @@ export class Game {
       },
     });
 
-    this.livesText = new PIXI.BitmapText({
-      text: 'Lives: 3',
-      style: {
-        fontFamily: 'HUDFont',
-        fontSize: 8,
-        fill: 0xffffff,
-      },
-      roundPixels: true,
-    });
-    this.livesText.x = 6;
-    this.livesText.y = 6;
-    this.stage.addChild(this.livesText);
+    this._createHUD();
 
     // simple keyboard state
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
@@ -175,6 +168,12 @@ export class Game {
 
   update(delta) {
     const tickDelta = typeof delta === 'number' ? delta : delta?.deltaTime ?? 1;
+
+    if (this.timeRemaining > 0) {
+      this.timeRemaining -= tickDelta / 60;
+      if (this.timeRemaining < 0) this.timeRemaining = 0;
+      this._refreshTimerText();
+    }
 
     if (this.player) {
       this.player.update(tickDelta, this.keys, this.map, this.bombs);
@@ -324,22 +323,25 @@ export class Game {
     const canPierce = this.player?.canPierceBlocks || false;
     
     for (const dir of directions) {
-      for (let i = 1; i <= range; i++) {
+      let freeTilesHit = 0;
+      for (let i = 1; i <= this.map.cols + this.map.rows; i++) {
         const tx = bomb.tx + dir.dx * i;
         const ty = bomb.ty + dir.dy * i;
-        
+
         if (this.map.isWall(tx, ty)) break; // Wall always stops explosion
-        
+
         const isBlock = this.map.isDestructible(tx, ty);
-        
+
         this._createExplosion({ tx, ty, isCenter: false });
         this._destroyTileAt(tx, ty);
-        
-        // If not piercing and hit a block, stop here
-        if (isBlock && !canPierce) {
-          break;
-        }
-        // If piercing, explosion continues through all blocks
+
+        if (!isBlock) freeTilesHit++;
+
+        // Without pierce: stop at first block
+        if (isBlock && !canPierce) break;
+
+        // Stop once enough free tiles have been hit
+        if (freeTilesHit >= range) break;
       }
     }
   }
@@ -376,6 +378,7 @@ export class Game {
     const frameIndex = this.itemMapping[randomType];
     
     const powerup = new Powerup(tx, ty, this.tileSize, randomType, this.itemFrames[frameIndex]);
+    powerup.immuneTicks = 10; // protect from same-frame explosions
     this.powerups.push(powerup);
     this.gameContainer.addChild(powerup.sprite);
   }
@@ -477,7 +480,7 @@ export class Game {
       }
       
       // Check for powerup collision
-      const hitPowerups = this.powerups.filter((powerup) => powerup.isOnTile(explosion.tx, explosion.ty));
+      const hitPowerups = this.powerups.filter((powerup) => !powerup.immuneTicks && powerup.isOnTile(explosion.tx, explosion.ty));
       for (const powerup of hitPowerups) {
         this.gameContainer.removeChild(powerup.sprite);
         this.powerups = this.powerups.filter((p) => p !== powerup);
@@ -533,6 +536,7 @@ export class Game {
     
     for (const powerup of this.powerups) {
       powerup.update(delta);
+      if (powerup.immuneTicks > 0) powerup.immuneTicks = Math.max(0, powerup.immuneTicks - delta);
       
       // Check collision with player
       if (this.player && powerup.isOnTile(
@@ -605,8 +609,131 @@ export class Game {
   }
 
   _refreshLivesText() {
-    if (!this.livesText || !this.player) return;
-    this.livesText.text = `Lives: ${this.player.lives}`;
+    if (!this.player) return;
+    if (this.livesText) this.livesText.text = `${this.player.lives}`;
+    if (this.bombCountText) this.bombCountText.text = `${this.player.maxBombs}`;
+  }
+
+  _refreshTimerText() {
+    if (!this.timerText) return;
+    const t = Math.max(0, Math.ceil(this.timeRemaining));
+    const mins = Math.floor(t / 60);
+    const secs = t % 60;
+    this.timerText.text = `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  _createHUD() {
+    this.hudContainer = new PIXI.Container();
+    this.stage.addChild(this.hudContainer);
+
+    const W = this.mapCols * this.tileSize;
+    const H = this.tileSize;
+
+    // Blue background bar
+    const bg = new PIXI.Graphics();
+    bg.rect(0, 0, W, H);
+    bg.fill(0x2244bb);
+    this.hudContainer.addChild(bg);
+
+    // Green border at bottom
+    const border = new PIXI.Graphics();
+    border.rect(0, H - 2, W, 2);
+    border.fill(0x44cc44);
+    this.hudContainer.addChild(border);
+
+    // Heart icon
+    this.hudContainer.addChild(this._drawHeart(4, H / 2));
+
+    // Lives text
+    this.livesText = new PIXI.BitmapText({
+      text: `${3}`,
+      style: { fontFamily: 'HUDFont', fontSize: 8 },
+      roundPixels: true,
+    });
+    this.livesText.x = 20;
+    this.livesText.y = H / 2 - 4;
+    this.hudContainer.addChild(this.livesText);
+
+    // Bomb icon
+    this.hudContainer.addChild(this._drawBombIcon(44, H / 2));
+
+    // Bomb count text
+    this.bombCountText = new PIXI.BitmapText({
+      text: '1',
+      style: { fontFamily: 'HUDFont', fontSize: 8 },
+      roundPixels: true,
+    });
+    this.bombCountText.x = 58;
+    this.bombCountText.y = H / 2 - 4;
+    this.hudContainer.addChild(this.bombCountText);
+
+    // Clock icon
+    this.hudContainer.addChild(this._drawClockIcon(W - 60, H / 2));
+
+    // Timer text
+    this.timerText = new PIXI.BitmapText({
+      text: '3:20',
+      style: { fontFamily: 'HUDFont', fontSize: 8 },
+      roundPixels: true,
+    });
+    this.timerText.x = W - 44;
+    this.timerText.y = H / 2 - 4;
+    this.hudContainer.addChild(this.timerText);
+
+    this._refreshTimerText();
+  }
+
+  _drawHeart(x, cy) {
+    const g = new PIXI.Graphics();
+    const p = 2;
+    const pat = [
+      [0,1,1,0,1,1,0],
+      [1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1],
+      [0,1,1,1,1,1,0],
+      [0,0,1,1,1,0,0],
+      [0,0,0,1,0,0,0],
+    ];
+    const h = pat.length * p;
+    const startY = Math.round(cy - h / 2);
+    g.fill(0xFF2222);
+    for (let r = 0; r < pat.length; r++) {
+      for (let c = 0; c < pat[r].length; c++) {
+        if (pat[r][c]) g.rect(x + c * p, startY + r * p, p, p);
+      }
+    }
+    return g;
+  }
+
+  _drawBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.circle(cx, cy, 7);
+    g.fill(0x111111);
+    g.circle(cx - 2, cy - 2, 2);
+    g.fill(0x555555);
+    g.moveTo(cx + 4, cy - 5);
+    g.lineTo(cx + 8, cy - 9);
+    g.stroke({ color: 0x886600, width: 2 });
+    g.circle(cx + 8, cy - 9, 2);
+    g.fill(0xFFAA00);
+    return g;
+  }
+
+  _drawClockIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.circle(cx, cy, 8);
+    g.fill(0xDDDDDD);
+    g.circle(cx, cy, 8);
+    g.stroke({ color: 0x555555, width: 1.5 });
+    g.moveTo(cx, cy);
+    g.lineTo(cx, cy - 5);
+    g.stroke({ color: 0x222222, width: 1.5 });
+    g.moveTo(cx, cy);
+    g.lineTo(cx + 4, cy + 1);
+    g.stroke({ color: 0x222222, width: 1.5 });
+    g.circle(cx, cy, 1.5);
+    g.fill(0x222222);
+    return g;
   }
 
   _handlePlayerDeath() {
