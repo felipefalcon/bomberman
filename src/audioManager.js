@@ -5,6 +5,7 @@ export class AudioManager {
     this.shouldPlay = false;
     this.soundEffects = {};
     this.soundPools = {}; // Pool de sons para evitar delay
+    this.muted = true; // Default muted for testing
   }
 
   async loadMusic(url) {
@@ -60,30 +61,45 @@ export class AudioManager {
   }
 
   playSoundEffect(name) {
-    if (this.soundPools[name] && this.soundPools[name].length > 0) {
-      // Find an available sound in the pool
-      let availableSound = this.soundPools[name].find(s => !s.isPlaying && s.audio.paused);
-      
-      // If no available sound, use the first one
-      if (!availableSound) {
-        availableSound = this.soundPools[name][0];
-      }
-      
-      if (availableSound) {
-        const audio = availableSound.audio;
-        audio.currentTime = 0;
-        availableSound.isPlaying = true;
-        
-        audio.play().catch(err => {
-          console.warn(`Could not play sound effect "${name}":`, err);
-        });
-        
-        // Mark as finished after duration
-        audio.onended = () => {
-          availableSound.isPlaying = false;
-        };
-      }
+    if (this.muted || !this.soundPools[name] || this.soundPools[name].length === 0) return;
+    
+    // Find an available sound in the pool
+    let availableSound = this.soundPools[name].find(s => !s.isPlaying && s.audio.paused);
+    
+    // If no available sound, use the first one
+    if (!availableSound) {
+      availableSound = this.soundPools[name][0];
     }
+    
+    if (availableSound) {
+      const audio = availableSound.audio;
+      audio.currentTime = 0;
+      availableSound.isPlaying = true;
+      
+      audio.play().catch(err => {
+        console.warn(`Could not play sound effect "${name}":`, err);
+      });
+      
+      // Mark as finished after duration
+      audio.onended = () => {
+        availableSound.isPlaying = false;
+      };
+    }
+  }
+
+  setMuted(value) {
+    this.muted = value;
+    if (this.muted && this.audio && !this.audio.paused) {
+      this.audio.pause();
+    } else if (!this.muted && this.audio && this.audio.paused) {
+      this.audio.play().catch(err => {
+        console.warn('Could not resume audio:', err);
+      });
+    }
+  }
+
+  toggleMute() {
+    this.setMuted(!this.muted);
   }
 
   _setupUserInteractionListener() {
@@ -109,7 +125,7 @@ export class AudioManager {
   }
 
   play() {
-    if (this.audio && this.isReady) {
+    if (this.audio && this.isReady && !this.muted) {
       window._userHasInteracted = true;
       this.audio.play().catch(err => {
         console.warn('Could not play audio:', err);

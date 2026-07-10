@@ -1,0 +1,62 @@
+import * as PIXI from 'pixi.js';
+
+export async function loadItemSprites() {
+  const url = `${import.meta.env.BASE_URL}assets/itens.png`;
+  
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      
+      const frameSize = 16;
+      const cols = Math.floor(img.width / frameSize);
+      const rows = Math.floor(img.height / frameSize);
+      
+      const frames = [];
+      const texture = PIXI.Texture.from(canvas);
+      texture.scaleMode = 'nearest';
+      texture.source.scaleMode = 'nearest';
+      
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const frame = new PIXI.Rectangle(
+            col * frameSize,
+            row * frameSize,
+            frameSize,
+            frameSize
+          );
+          const frameTexture = new PIXI.Texture({
+            source: texture.source,
+            frame: frame
+          });
+          frameTexture.scaleMode = 'nearest';
+          frames.push(frameTexture);
+        }
+      }
+      
+      // Define item types and their frame indices
+      const mapping = {
+        range: 0,        // Explosion range
+        pierce: 1,       // Explosion pierces through blocks
+        bomb: 2,         // Extra bomb
+        speed: 3,        // Speed boost
+        shield: 4,       // Shield/Invulnerability (para decidir depois)
+        detonator: 5     // Remote detonator (para decidir depois)
+      };
+      
+      resolve({ frames, mapping });
+    };
+    
+    img.onerror = () => {
+      reject(new Error(`Failed to load items sprite: ${url}`));
+    };
+    
+    img.src = url;
+  });
+}

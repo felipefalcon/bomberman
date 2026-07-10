@@ -2,9 +2,11 @@ import * as PIXI from 'pixi.js';
 import { TileMap } from './map.js';
 import { Player } from './player.js';
 import { Monster } from './monster.js';
+import { Powerup } from './powerup.js';
 import { loadPlayerSprites } from './playerSprite.js';
 import { loadEnemySprites } from './enemySprite.js';
 import { loadBombSprite } from './bombLoader.js';
+import { loadItemSprites } from './itemsLoader.js';
 import { AnimationDebugger } from './animationDebugger.js';
 import { AudioManager } from './audioManager.js';
 
@@ -14,13 +16,14 @@ export class Game {
     this.stage = app.stage;
     this.tileSize = 32;
     this.mapCols = 17;
-    this.mapRows = 13;
+    this.mapRows = 11;
     this.keys = {};
     this.bombFuseTicks = 180; // 3 seconds at 60 FPS
     this.lastZ = false;
     this.bombs = [];
     this.explosions = [];
     this.destroyingBlocks = []; // Blocks being animated during destruction
+    this.powerups = [];
     this.monsters = [];
     this.livesText = null;
     this.playerFrames = null;
@@ -29,13 +32,23 @@ export class Game {
     this.enemyMapping = null;
     this.bombFrames = null;
     this.bombMapping = null;
+    this.itemFrames = null;
+    this.itemMapping = null;
     this.debugger = null;
     this.audioManager = new AudioManager();
+    this.timeRemaining = 200; // seconds
+    this.hudContainer = null;
+    this.bombCountText = null;
+    this.timerText = null;
   }
 
   start() {
+    this.gameContainer = new PIXI.Container();
+    this.gameContainer.y = this.tileSize; // offset down by 1 tile for HUD
+    this.stage.addChild(this.gameContainer);
+
     this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows);
-    this.stage.addChild(this.map.container);
+    this.gameContainer.addChild(this.map.container);
 
     PIXI.BitmapFont.install({
       name: 'HUDFont',
@@ -51,18 +64,7 @@ export class Game {
       },
     });
 
-    this.livesText = new PIXI.BitmapText({
-      text: 'Lives: 3',
-      style: {
-        fontFamily: 'HUDFont',
-        fontSize: 8,
-        fill: 0xffffff,
-      },
-      roundPixels: true,
-    });
-    this.livesText.x = 6;
-    this.livesText.y = 6;
-    this.stage.addChild(this.livesText);
+    this._createHUD();
 
     // simple keyboard state
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
@@ -79,12 +81,12 @@ export class Game {
         this.playerMapping = mapping;
         console.log('Game: Player spritesheet loaded');
         this.player = new Player(startX, startY, this.tileSize, frames, mapping);
-        this.stage.addChild(this.player.sprite);
+        this.gameContainer.addChild(this.player.sprite);
       })
       .catch((err) => {
         console.warn('Could not load player spritesheet, using placeholder. Error:', err);
         this.player = new Player(startX, startY, this.tileSize);
-        this.stage.addChild(this.player.sprite);
+        this.gameContainer.addChild(this.player.sprite);
       });
 
     const enemyPromise = this.map._initPromise.then(async () => {
@@ -145,7 +147,19 @@ export class Game {
         console.warn('Could not load game over sound. Error:', err);
       });
 
-    Promise.all([playerPromise, enemyPromise, bombPromise, musicPromise, explosionSoundPromise, damageSoundPromise, gameOverSoundPromise]).then(() => {
+    const itemsPromise = loadItemSprites()
+      .then(({ frames, mapping }) => {
+        this.itemFrames = frames;
+        this.itemMapping = mapping;
+        console.log('Game: Items sprite loaded');
+      })
+      .catch((err) => {
+        console.warn('Could not load items sprite. Error:', err);
+        this.itemFrames = null;
+        this.itemMapping = null;
+      });
+
+    Promise.all([playerPromise, enemyPromise, bombPromise, musicPromise, explosionSoundPromise, damageSoundPromise, gameOverSoundPromise, itemsPromise]).then(() => {
       console.log('Game: All assets loaded');
     });
 
@@ -155,12 +169,19 @@ export class Game {
   update(delta) {
     const tickDelta = typeof delta === 'number' ? delta : delta?.deltaTime ?? 1;
 
+    if (this.timeRemaining > 0) {
+      this.timeRemaining -= tickDelta / 60;
+      if (this.timeRemaining < 0) this.timeRemaining = 0;
+      this._refreshTimerText();
+    }
+
     if (this.player) {
       this.player.update(tickDelta, this.keys, this.map, this.bombs);
       this._processBombInput();
     }
     this._updateBombs(tickDelta);
     this._updateDestroyingBlocks(tickDelta);
+    this._updatePowerups(tickDelta);
     this._updateMonsters(tickDelta);
     this._updateExplosions(tickDelta);
   }
@@ -174,6 +195,9 @@ export class Game {
   }
 
   _placeBomb() {
+    // Check if player has reached max bomb limit
+    if (this.player.activeBombs >= this.player.maxBombs) return;
+    
     const tx = Math.floor(this.player.sprite.x / this.tileSize);
     const ty = Math.floor(this.player.sprite.y / this.tileSize);
     if (this.map.isBlocked(tx, ty)) return;
@@ -186,7 +210,8 @@ export class Game {
       sprite: this._createBombSprite(tx, ty),
     };
     this.bombs.push(bomb);
-    this.stage.addChild(bomb.sprite);
+    this.player.activeBombs += 1;
+    this.gameContainer.addChild(bomb.sprite);
   }
 
   _createBombSprite(tx, ty) {
@@ -251,7 +276,7 @@ export class Game {
     for (const { tx, ty } of spawnTiles) {
       const monster = new Monster(tx, ty, this.tileSize, this.enemyFrames, this.enemyMapping);
       this.monsters.push(monster);
-      this.stage.addChild(monster.sprite);
+      this.gameContainer.addChild(monster.sprite);
     }
   }
 
@@ -276,7 +301,12 @@ export class Game {
 
   _explodeBomb(bomb) {
     this.bombs = this.bombs.filter((b) => b !== bomb);
-    this.stage.removeChild(bomb.sprite);
+    this.gameContainer.removeChild(bomb.sprite);
+    
+    // Decrease active bomb count
+    if (this.player && this.player.activeBombs > 0) {
+      this.player.activeBombs -= 1;
+    }
 
     const center = { tx: bomb.tx, ty: bomb.ty, isCenter: true };
     this._createExplosion(center);
@@ -288,12 +318,30 @@ export class Game {
       { dx: 0, dy: 1 },
       { dx: 0, dy: -1 },
     ];
+    
+    const range = this.player?.explosionRange || 1;
+    const canPierce = this.player?.canPierceBlocks || false;
+    
     for (const dir of directions) {
-      const tx = bomb.tx + dir.dx;
-      const ty = bomb.ty + dir.dy;
-      if (!this.map.isWall(tx, ty)) {
+      let freeTilesHit = 0;
+      for (let i = 1; i <= this.map.cols + this.map.rows; i++) {
+        const tx = bomb.tx + dir.dx * i;
+        const ty = bomb.ty + dir.dy * i;
+
+        if (this.map.isWall(tx, ty)) break; // Wall always stops explosion
+
+        const isBlock = this.map.isDestructible(tx, ty);
+
         this._createExplosion({ tx, ty, isCenter: false });
         this._destroyTileAt(tx, ty);
+
+        if (!isBlock) freeTilesHit++;
+
+        // Without pierce: stop at first block
+        if (isBlock && !canPierce) break;
+
+        // Stop once enough free tiles have been hit
+        if (freeTilesHit >= range) break;
       }
     }
   }
@@ -312,9 +360,27 @@ export class Game {
         });
       }
       
+      // Chance to spawn a powerup
+      this._trySpawnPowerup(tx, ty);
+      
       // Remove any explosion on this tile to prevent further damage
       this.explosions = this.explosions.filter(exp => !(exp.tx === tx && exp.ty === ty));
     }
+  }
+
+  _trySpawnPowerup(tx, ty) {
+    // 30% chance to spawn a powerup when a block is destroyed
+    if (Math.random() > 0.3) return;
+    if (!this.itemFrames || !this.itemMapping) return;
+    
+    const powerupTypes = Object.keys(this.itemMapping);
+    const randomType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+    const frameIndex = this.itemMapping[randomType];
+    
+    const powerup = new Powerup(tx, ty, this.tileSize, randomType, this.itemFrames[frameIndex]);
+    powerup.immuneTicks = 10; // protect from same-frame explosions
+    this.powerups.push(powerup);
+    this.gameContainer.addChild(powerup.sprite);
   }
 
   _createExplosion(cell) {
@@ -326,7 +392,7 @@ export class Game {
       sprite: this._createExplosionSprite(cell.tx, cell.ty, cell.isCenter),
     };
     this.explosions.push(explosion);
-    this.stage.addChild(explosion.sprite);
+    this.gameContainer.addChild(explosion.sprite);
   }
 
   _createExplosionSprite(tx, ty, isCenter = false) {
@@ -412,12 +478,20 @@ export class Game {
           }
         }
       }
+      
+      // Check for powerup collision
+      const hitPowerups = this.powerups.filter((powerup) => !powerup.immuneTicks && powerup.isOnTile(explosion.tx, explosion.ty));
+      for (const powerup of hitPowerups) {
+        this.gameContainer.removeChild(powerup.sprite);
+        this.powerups = this.powerups.filter((p) => p !== powerup);
+      }
+      
       if (explosion.timer <= 0) {
         expire.push(explosion);
       }
     }
     for (const explosion of expire) {
-      this.stage.removeChild(explosion.sprite);
+      this.gameContainer.removeChild(explosion.sprite);
       this.explosions = this.explosions.filter((e) => e !== explosion);
     }
   }
@@ -448,13 +522,60 @@ export class Game {
       
       if (progress >= 1) {
         // Remove from stage and mark for removal
-        this.stage.removeChild(block.sprite);
+        this.gameContainer.removeChild(block.sprite);
         toRemove.push(block);
       }
     }
     
     // Remove completed animations
     this.destroyingBlocks = this.destroyingBlocks.filter(b => !toRemove.includes(b));
+  }
+
+  _updatePowerups(delta) {
+    const toRemove = [];
+    
+    for (const powerup of this.powerups) {
+      powerup.update(delta);
+      if (powerup.immuneTicks > 0) powerup.immuneTicks = Math.max(0, powerup.immuneTicks - delta);
+      
+      // Check collision with player
+      if (this.player && powerup.isOnTile(
+        Math.floor(this.player.sprite.x / this.tileSize),
+        Math.floor(this.player.sprite.y / this.tileSize)
+      )) {
+        this._applyPowerup(this.player, powerup.type);
+        toRemove.push(powerup);
+        this.gameContainer.removeChild(powerup.sprite);
+      }
+    }
+    
+    // Remove collected powerups
+    this.powerups = this.powerups.filter(p => !toRemove.includes(p));
+  }
+
+  _applyPowerup(player, type) {
+    console.log(`Player collected: ${type}`);
+    
+    switch(type) {
+      case 'speed':
+        player.speed *= 1.2; // 20% speed boost
+        break;
+      case 'bomb':
+        player.maxBombs += 1;
+        break;
+      case 'range':
+        player.explosionRange += 1;
+        break;
+      case 'pierce':
+        player.canPierceBlocks = true;
+        break;
+      case 'shield':
+        player.hasShield = true;
+        break;
+      case 'detonator':
+        player.hasDetonator = true;
+        break;
+    }
   }
 
   _updateMonsters(delta) {
@@ -477,7 +598,7 @@ export class Game {
   }
 
   _removeMonster(monster) {
-    this.stage.removeChild(monster.sprite);
+    this.gameContainer.removeChild(monster.sprite);
     this.monsters = this.monsters.filter((m) => m !== monster);
   }
 
@@ -488,8 +609,131 @@ export class Game {
   }
 
   _refreshLivesText() {
-    if (!this.livesText || !this.player) return;
-    this.livesText.text = `Lives: ${this.player.lives}`;
+    if (!this.player) return;
+    if (this.livesText) this.livesText.text = `${this.player.lives}`;
+    if (this.bombCountText) this.bombCountText.text = `${this.player.maxBombs}`;
+  }
+
+  _refreshTimerText() {
+    if (!this.timerText) return;
+    const t = Math.max(0, Math.ceil(this.timeRemaining));
+    const mins = Math.floor(t / 60);
+    const secs = t % 60;
+    this.timerText.text = `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  _createHUD() {
+    this.hudContainer = new PIXI.Container();
+    this.stage.addChild(this.hudContainer);
+
+    const W = this.mapCols * this.tileSize;
+    const H = this.tileSize;
+
+    // Blue background bar
+    const bg = new PIXI.Graphics();
+    bg.rect(0, 0, W, H);
+    bg.fill(0x2244bb);
+    this.hudContainer.addChild(bg);
+
+    // Green border at bottom
+    const border = new PIXI.Graphics();
+    border.rect(0, H - 2, W, 2);
+    border.fill(0x44cc44);
+    this.hudContainer.addChild(border);
+
+    // Heart icon
+    this.hudContainer.addChild(this._drawHeart(4, H / 2));
+
+    // Lives text
+    this.livesText = new PIXI.BitmapText({
+      text: `${3}`,
+      style: { fontFamily: 'HUDFont', fontSize: 8 },
+      roundPixels: true,
+    });
+    this.livesText.x = 20;
+    this.livesText.y = H / 2 - 4;
+    this.hudContainer.addChild(this.livesText);
+
+    // Bomb icon
+    this.hudContainer.addChild(this._drawBombIcon(44, H / 2));
+
+    // Bomb count text
+    this.bombCountText = new PIXI.BitmapText({
+      text: '1',
+      style: { fontFamily: 'HUDFont', fontSize: 8 },
+      roundPixels: true,
+    });
+    this.bombCountText.x = 58;
+    this.bombCountText.y = H / 2 - 4;
+    this.hudContainer.addChild(this.bombCountText);
+
+    // Clock icon
+    this.hudContainer.addChild(this._drawClockIcon(W - 60, H / 2));
+
+    // Timer text
+    this.timerText = new PIXI.BitmapText({
+      text: '3:20',
+      style: { fontFamily: 'HUDFont', fontSize: 8 },
+      roundPixels: true,
+    });
+    this.timerText.x = W - 44;
+    this.timerText.y = H / 2 - 4;
+    this.hudContainer.addChild(this.timerText);
+
+    this._refreshTimerText();
+  }
+
+  _drawHeart(x, cy) {
+    const g = new PIXI.Graphics();
+    const p = 2;
+    const pat = [
+      [0,1,1,0,1,1,0],
+      [1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1],
+      [0,1,1,1,1,1,0],
+      [0,0,1,1,1,0,0],
+      [0,0,0,1,0,0,0],
+    ];
+    const h = pat.length * p;
+    const startY = Math.round(cy - h / 2);
+    g.fill(0xFF2222);
+    for (let r = 0; r < pat.length; r++) {
+      for (let c = 0; c < pat[r].length; c++) {
+        if (pat[r][c]) g.rect(x + c * p, startY + r * p, p, p);
+      }
+    }
+    return g;
+  }
+
+  _drawBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.circle(cx, cy, 7);
+    g.fill(0x111111);
+    g.circle(cx - 2, cy - 2, 2);
+    g.fill(0x555555);
+    g.moveTo(cx + 4, cy - 5);
+    g.lineTo(cx + 8, cy - 9);
+    g.stroke({ color: 0x886600, width: 2 });
+    g.circle(cx + 8, cy - 9, 2);
+    g.fill(0xFFAA00);
+    return g;
+  }
+
+  _drawClockIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.circle(cx, cy, 8);
+    g.fill(0xDDDDDD);
+    g.circle(cx, cy, 8);
+    g.stroke({ color: 0x555555, width: 1.5 });
+    g.moveTo(cx, cy);
+    g.lineTo(cx, cy - 5);
+    g.stroke({ color: 0x222222, width: 1.5 });
+    g.moveTo(cx, cy);
+    g.lineTo(cx + 4, cy + 1);
+    g.stroke({ color: 0x222222, width: 1.5 });
+    g.circle(cx, cy, 1.5);
+    g.fill(0x222222);
+    return g;
   }
 
   _handlePlayerDeath() {
@@ -512,7 +756,7 @@ export class Game {
     });
     gameOver.x = (this.tileSize * this.mapCols) / 2;
     gameOver.y = (this.tileSize * this.mapRows) / 2;
-    this.stage.addChild(gameOver);
+    this.gameContainer.addChild(gameOver);
     this.app.ticker.stop();
   }
 }
