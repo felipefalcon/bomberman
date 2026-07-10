@@ -5,7 +5,7 @@ export class AudioManager {
     this.shouldPlay = false;
     this.soundEffects = {};
     this.soundPools = {}; // Pool de sons para evitar delay
-    this.muted = true; // Default muted for testing
+    this.muted = false; // Default muted for testing
   }
 
   async loadMusic(url) {
