@@ -342,8 +342,7 @@ export class Game {
     const canPierce = this.player?.canPierceBlocks || false;
     
     for (const dir of directions) {
-      let freeTilesHit = 0;
-      for (let i = 1; i <= this.map.cols + this.map.rows; i++) {
+      for (let i = 1; i <= range; i++) {
         const tx = bomb.tx + dir.dx * i;
         const ty = bomb.ty + dir.dy * i;
 
@@ -354,13 +353,8 @@ export class Game {
         this._createExplosion({ tx, ty, isCenter: false });
         this._destroyTileAt(tx, ty);
 
-        if (!isBlock) freeTilesHit++;
-
         // Without pierce: stop at first block
         if (isBlock && !canPierce) break;
-
-        // Stop once enough free tiles have been hit
-        if (freeTilesHit >= range) break;
       }
     }
   }
