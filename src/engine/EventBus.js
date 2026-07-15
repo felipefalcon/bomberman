@@ -136,6 +136,8 @@ export const GameEvents = {
   // Block events
   BLOCK_DESTROY: 'block:destroy',
   BLOCK_SPAWN_POWERUP: 'block:spawn_powerup',
+  BLOCK_DESTRUCTION_START: 'block:destruction_start',
+  BLOCK_DESTRUCTION_END: 'block:destruction_end',
   
   // Powerup events
   POWERUP_SPAWN: 'powerup:spawn',
@@ -154,4 +156,8 @@ export const GameEvents = {
   UI_UPDATE_LIVES: 'ui:update_lives',
   UI_UPDATE_TIMER: 'ui:update_timer',
   UI_UPDATE_POWERUPS: 'ui:update_powerups',
+  
+  // Input events
+  INPUT_KEY_DOWN: 'input:key_down',
+  INPUT_KEY_UP: 'input:key_up',
 };
