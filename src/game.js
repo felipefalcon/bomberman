@@ -1,12 +1,12 @@
 import * as PIXI from 'pixi.js';
-import { TileMap } from './map.js';
+import { TileMap } from './map/map.js';
 import { Player } from './player.js';
 import { Monster } from './monster.js';
 import { Powerup } from './powerup.js';
-import { loadPlayerSprites } from './playerSprite.js';
-import { loadEnemySprites } from './enemySprite.js';
-import { loadBombSprite } from './bombLoader.js';
-import { loadItemSprites } from './itemsLoader.js';
+import { loadPlayerSprites } from './loaders/playerSprite.js';
+import { loadEnemySprites } from './loaders/enemySprite.js';
+import { loadBombSprite } from './loaders/bombLoader.js';
+import { loadItemSprites } from './loaders/itemsLoader.js';
 import { AnimationDebugger } from './animationDebugger.js';
 import { AudioManager } from './audioManager.js';
 import { TopHud } from './topHud.js';

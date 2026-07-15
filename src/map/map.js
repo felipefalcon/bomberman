@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
-import { loadTilesetTiles } from './tilesetLoader.js';
-import { loadBlockTexture } from './blockLoader.js';
-import { loadPillarTexture } from './pillarLoader.js';
+import { loadTilesetTiles } from '../loaders/tilesetLoader.js';
+import { loadBlockTexture } from '../loaders/blockLoader.js';
+import { loadPillarTexture } from '../loaders/pillarLoader.js';
 
 export class TileMap {
   constructor(app, tileSize = 32, cols = 17, rows = 11) {
