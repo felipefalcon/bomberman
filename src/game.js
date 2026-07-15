@@ -8,7 +8,7 @@ import { loadEnemySprites } from './loaders/enemySprite.js';
 import { loadBombSprite } from './loaders/bombLoader.js';
 import { loadItemSprites } from './loaders/itemsLoader.js';
 import { AnimationDebugger } from './animationDebugger.js';
-import { AudioManager } from './audioManager.js';
+import { AudioManager } from './managers/audioManager.js';
 import { TopHud } from './topHud.js';
 import { SidebarHud } from './sidebarHud.js';
 
