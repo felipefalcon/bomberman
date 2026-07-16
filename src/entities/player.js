@@ -51,7 +51,7 @@ export class Player {
   }
 
   takeDamage() {
-    if (this.lives <= 0) return false;
+    if (this.lives <= 0 || this.isBlinking) return false;
     this.lives -= 1;
     this.startBlink();
     return this.lives > 0;
