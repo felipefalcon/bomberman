@@ -1,6 +1,6 @@
 import { GAME_CONFIG, POWERUP_TYPES } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
-import { Powerup } from '../entities/powerup.js';
+import { Powerup } from '../entities/Powerup.js';
 
 /**
  * PowerupSystem - Manages powerup spawning, collection, and effects

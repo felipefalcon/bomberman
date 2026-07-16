@@ -1,6 +1,6 @@
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
-import { Monster } from '../entities/monster.js';
+import { Monster } from '../entities/Monster.js';
 
 /**
  * MonsterSystem - Manages monster spawning, AI, and updates

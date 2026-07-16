@@ -1,7 +1,7 @@
 // Animation Debugger - Display player and enemy sprites in all directions
 import * as PIXI from 'pixi.js';
-import { Player } from './entities/player.js';
-import { Monster } from './entities/monster.js';
+import { Player } from './entities/Player.js';
+import { Monster } from './entities/Monster.js';
 import { GAME_CONFIG } from './config/Constants.js';
 
 export class AnimationDebugger {
