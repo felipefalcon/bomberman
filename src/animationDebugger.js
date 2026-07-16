@@ -1,7 +1,8 @@
 // Animation Debugger - Display player and enemy sprites in all directions
 import * as PIXI from 'pixi.js';
-import { Player } from './player.js';
-import { Monster } from './monster.js';
+import { Player } from './entities/player.js';
+import { Monster } from './entities/monster.js';
+import { GAME_CONFIG } from './config/Constants.js';
 
 export class AnimationDebugger {
   constructor(app, playerFrames, playerMapping, enemyFrames, enemyMapping) {
@@ -69,8 +70,7 @@ export class AnimationDebugger {
       label.y = pos.y - 20;
       this.container.addChild(label);
 
-      // Create player sprite with smaller tileSize (16 instead of 32)
-      const player = new Player(pos.x, pos.y, 16, this.playerFrames, this.playerMapping);
+      const player = new Player(pos.x, pos.y, GAME_CONFIG.SPRITE_TILE_SIZE, this.playerFrames, this.playerMapping);
       player.sprite.x = pos.x;
       player.sprite.y = pos.y;
       this.container.addChild(player.sprite);
@@ -119,8 +119,7 @@ export class AnimationDebugger {
       label.y = pos.y - 20;
       this.container.addChild(label);
 
-      // Create enemy sprite with smaller tileSize (16 instead of 32)
-      const enemy = new Monster(0, 0, 16, this.enemyFrames, this.enemyMapping);
+      const enemy = new Monster(0, 0, GAME_CONFIG.SPRITE_TILE_SIZE, this.enemyFrames, this.enemyMapping);
       enemy.sprite.x = pos.x;
       enemy.sprite.y = pos.y;
       this.container.addChild(enemy.sprite);

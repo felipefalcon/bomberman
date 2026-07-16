@@ -42,10 +42,12 @@ export class GameState {
    */
   setupEventListeners() {
     this.eventBus.on(GameEvents.PLAYER_DAMAGE, () => this.handlePlayerDamage());
+    this.eventBus.on(GameEvents.MONSTER_DAMAGE_PLAYER, () => this.handlePlayerDamage());
     this.eventBus.on(GameEvents.PLAYER_DEATH, () => this.handlePlayerDeath());
     this.eventBus.on(GameEvents.MONSTER_DEATH, () => this.handleMonsterDeath());
     this.eventBus.on(GameEvents.BLOCK_DESTROY, () => this.handleBlockDestroy());
     this.eventBus.on(GameEvents.PLAYER_COLLECT_POWERUP, (data) => this.handlePowerupCollect(data));
+    this.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => this.handleExplosionDamage(data));
   }
 
   /**
@@ -106,6 +108,19 @@ export class GameState {
       if (this.playerState.lives <= 0) {
         this.eventBus.emit(GameEvents.PLAYER_DEATH);
       }
+    }
+  }
+
+  /**
+   * Handle explosion damage
+   * @param {Object} data - Damage data with target type
+   */
+  handleExplosionDamage(data) {
+    if (data.target === 'player') {
+      this.handlePlayerDamage();
+    } else if (data.target === 'monster') {
+      // Monster damage is handled by MonsterSystem
+      this.handleMonsterDeath();
     }
   }
 

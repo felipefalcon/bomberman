@@ -97,7 +97,7 @@ export class BombSystem {
       
       if (textures.length > 0) {
         sprite = new PIXI.AnimatedSprite(textures);
-        sprite.animationSpeed = 0.15;
+        sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
         sprite.play();
         // Scale from 16x16 to 32x32 (2x scale)
         sprite.scale.set(2);
@@ -161,12 +161,14 @@ export class BombSystem {
    * @param {Function} explodeCallback - Callback for explosion logic
    */
   explodeBomb(bomb, explodeCallback) {
+    console.log('BombSystem: Exploding bomb at', bomb.tx, bomb.ty);
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.gameContainer.removeChild(bomb.sprite);
     
     this.eventBus.emit(GameEvents.BOMB_EXPLODE, { tx: bomb.tx, ty: bomb.ty });
     
     if (explodeCallback) {
+      console.log('BombSystem: Calling explodeCallback');
       explodeCallback(bomb);
     }
   }

@@ -1,4 +1,5 @@
 import * as PIXI from 'pixi.js';
+import { GAME_CONFIG } from '../config/Constants.js';
 
 export class Powerup {
   constructor(tx, ty, tileSize, type, texture) {
@@ -6,7 +7,7 @@ export class Powerup {
     this.ty = ty;
     this.tileSize = tileSize;
     this.type = type; // 'speed', 'bomb', 'range', 'shield', 'life', 'detonator'
-    this.spriteScale = 1.5;
+    this.spriteScale = GAME_CONFIG.POWERUP_SPRITE_SCALE;
     
     // Create sprite
     this.sprite = new PIXI.Sprite(texture);
@@ -23,7 +24,7 @@ export class Powerup {
   update(delta) {
     // Bobbing animation
     this.animTimer += delta;
-    this.floatOffset = Math.sin(this.animTimer * 0.1) * 3; // Bobs up/down
+    this.floatOffset = Math.sin(this.animTimer * GAME_CONFIG.POWERUP_BOB_SPEED) * GAME_CONFIG.POWERUP_BOB_AMOUNT;
     this.sprite.y = this.ty * this.tileSize + this.tileSize / 2 + this.floatOffset;
   }
 

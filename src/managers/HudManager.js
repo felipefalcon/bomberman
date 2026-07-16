@@ -1,4 +1,5 @@
 import * as PIXI from 'pixi.js';
+import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 
 /**
@@ -26,7 +27,7 @@ export class HudManager {
     this.itemFrames = null;
     this.itemMapping = null;
     
-    this.fontSize = 12;
+    this.fontSize = GAME_CONFIG.HUD.FONT_SIZE;
     
     this.create();
     this.setupEventListeners();
@@ -44,6 +45,7 @@ export class HudManager {
    * Create top HUD (lives and timer)
    */
   createTopHud() {
+    const hudTop = GAME_CONFIG.HUD.TOP;
     const container = new PIXI.Container();
     container.x = this.config.sidebarWidth;
     this.stage.addChild(container);
@@ -54,15 +56,20 @@ export class HudManager {
     // Frame
     const frame = new PIXI.Graphics();
     frame.rect(0, 0, width, height);
-    frame.fill(0x203890);
+    frame.fill(hudTop.FRAME_FILL_COLOR);
     frame.rect(0, 0, width, height);
-    frame.stroke({ color: 0x406000, width: 1 });
+    frame.stroke({ color: hudTop.FRAME_OUTER_STROKE_COLOR, width: hudTop.FRAME_STROKE_WIDTH });
     frame.rect(1, 1, width - 2, height - 2);
-    frame.stroke({ color: 0x58d800, width: 1 });
+    frame.stroke({ color: hudTop.FRAME_INNER_STROKE_COLOR, width: hudTop.FRAME_STROKE_WIDTH });
     container.addChild(frame);
 
     // Lives panel
-    const livesPanel = this.createHudPanel(8, 5, 90, height - 6);
+    const livesPanel = this.createHudPanel(
+      hudTop.LIVES_PANEL_X,
+      hudTop.LIVES_PANEL_Y,
+      hudTop.LIVES_PANEL_WIDTH,
+      height - hudTop.PANEL_INNER_MARGIN
+    );
     container.addChild(livesPanel);
 
     this.playerIconContainer = new PIXI.Container();
@@ -70,16 +77,21 @@ export class HudManager {
     livesPanel.addChild(this.playerIconContainer);
 
     this.livesText = new PIXI.BitmapText({
-      text: '3',
+      text: hudTop.DEFAULT_LIVES_TEXT,
       style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
       roundPixels: true,
     });
-    this.livesText.x = 26;
-    this.livesText.y = 5;
+    this.livesText.x = hudTop.LIVES_TEXT_X;
+    this.livesText.y = hudTop.LIVES_TEXT_Y;
     livesPanel.addChild(this.livesText);
 
     // Timer panel
-    const timerPanel = this.createHudPanel((width / 2) - 40, 5, 82, height - 6);
+    const timerPanel = this.createHudPanel(
+      (width / 2) + hudTop.TIMER_PANEL_OFFSET_X,
+      hudTop.TIMER_PANEL_Y,
+      hudTop.TIMER_PANEL_WIDTH,
+      height - hudTop.PANEL_INNER_MARGIN
+    );
     container.addChild(timerPanel);
 
     this.clockIconContainer = new PIXI.Container();
@@ -87,12 +99,12 @@ export class HudManager {
     timerPanel.addChild(this.clockIconContainer);
 
     this.timerText = new PIXI.BitmapText({
-      text: '3:20',
+      text: hudTop.DEFAULT_TIMER_TEXT,
       style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
       roundPixels: true,
     });
-    this.timerText.x = 32;
-    this.timerText.y = 5;
+    this.timerText.x = hudTop.TIMER_TEXT_X;
+    this.timerText.y = hudTop.TIMER_TEXT_Y;
     timerPanel.addChild(this.timerText);
 
     this.topContainer = container;
@@ -102,6 +114,7 @@ export class HudManager {
    * Create sidebar HUD (powerups)
    */
   createSidebarHud() {
+    const hudSidebar = GAME_CONFIG.HUD.SIDEBAR;
     const container = new PIXI.Container();
     container.y = this.config.tileSize;
     this.stage.addChild(container);
@@ -115,16 +128,46 @@ export class HudManager {
 
     // Powerup slots
     const powerupRows = [
-      { key: 'bomb', fallbackDraw: () => this.drawBombIcon(8, 9), withText: true },
-      { key: 'range', fallbackDraw: () => this.drawRangeIcon(8, 9), withText: true },
-      { key: 'speed', fallbackDraw: () => this.drawSpeedIcon(8, 9), withText: true },
-      { key: 'pierce', fallbackDraw: () => this.drawPierceIcon(8, 9), withText: false },
-      { key: 'shield', fallbackDraw: () => this.drawShieldIcon(8, 9), withText: false },
-      { key: 'detonator', fallbackDraw: () => this.drawDetonatorIcon(8, 9), withText: false },
+      {
+        key: 'bomb',
+        fallbackDraw: () => this.drawBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: true,
+      },
+      {
+        key: 'range',
+        fallbackDraw: () => this.drawRangeIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: true,
+      },
+      {
+        key: 'speed',
+        fallbackDraw: () => this.drawSpeedIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: true,
+      },
+      {
+        key: 'pierce',
+        fallbackDraw: () => this.drawPierceIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
+      {
+        key: 'shield',
+        fallbackDraw: () => this.drawShieldIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
+      {
+        key: 'detonator',
+        fallbackDraw: () => this.drawDetonatorIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
     ];
 
     powerupRows.forEach((row, index) => {
-      const slot = this.createPowerupSlot(2, index * 28, row.key, row.fallbackDraw, row.withText);
+      const slot = this.createPowerupSlot(
+        hudSidebar.SLOT_START_X,
+        hudSidebar.SLOT_START_Y + (index * hudSidebar.SLOT_GAP_Y),
+        row.key,
+        row.fallbackDraw,
+        row.withText
+      );
       container.addChild(slot.container);
       this.powerupSlots[row.key] = slot;
     });
@@ -142,7 +185,7 @@ export class HudManager {
 
     const bg = new PIXI.Graphics();
     bg.rect(0, 0, width, height);
-    bg.rect(0, 0, width, 3);
+    bg.rect(0, 0, width, GAME_CONFIG.HUD.PANEL_STRIP_HEIGHT);
     panel.addChild(bg);
 
     return panel;
@@ -152,14 +195,15 @@ export class HudManager {
    * Create a powerup slot
    */
   createPowerupSlot(x, y, key, fallbackDraw, withText) {
+    const hudSidebar = GAME_CONFIG.HUD.SIDEBAR;
     const container = new PIXI.Container();
     container.x = x;
     container.y = y;
-    container.alpha = 0.35;
+    container.alpha = GAME_CONFIG.HUD.SIDEBAR_INACTIVE_ALPHA;
 
     const bg = new PIXI.Graphics();
     bg.rect(0, 0, this.config.sidebarWidth, this.config.tileSize);
-    bg.rect(0, 0, this.config.sidebarWidth, 3);
+    bg.rect(0, 0, this.config.sidebarWidth, GAME_CONFIG.HUD.PANEL_STRIP_HEIGHT);
     container.addChild(bg);
 
     const iconContainer = new PIXI.Container();
@@ -170,11 +214,11 @@ export class HudManager {
     if (withText) {
       text = new PIXI.BitmapText({
         text: '0',
-        style: { fontFamily: 'HUDFont', fontSize: 6, fill: 0xffffff },
+        style: { fontFamily: 'HUDFont', fontSize: GAME_CONFIG.HUD.SMALL_FONT_SIZE, fill: 0xffffff },
         roundPixels: true,
       });
-      text.x = 7;
-      text.y = 19;
+      text.x = hudSidebar.SLOT_TEXT_X;
+      text.y = hudSidebar.SLOT_TEXT_Y;
       container.addChild(text);
     }
 
@@ -261,21 +305,25 @@ export class HudManager {
     const slot = this.powerupSlots[key];
     if (!slot) return;
 
-    slot.container.alpha = isActive ? 1 : 0.35;
+    slot.container.alpha = isActive ? 1 : GAME_CONFIG.HUD.SIDEBAR_INACTIVE_ALPHA;
     if (slot.text) slot.text.text = value;
   }
 
   // Icon creation methods
   createPlayerIcon() {
-    const sprite = this.createItemIcon(19);
+    const sprite = this.createItemIcon(GAME_CONFIG.HUD.TOP.PLAYER_ICON_FRAME);
     if (sprite) return sprite;
-    return this.drawFaceIcon(11, 13);
+    return this.drawFaceIcon(GAME_CONFIG.HUD.TOP.PLAYER_ICON_X, GAME_CONFIG.HUD.TOP.PLAYER_ICON_Y);
   }
 
   createClockIcon() {
-    const sprite = this.createItemIcon(20);
+    const sprite = this.createItemIcon(GAME_CONFIG.HUD.TOP.CLOCK_ICON_FRAME);
     if (sprite) return sprite;
-    return this.drawClockIcon(10, 13, 0xff7a22);
+    return this.drawClockIcon(
+      GAME_CONFIG.HUD.TOP.CLOCK_ICON_X,
+      GAME_CONFIG.HUD.TOP.CLOCK_ICON_Y,
+      GAME_CONFIG.HUD.TOP.CLOCK_BEZEL_COLOR
+    );
   }
 
   createPowerupIcon(key, fallbackDraw) {
@@ -295,8 +343,8 @@ export class HudManager {
     if (!texture) return null;
 
     const sprite = new PIXI.Sprite(texture);
-    sprite.width = 24;
-    sprite.height = 24;
+    sprite.width = GAME_CONFIG.HUD.ICON_SIZE;
+    sprite.height = GAME_CONFIG.HUD.ICON_SIZE;
     sprite.x = 0;
     sprite.y = 0;
     sprite.roundPixels = true;

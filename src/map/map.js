@@ -1,10 +1,11 @@
 import * as PIXI from 'pixi.js';
+import { GAME_CONFIG, TILE_TYPES } from '../config/Constants.js';
 import { loadTilesetTiles } from '../loaders/tilesetLoader.js';
 import { loadBlockTexture } from '../loaders/blockLoader.js';
 import { loadPillarTexture } from '../loaders/pillarLoader.js';
 
 export class TileMap {
-  constructor(app, tileSize = 32, cols = 17, rows = 11) {
+  constructor(app, tileSize = GAME_CONFIG.TILE_SIZE, cols = GAME_CONFIG.MAP_COLS, rows = GAME_CONFIG.MAP_ROWS) {
     this.app = app;
     this.tileSize = tileSize;
     this.cols = cols;
@@ -53,14 +54,14 @@ export class TileMap {
       this.tiles[y] = [];
       for (let x = 0; x < this.cols; x++) {
         // simple rules: border walls + pillars on even coords
-        let t = 0; // 0 = floor, 1 = wall, 2 = destructible crate
-        if (x === 0 || y === 0 || x === this.cols - 1 || y === this.rows - 1) t = 1;
-        if (x % 2 === 0 && y % 2 === 0) t = 1;
+        let t = TILE_TYPES.FLOOR;
+        if (x === 0 || y === 0 || x === this.cols - 1 || y === this.rows - 1) t = TILE_TYPES.WALL;
+        if (x % 2 === 0 && y % 2 === 0) t = TILE_TYPES.WALL;
 
         // leave open spaces near the start area
         const isStartSafe = (x === 1 && y === 1) || (x === 2 && y === 1) || (x === 1 && y === 2);
-        if (t === 0 && !isStartSafe && Math.random() < 0.47) {
-          t = 2; // destructible crate
+        if (t === TILE_TYPES.FLOOR && !isStartSafe && Math.random() < GAME_CONFIG.MAP_DESTRUCTIBLE_CHANCE) {
+          t = TILE_TYPES.DESTRUCTIBLE;
         }
 
         // Use tileset/block/pillar texture if available, otherwise fallback to graphics
@@ -68,12 +69,12 @@ export class TileMap {
         
         // Check if it's a pilar (internal wall)
         const isBorderWall = (x === 0 || x === this.cols - 1 || y === 0 || y === this.rows - 1);
-        const isPilar = t === 1 && !isBorderWall;
-        const isCrate = t === 2;
+        const isPilar = t === TILE_TYPES.WALL && !isBorderWall;
+        const isCrate = t === TILE_TYPES.DESTRUCTIBLE;
 
         // Always render ground/floor first
         let frameIndex = 0;
-        if (t === 1) {
+        if (t === TILE_TYPES.WALL) {
           // Border walls (cantos e paredes)
           if (x === 0 && y === 0) {
             frameIndex = 1; // canto topo-esquerdo
@@ -94,7 +95,7 @@ export class TileMap {
           } else {
             frameIndex = 8; // fallback: piso para pilares internos
           }
-        } else if (t === 2) {
+        } else if (t === TILE_TYPES.DESTRUCTIBLE) {
           frameIndex = 8; // crate: render floor under it
         } else {
           frameIndex = 8; // chão normal
@@ -151,17 +152,17 @@ export class TileMap {
 
   isWall(tx, ty) {
     if (!this._isValidTileCoord(tx, ty)) return true;
-    return this.tiles[ty][tx] === 1;
+    return this.tiles[ty][tx] === TILE_TYPES.WALL;
   }
 
   isBlocked(tx, ty) {
     if (!this._isValidTileCoord(tx, ty)) return true;
-    return this.tiles[ty][tx] === 1 || this.tiles[ty][tx] === 2;
+    return this.tiles[ty][tx] === TILE_TYPES.WALL || this.tiles[ty][tx] === TILE_TYPES.DESTRUCTIBLE;
   }
 
   isDestructible(tx, ty) {
     if (!this._isValidTileCoord(tx, ty)) return false;
-    return this.tiles[ty][tx] === 2;
+    return this.tiles[ty][tx] === TILE_TYPES.DESTRUCTIBLE;
   }
 
   _isValidTileCoord(tx, ty) {
@@ -180,7 +181,7 @@ export class TileMap {
       this.spriteMap.delete(spriteKey);
     }
     
-    this.tiles[ty][tx] = 0;
+    this.tiles[ty][tx] = TILE_TYPES.FLOOR;
     return blockSprite || null; // Return the sprite so caller can apply effects
   }
 }

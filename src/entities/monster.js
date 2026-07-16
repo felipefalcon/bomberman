@@ -1,20 +1,21 @@
 import { AnimatedSprite, Graphics } from 'pixi.js';
+import { GAME_CONFIG } from '../config/Constants.js';
 
-export const MONSTER_SPEED = 0.85;
+export const MONSTER_SPEED = GAME_CONFIG.MONSTER_SPEED;
 
 export class Monster {
-  constructor(tx, ty, tileSize = 32, textures = null, mapping = null) {
+  constructor(tx, ty, tileSize = GAME_CONFIG.TILE_SIZE, textures = null, mapping = null) {
     this.tileSize = tileSize;
     this.tx = tx;
     this.ty = ty;
     this.speed = MONSTER_SPEED;
-    this.lives = 1;
+    this.lives = GAME_CONFIG.MONSTER_STARTING_LIVES;
     this.target = null;
     this.direction = null;
     this.isTrapped = false;
     this.lastAnimationFacing = null; // Track last animation to avoid redundant updates
-    this.spriteScale = 1.5; // Scale multiplier for rendering (1.5 = 48x48)
-    this.animationSpeed = 0.15;
+    this.spriteScale = GAME_CONFIG.MONSTER_SPRITE_SCALE;
+    this.animationSpeed = GAME_CONFIG.MONSTER_ANIMATION_SPEED;
     
     this.textures = textures;
     this.mapping = mapping;

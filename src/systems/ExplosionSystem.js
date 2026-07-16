@@ -25,6 +25,14 @@ export class ExplosionSystem {
   }
 
   /**
+   * Set the map directly for wall/destructible checks
+   * @param {Object} map - TileMap instance
+   */
+  setMap(map) {
+    this.map = map;
+  }
+
+  /**
    * Create an explosion at the specified tile
    * @param {number} tx - Tile X position
    * @param {number} ty - Tile Y position
@@ -227,7 +235,7 @@ export class ExplosionSystem {
 
         const isBlock = this.isDestructible(tx, ty);
 
-        this.createExplosion({ tx, ty, isCenter: false });
+        this.createExplosion(tx, ty, false);
         
         if (destroyTileCallback) {
           destroyTileCallback(tx, ty);
@@ -246,6 +254,7 @@ export class ExplosionSystem {
    * @returns {boolean}
    */
   isWall(tx, ty) {
+    if (this.map) return this.map.isWall(tx, ty);
     if (!this.scene || !this.scene.map) return true;
     return this.scene.map.isWall(tx, ty);
   }
@@ -257,6 +266,7 @@ export class ExplosionSystem {
    * @returns {boolean}
    */
   isDestructible(tx, ty) {
+    if (this.map) return this.map.isDestructible(tx, ty);
     if (!this.scene || !this.scene.map) return false;
     return this.scene.map.isDestructible(tx, ty);
   }

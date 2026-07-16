@@ -1,6 +1,6 @@
 import { GAME_CONFIG, POWERUP_TYPES } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
-import { Powerup } from '../powerup.js';
+import { Powerup } from '../entities/powerup.js';
 
 /**
  * PowerupSystem - Manages powerup spawning, collection, and effects
@@ -42,7 +42,7 @@ export class PowerupSystem {
    * @param {number} ty - Tile Y position
    */
   trySpawnPowerup(tx, ty) {
-    // 30% chance to spawn a powerup when a block is destroyed
+    // Spawn chance is configured in GAME_CONFIG.POWERUP_SPAWN_CHANCE.
     if (Math.random() > this.spawnChance) return;
     if (!this.itemFrames || !this.itemMapping) return;
     
@@ -51,7 +51,8 @@ export class PowerupSystem {
     const frameIndex = this.itemMapping[randomType];
     
     const powerup = new Powerup(tx, ty, this.tileSize, randomType, this.itemFrames[frameIndex]);
-    powerup.immuneTicks = GAME_CONFIG.POWERUP_IMMUNE_TICKS;
+    // Keep newly spawned powerups immune for at least the full current explosion lifetime.
+    powerup.immuneTicks = Math.max(GAME_CONFIG.POWERUP_IMMUNE_TICKS, GAME_CONFIG.EXPLOSION_DURATION + 1);
     this.powerups.push(powerup);
     this.gameContainer.addChild(powerup.sprite);
     

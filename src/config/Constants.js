@@ -3,6 +3,50 @@ export const GAME_CONFIG = {
   // Display
   GAME_ZOOM: 2,
   SIDEBAR_WIDTH: 24,
+
+  // HUD
+  HUD: {
+    FONT_SIZE: 12,
+    SMALL_FONT_SIZE: 6,
+    PANEL_STRIP_HEIGHT: 3,
+    SIDEBAR_INACTIVE_ALPHA: 0.35,
+    ICON_SIZE: 24,
+    TOP: {
+      FRAME_FILL_COLOR: 0x203890,
+      FRAME_OUTER_STROKE_COLOR: 0x406000,
+      FRAME_INNER_STROKE_COLOR: 0x58d800,
+      FRAME_STROKE_WIDTH: 1,
+      LIVES_PANEL_X: 8,
+      LIVES_PANEL_Y: 5,
+      LIVES_PANEL_WIDTH: 90,
+      TIMER_PANEL_OFFSET_X: -40,
+      TIMER_PANEL_Y: 5,
+      TIMER_PANEL_WIDTH: 82,
+      PANEL_INNER_MARGIN: 6,
+      LIVES_TEXT_X: 26,
+      LIVES_TEXT_Y: 5,
+      TIMER_TEXT_X: 32,
+      TIMER_TEXT_Y: 5,
+      DEFAULT_LIVES_TEXT: '3',
+      DEFAULT_TIMER_TEXT: '3:20',
+      PLAYER_ICON_FRAME: 19,
+      CLOCK_ICON_FRAME: 20,
+      PLAYER_ICON_X: 11,
+      PLAYER_ICON_Y: 13,
+      CLOCK_ICON_X: 10,
+      CLOCK_ICON_Y: 13,
+      CLOCK_BEZEL_COLOR: 0xff7a22,
+    },
+    SIDEBAR: {
+      SLOT_START_X: 2,
+      SLOT_START_Y: 0,
+      SLOT_GAP_Y: 28,
+      POWERUP_ICON_X: 8,
+      POWERUP_ICON_Y: 9,
+      SLOT_TEXT_X: 7,
+      SLOT_TEXT_Y: 19,
+    },
+  },
   
   // Map dimensions
   MAP_COLS: 17,
@@ -25,6 +69,7 @@ export const GAME_CONFIG = {
   PLAYER_STARTING_BOMBS: 1,
   PLAYER_STARTING_RANGE: 1,
   PLAYER_BLINK_DURATION: 60, // ticks
+  PLAYER_BLINK_INTERVAL_TICKS: 10,
   
   // Monster settings
   MONSTER_SPEED: 0.85,
@@ -32,13 +77,17 @@ export const GAME_CONFIG = {
   MONSTER_ANIMATION_SPEED: 0.15,
   MONSTER_SPAWN_COUNT: 3,
   MONSTER_START_DISTANCE: 6, // minimum distance from start area
+  MONSTER_STARTING_LIVES: 1,
   
   // Powerup settings
-  POWERUP_SPAWN_CHANCE: 0.3, // 30% chance when block destroyed
+  POWERUP_SPAWN_CHANCE: 0.8, // chance when block destroyed
   POWERUP_IMMUNE_TICKS: 10, // protection from same-frame explosions
   POWERUP_SPRITE_SCALE: 1.5,
   POWERUP_BOB_SPEED: 0.1,
   POWERUP_BOB_AMOUNT: 3, // pixels
+
+  // Map generation
+  MAP_DESTRUCTIBLE_CHANCE: 0.47,
   
   // Explosion settings
   EXPLOSION_DURATION: 20, // ticks
@@ -55,6 +104,7 @@ export const GAME_CONFIG = {
   MUSIC_VOLUME: 0.3,
   SOUND_EFFECT_VOLUME: 0.7,
   SOUND_POOL_SIZE: 5,
+  AUDIO_START_MUTED: false,
   
   // Asset paths
   ASSETS_PATH: `${import.meta.env.BASE_URL}assets/`,
