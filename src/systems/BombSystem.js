@@ -46,10 +46,10 @@ export class BombSystem {
   placeBomb(tx, ty, player) {
     // Check if player has reached max bomb limit
     if (player.activeBombs >= player.maxBombs) return false;
-    
+
     // Check if tile is blocked
     if (this.isTileBlocked(tx, ty)) return false;
-    
+
     // Check if bomb already exists at this position
     if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return false;
 
@@ -59,14 +59,24 @@ export class BombSystem {
       timer: this.bombFuseTicks,
       sprite: this.createBombSprite(tx, ty),
       soundPlayed: false,
+      // Kick bomb properties
+      isSliding: false,
+      slideDx: 0,
+      slideDy: 0,
+      slideSpeed: GAME_CONFIG.BOMB_SLIDE_SPEED || 4,
+      slideProgress: 0,
+      nextTx: tx,
+      nextTy: ty,
+
+      canMove: false,
     };
-    
+
     this.bombs.push(bomb);
     player.activeBombs += 1;
     this.gameContainer.addChild(bomb.sprite);
-    
+
     this.eventBus.emit(GameEvents.BOMB_PLACED, { tx, ty, bomb });
-    
+
     return true;
   }
 
@@ -89,12 +99,12 @@ export class BombSystem {
    */
   createBombSprite(tx, ty) {
     let sprite;
-    
+
     if (this.bombFrames && this.bombFrames.length > 0 && this.bombMapping?.bomb) {
       // Use animated sprite with ping-pong animation
       const frameIndices = this.bombMapping.bomb;
       const textures = frameIndices.map(i => this.bombFrames[i]).filter(Boolean);
-      
+
       if (textures.length > 0) {
         sprite = new PIXI.AnimatedSprite(textures);
         sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
@@ -109,7 +119,7 @@ export class BombSystem {
       // Fallback to Graphics
       sprite = this.createBombGraphics();
     }
-    
+
     sprite.x = tx * this.tileSize;
     sprite.y = ty * this.tileSize;
     sprite.roundPixels = true;
@@ -134,25 +144,192 @@ export class BombSystem {
    * @param {Function} explodeCallback - Callback when bomb explodes
    */
   update(delta, explodeCallback) {
-    const expire = [];
-    
+
+    this.updateSliding(delta);
+
+    this.updateTimers(delta);
+
+    this.explodeExpiredBombs(explodeCallback);
+
+  }
+
+  updateSliding(delta) {
+
+    this.calculateTargets();
+
+    this.resolveConflicts();
+
+    this.moveBombs(delta);
+
+    this.finalizeTiles();
+
+  }
+
+  calculateTargets() {
+
     for (const bomb of this.bombs) {
+
+      if (!bomb.isSliding)
+        continue;
+
+      bomb.nextTx = bomb.tx + bomb.slideDx;
+      bomb.nextTy = bomb.ty + bomb.slideDy;
+
+      bomb.canMove = true;
+
+    }
+
+  }
+
+  resolveConflicts() {
+
+    const reserved = new Map();
+
+    for (const bomb of this.bombs) {
+
+      if (!bomb.isSliding)
+        continue;
+
+      if (!bomb.canMove)
+        continue;
+
+      if (this.isTileBlocked(bomb.nextTx, bomb.nextTy)) {
+
+        bomb.canMove = false;
+
+        continue;
+
+      }
+
+      const stoppedBomb = this.bombs.find(b =>
+        b !== bomb &&
+        !b.isSliding &&
+        b.tx === bomb.nextTx &&
+        b.ty === bomb.nextTy
+      );
+
+      if (stoppedBomb) {
+
+        bomb.canMove = false;
+
+        continue;
+
+      }
+
+      const key = `${bomb.nextTx},${bomb.nextTy}`;
+
+      if (reserved.has(key)) {
+
+        bomb.canMove = false;
+
+        continue;
+
+      }
+
+      reserved.set(key, bomb);
+
+    }
+
+  }
+
+  moveBombs(delta) {
+
+    for (const bomb of this.bombs) {
+
+      if (!bomb.isSliding)
+        continue;
+
+      if (!bomb.canMove)
+        continue;
+
+      const amount = bomb.slideSpeed * delta;
+
+      bomb.sprite.x += bomb.slideDx * amount;
+      bomb.sprite.y += bomb.slideDy * amount;
+
+      bomb.slideProgress += amount / this.tileSize;
+
+    }
+
+  }
+
+  finalizeTiles() {
+
+    for (const bomb of this.bombs) {
+
+      if (!bomb.isSliding)
+        continue;
+
+      if (!bomb.canMove) {
+
+        this.stopSlidingBomb(bomb);
+
+        continue;
+
+      }
+
+      if (bomb.slideProgress < 1)
+        continue;
+
+      bomb.slideProgress = 0;
+
+      bomb.tx = bomb.nextTx;
+      bomb.ty = bomb.nextTy;
+
+      bomb.sprite.x = bomb.tx * this.tileSize;
+      bomb.sprite.y = bomb.ty * this.tileSize;
+
+    }
+
+  }
+
+  updateTimers(delta) {
+
+    for (const bomb of this.bombs) {
+
       bomb.timer -= delta;
-      
-      // Play explosion sound early (when timer reaches ~40 ticks before explosion)
-      if (bomb.timer <= GAME_CONFIG.EXPLOSION_SOUND_TICKS && !bomb.soundPlayed) {
+
+      if (
+        bomb.timer <= GAME_CONFIG.EXPLOSION_SOUND_TICKS &&
+        !bomb.soundPlayed
+      ) {
+
         bomb.soundPlayed = true;
-        this.eventBus.emit(GameEvents.AUDIO_PLAY, { type: 'explosion' });
+
+        this.eventBus.emit(
+          GameEvents.AUDIO_PLAY,
+          { type: "explosion" }
+        );
+
       }
-      
-      if (bomb.timer <= 0) {
-        expire.push(bomb);
-      }
+
     }
-    
-    for (const bomb of expire) {
-      this.explodeBomb(bomb, explodeCallback);
+
+  }
+
+  explodeExpiredBombs(callback) {
+
+    const expired = this.bombs.filter(b => b.timer <= 0);
+
+    for (const bomb of expired) {
+
+      this.explodeBomb(bomb, callback);
+
     }
+
+  }
+
+  stopSlidingBomb(bomb) {
+    bomb.isSliding = false;
+    bomb.slideDx = 0;
+    bomb.slideDy = 0;
+    bomb.slideProgress = 0;
+    bomb.nextTx = bomb.tx;
+    bomb.nextTy = bomb.ty;
+    bomb.canMove = false;
+
+    bomb.sprite.x = bomb.tx * this.tileSize;
+    bomb.sprite.y = bomb.ty * this.tileSize;
   }
 
   /**
@@ -164,9 +341,9 @@ export class BombSystem {
     console.log('BombSystem: Exploding bomb at', bomb.tx, bomb.ty);
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.gameContainer.removeChild(bomb.sprite);
-    
+
     this.eventBus.emit(GameEvents.BOMB_EXPLODE, { tx: bomb.tx, ty: bomb.ty });
-    
+
     if (explodeCallback) {
       console.log('BombSystem: Calling explodeCallback');
       explodeCallback(bomb);
@@ -189,6 +366,43 @@ export class BombSystem {
    */
   getBombAt(tx, ty) {
     return this.bombs.find((b) => b.tx === tx && b.ty === ty) || null;
+  }
+
+  /**
+   * Kick a bomb in a specific direction
+   * @param {Object} bomb - Bomb object
+   * @param {number} dx - Direction X (-1, 0, or 1)
+   * @param {number} dy - Direction Y (-1, 0, or 1)
+   * @returns {boolean} True if bomb was kicked
+   */
+  kickBomb(bomb, dx, dy) {
+    if (bomb.isSliding) return false; // Already sliding
+
+    // Check if the direction is valid (only cardinal directions)
+    if (Math.abs(dx) + Math.abs(dy) !== 1) return false;
+
+    // Check if the next tile in that direction is free
+    const nextTx = bomb.tx + dx;
+    const nextTy = bomb.ty + dy;
+
+    if (this.isTileBlocked(nextTx, nextTy)) return false;
+
+    // Check if there's another bomb at the target position
+    if (this.bombs.some((b) => b !== bomb && b.tx === nextTx && b.ty === nextTy)) return false;
+    console.log('BombSystem: No bomb at target position');
+
+    // Start sliding
+    bomb.isSliding = true;
+    bomb.slideDx = dx;
+    bomb.slideDy = dy;
+    bomb.slideProgress = 0;
+    bomb.nextTx = bomb.tx;
+    bomb.nextTy = bomb.ty;
+    bomb.canMove = true;
+
+    this.eventBus.emit(GameEvents.BOMB_KICK, { tx: bomb.tx, ty: bomb.ty, dx, dy });
+
+    return true;
   }
 
   /**

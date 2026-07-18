@@ -48,7 +48,7 @@ export class Player {
     this.canPierceBlocks = false; // Explosions can pass through blocks
     this.hasShield = false;
     this.hasDetonator = false;
-    this.hasKickBomb = false;
+    this.hasKickBomb = true;
   }
 
   takeDamage() {
@@ -63,7 +63,7 @@ export class Player {
     this.blinkTimer = 0;
   }
 
-  update(delta, keys, map, bombs = []) {
+  update(delta, keys, map, bombs = [], bombSystem = null) {
     // Handle blink effect when taking damage
     if (this.isBlinking) {
       this.blinkTimer += delta;
@@ -96,22 +96,22 @@ export class Player {
     // decide animation based on input
     this._updateAnimation(vx, vy);
 
-    this._tryMove(moveX, moveY, map, bombs);
+    this._tryMove(moveX, moveY, map, bombs, bombSystem);
   }
 
-  _tryMove(dx, dy, map, bombs) {
+  _tryMove(dx, dy, map, bombs, bombSystem = null) {
     // Axis-separated movement for smoother sliding along walls
     if (dx !== 0) {
       const nx = this.sprite.x + dx;
-      if (!this._collidesAt(nx, this.sprite.y, map, bombs)) this.sprite.x = nx;
+      if (!this._collidesAt(nx, this.sprite.y, map, bombs, bombSystem)) this.sprite.x = nx;
     }
     if (dy !== 0) {
       const ny = this.sprite.y + dy;
-      if (!this._collidesAt(this.sprite.x, ny, map, bombs)) this.sprite.y = ny;
+      if (!this._collidesAt(this.sprite.x, ny, map, bombs, bombSystem)) this.sprite.y = ny;
     }
   }
 
-  _collidesAt(cx, cy, map, bombs) {
+  _collidesAt(cx, cy, map, bombs, bombSystem = null) {
     // check collision box corners using collisionHalf
     const currentCorners = [
       { x: this.sprite.x - this.collisionHalf, y: this.sprite.y - this.collisionHalf },
@@ -138,6 +138,19 @@ export class Player {
         if (currentTiles.has(`${tx},${ty}`)) {
           continue;
         }
+        
+        // If player has kick bomb powerup, kick the bomb instead of blocking
+        if (this.hasKickBomb && bombSystem && !bomb.isSliding) {
+          const dx = Math.sign(cx - this.sprite.x);
+          const dy = Math.sign(cy - this.sprite.y);
+          
+          // Only kick in cardinal directions
+          if (Math.abs(dx) + Math.abs(dy) === 1) {
+            bombSystem.kickBomb(bomb, dx, dy);
+            // return false; // Allow movement through the bomb
+          }
+        }
+        
         return true;
       }
     }

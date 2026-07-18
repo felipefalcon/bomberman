@@ -248,7 +248,7 @@ export class Game {
     if (this.player) {
       // Use collision system for player movement
       const bombs = this.bombSystem.getBombs();
-      this.player.update(tickDelta, this.keys, this.map, bombs);
+      this.player.update(tickDelta, this.keys, this.map, bombs, this.bombSystem);
       this._processBombInput();
     }
     

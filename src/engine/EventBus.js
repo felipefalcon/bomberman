@@ -122,6 +122,7 @@ export const GameEvents = {
   // Bomb events
   BOMB_PLACED: 'bomb:placed',
   BOMB_EXPLODE: 'bomb:explode',
+  BOMB_KICK: 'bomb:kick',
   
   // Explosion events
   EXPLOSION_CREATE: 'explosion:create',

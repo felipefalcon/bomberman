@@ -94,6 +94,9 @@ export const GAME_CONFIG = {
   EXPLOSION_SOUND_TICKS: 40, // ticks before explosion to play sound
   EXPLOSION_DAMAGE_WARNING_TICKS: 30, // ticks to play damage warning
   
+  // Bomb slide settings
+  BOMB_SLIDE_SPEED: 4, // pixels per tick
+  
   // Block destruction animation
   BLOCK_DESTRUCTION_DURATION: 15, // ticks
   
@@ -104,7 +107,7 @@ export const GAME_CONFIG = {
   MUSIC_VOLUME: 0.3,
   SOUND_EFFECT_VOLUME: 0.7,
   SOUND_POOL_SIZE: 5,
-  AUDIO_START_MUTED: false,
+  AUDIO_START_MUTED: true,
   
   // Asset paths
   ASSETS_PATH: `${import.meta.env.BASE_URL}assets/`,
