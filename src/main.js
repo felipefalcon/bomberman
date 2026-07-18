@@ -1,10 +1,11 @@
 import * as PIXI from 'pixi.js';
 import { Game } from './game.js';
+import { GAME_CONFIG } from './config/Constants.js';
 
-const GAME_ZOOM = 2; // adjust game zoom here
-const SIDEBAR_WIDTH = 24;
-const LOGICAL_WIDTH = 17 * 32 + SIDEBAR_WIDTH;
-const LOGICAL_HEIGHT = 11 * 32 + 32; // +1 tile for HUD row
+const GAME_ZOOM = GAME_CONFIG.GAME_ZOOM;
+const SIDEBAR_WIDTH = GAME_CONFIG.SIDEBAR_WIDTH;
+const LOGICAL_WIDTH = GAME_CONFIG.MAP_COLS * GAME_CONFIG.TILE_SIZE + SIDEBAR_WIDTH;
+const LOGICAL_HEIGHT = GAME_CONFIG.MAP_ROWS * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE; // +1 tile for HUD row
 
 async function bootstrap() {
   if (document.fonts?.load) {

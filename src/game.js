@@ -1,34 +1,43 @@
 import * as PIXI from 'pixi.js';
-import { TileMap } from './map.js';
-import { Player } from './player.js';
-import { Monster } from './monster.js';
-import { Powerup } from './powerup.js';
-import { loadPlayerSprites } from './playerSprite.js';
-import { loadEnemySprites } from './enemySprite.js';
-import { loadBombSprite } from './bombLoader.js';
-import { loadItemSprites } from './itemsLoader.js';
-import { AnimationDebugger } from './animationDebugger.js';
-import { AudioManager } from './audioManager.js';
-import { TopHud } from './topHud.js';
-import { SidebarHud } from './sidebarHud.js';
+import { GAME_CONFIG } from './config/Constants.js';
+import { TileMap } from './map/TileMap.js';
+import { Player } from './entities/Player.js';
+import { Monster } from './entities/Monster.js';
+import { Powerup } from './entities/Powerup.js';
+import { loadPlayerSprites } from './loaders/playerSprite.js';
+import { loadEnemySprites } from './loaders/enemySprite.js';
+import { loadBombSprite } from './loaders/bombLoader.js';
+import { loadItemSprites } from './loaders/itemsLoader.js';
+import { AnimationDebugger } from './AnimationDebugger.js';
+import { AudioManager } from './managers/AudioManager.js';
+import { HudManager } from './managers/HudManager.js';
+import { AssetManager } from './engine/AssetManager.js';
+import { InputManager } from './managers/InputManager.js';
+import { GameState } from './managers/GameState.js';
+import { BombSystem } from './systems/BombSystem.js';
+import { ExplosionSystem } from './systems/ExplosionSystem.js';
+import { PowerupSystem } from './systems/PowerupSystem.js';
+import { MonsterSystem } from './systems/MonsterSystem.js';
+import { CollisionSystem } from './systems/CollisionSystem.js';
+import { GameEvents } from './engine/EventBus.js';
 
 export class Game {
   constructor(app) {
     this.app = app;
     this.stage = app.stage;
-    this.tileSize = 32;
-    this.sidebarWidth = 24;
-    this.mapCols = 17;
-    this.mapRows = 11;
+    
+    // Use config values
+    this.tileSize = GAME_CONFIG.TILE_SIZE;
+    this.sidebarWidth = GAME_CONFIG.SIDEBAR_WIDTH;
+    this.mapCols = GAME_CONFIG.MAP_COLS;
+    this.mapRows = GAME_CONFIG.MAP_ROWS;
+    
+    // Legacy state (will be phased out)
     this.keys = {};
-    this.bombFuseTicks = 180; // 3 seconds at 60 FPS
     this.lastZ = false;
-    this.bombs = [];
-    this.explosions = [];
-    this.destroyingBlocks = []; // Blocks being animated during destruction
-    this.powerups = [];
-    this.monsters = [];
-    this.livesText = null;
+    this.destroyingBlocks = [];
+    
+    // Asset storage
     this.playerFrames = null;
     this.playerMapping = null;
     this.enemyFrames = null;
@@ -37,11 +46,25 @@ export class Game {
     this.bombMapping = null;
     this.itemFrames = null;
     this.itemMapping = null;
-    this.debugger = null;
+    
+    // Managers
+    this.assetManager = new AssetManager();
+    this.inputManager = new InputManager();
+    this.gameState = new GameState();
     this.audioManager = new AudioManager();
-    this.timeRemaining = 200; // seconds
-    this.topHud = null;
-    this.sidebarHud = null;
+    
+    // Systems (will be initialized in start)
+    this.bombSystem = null;
+    this.explosionSystem = null;
+    this.powerupSystem = null;
+    this.monsterSystem = null;
+    this.collisionSystem = null;
+    
+    // Game objects
+    this.map = null;
+    this.player = null;
+    this.hudManager = null;
+    this.debugger = null;
   }
 
   start() {
@@ -50,9 +73,37 @@ export class Game {
     this.gameContainer.y = this.tileSize; // offset down by 1 tile for HUD
     this.stage.addChild(this.gameContainer);
 
+    // Initialize map
     this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows);
     this.gameContainer.addChild(this.map.container);
 
+    // Initialize systems
+    this.bombSystem = new BombSystem();
+    this.bombSystem.setScene({ getContainer: () => this.gameContainer, map: this.map });
+    
+    this.explosionSystem = new ExplosionSystem();
+    this.explosionSystem.setScene({ getContainer: () => this.gameContainer, map: this.map });
+    this.explosionSystem.setMap(this.map); // Set map directly for wall/destructible checks
+    
+    this.powerupSystem = new PowerupSystem();
+    this.powerupSystem.setScene({ getContainer: () => this.gameContainer });
+    
+    this.monsterSystem = new MonsterSystem();
+    this.monsterSystem.setScene({ getContainer: () => this.gameContainer, map: this.map });
+    
+    this.collisionSystem = new CollisionSystem();
+    this.collisionSystem.setScene({ map: this.map });
+
+    // Initialize input manager
+    this.inputManager.bind();
+
+    // Initialize game state
+    this.gameState.initialize();
+    
+    // Setup event listeners to sync player with game state
+    this._setupGameStateListeners();
+
+    // Install HUD font
     PIXI.BitmapFont.install({
       name: 'HUDFont',
       chars: PIXI.BitmapFontManager.ASCII,
@@ -67,27 +118,25 @@ export class Game {
       },
     });
 
-    this.topHud = new TopHud(this.stage, {
+    this.hudManager = new HudManager(this.stage, {
       sidebarWidth: this.sidebarWidth,
       mapCols: this.mapCols,
-      tileSize: this.tileSize,
-      itemFrames: this.itemFrames,
-    });
-    this.sidebarHud = new SidebarHud(this.stage, {
-      sidebarWidth: this.sidebarWidth,
       mapRows: this.mapRows,
       tileSize: this.tileSize,
       itemFrames: this.itemFrames,
       itemMapping: this.itemMapping,
     });
 
-    // simple keyboard state
+    // Initialize HUD with default game state values (bomb/range level 1, etc.)
+    this.hudManager.updatePowerups(this.gameState.getPlayerState());
+
+    // Legacy keyboard state (will be phased out)
     window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
     window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
 
     // place player near top-left free tile
-    const startX = this.tileSize * 1.5;
-    const startY = this.tileSize * 1.5;
+    const startX = this.tileSize * GAME_CONFIG.PLAYER_START_X;
+    const startY = this.tileSize * GAME_CONFIG.PLAYER_START_Y;
 
     // Load both player and enemy spritesheets in parallel
     const playerPromise = loadPlayerSprites(`${import.meta.env.BASE_URL}assets/player-spritesheet.png`, this.tileSize)
@@ -97,13 +146,11 @@ export class Game {
         console.log('Game: Player spritesheet loaded');
         this.player = new Player(startX, startY, this.tileSize, frames, mapping);
         this.gameContainer.addChild(this.player.sprite);
-        this._refreshHUD();
       })
       .catch((err) => {
         console.warn('Could not load player spritesheet, using placeholder. Error:', err);
         this.player = new Player(startX, startY, this.tileSize);
         this.gameContainer.addChild(this.player.sprite);
-        this._refreshHUD();
       });
 
     const enemyPromise = this.map._initPromise.then(async () => {
@@ -112,11 +159,14 @@ export class Game {
         this.enemyFrames = frames;
         this.enemyMapping = mapping;
         console.log('Game: Enemy spritesheet loaded');
-        this._spawnMonsters(3);
+        // Pass assets to monster system
+        this.monsterSystem.setAssets(frames, mapping);
+        this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
       } catch (err) {
         console.warn('Could not load enemy spritesheet, using placeholder. Error:', err);
         this.enemyFrames = null;
         this.enemyMapping = null;
+        this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
       }
     });
 
@@ -125,6 +175,8 @@ export class Game {
         this.bombFrames = frames;
         this.bombMapping = mapping;
         console.log('Game: Bomb sprite loaded');
+        // Pass assets to bomb system
+        this.bombSystem.setAssets(frames, mapping);
       })
       .catch((err) => {
         console.warn('Could not load bomb sprite, using placeholder. Error:', err);
@@ -168,8 +220,9 @@ export class Game {
       .then(({ frames, mapping }) => {
         this.itemFrames = frames;
         this.itemMapping = mapping;
-        this.topHud?.setItemIcons(this.itemFrames);
-        this.sidebarHud?.setItemIcons(this.itemFrames, this.itemMapping);
+        // Pass assets to powerup system
+        this.powerupSystem.setAssets(frames, mapping);
+        this.hudManager?.setItemIcons(this.itemFrames, this.itemMapping);
         console.log('Game: Items sprite loaded');
       })
       .catch((err) => {
@@ -188,21 +241,25 @@ export class Game {
   update(delta) {
     const tickDelta = typeof delta === 'number' ? delta : delta?.deltaTime ?? 1;
 
-    if (this.timeRemaining > 0) {
-      this.timeRemaining -= tickDelta / 60;
-      if (this.timeRemaining < 0) this.timeRemaining = 0;
-      this._refreshTimerText();
-    }
+    // Update game state (timer, etc.)
+    this.gameState.update(tickDelta);
+    this.inputManager.update();
 
     if (this.player) {
-      this.player.update(tickDelta, this.keys, this.map, this.bombs);
+      // Use collision system for player movement
+      const bombs = this.bombSystem.getBombs();
+      this.player.update(tickDelta, this.keys, this.map, bombs);
       this._processBombInput();
     }
-    this._updateBombs(tickDelta);
+    
+    // Update systems
+    this.bombSystem.update(tickDelta, (bomb) => this._explodeBomb(bomb));
+    this.explosionSystem.update(tickDelta, this.player, this.monsterSystem.getMonsters(), this.powerupSystem.getPowerups());
+    this.powerupSystem.update(tickDelta, this.player);
+    this.monsterSystem.update(tickDelta, this.player, this.bombSystem.getBombs());
+    
+    // Legacy updates (will be phased out)
     this._updateDestroyingBlocks(tickDelta);
-    this._updatePowerups(tickDelta);
-    this._updateMonsters(tickDelta);
-    this._updateExplosions(tickDelta);
   }
 
   _processBombInput() {
@@ -214,23 +271,9 @@ export class Game {
   }
 
   _placeBomb() {
-    // Check if player has reached max bomb limit
-    if (this.player.activeBombs >= this.player.maxBombs) return;
-    
     const tx = Math.floor(this.player.sprite.x / this.tileSize);
     const ty = Math.floor(this.player.sprite.y / this.tileSize);
-    if (this.map.isBlocked(tx, ty)) return;
-    if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return;
-
-    const bomb = {
-      tx,
-      ty,
-      timer: this.bombFuseTicks,
-      sprite: this._createBombSprite(tx, ty),
-    };
-    this.bombs.push(bomb);
-    this.player.activeBombs += 1;
-    this.gameContainer.addChild(bomb.sprite);
+    this.bombSystem.placeBomb(tx, ty, this.player);
   }
 
   _createBombSprite(tx, ty) {
@@ -243,7 +286,7 @@ export class Game {
       
       if (textures.length > 0) {
         sprite = new PIXI.AnimatedSprite(textures);
-        sprite.animationSpeed = 0.15;
+        sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
         sprite.play();
         // Scale from 16x16 to 32x32 (2x scale)
         sprite.scale.set(2);
@@ -275,8 +318,8 @@ export class Game {
     for (const bomb of this.bombs) {
       bomb.timer -= delta;
       
-      // Play explosion sound early (when timer reaches ~40 ticks before explosion)
-      if (bomb.timer <= 40 && !bomb.soundPlayed) {
+      // Play explosion sound early before detonation.
+      if (bomb.timer <= GAME_CONFIG.EXPLOSION_SOUND_TICKS && !bomb.soundPlayed) {
         bomb.soundPlayed = true;
         this.audioManager.playSoundEffect('explosion');
       }
@@ -307,7 +350,7 @@ export class Game {
         if (isStartArea) continue;
         if (this.map.isBlocked(tx, ty)) continue;
         const distanceFromStart = Math.abs(tx - 1) + Math.abs(ty - 1);
-        if (distanceFromStart < 6) continue;
+        if (distanceFromStart < GAME_CONFIG.MONSTER_START_DISTANCE) continue;
         positions.push({ tx, ty });
       }
     }
@@ -319,50 +362,13 @@ export class Game {
   }
 
   _explodeBomb(bomb) {
-    this.bombs = this.bombs.filter((b) => b !== bomb);
-    this.gameContainer.removeChild(bomb.sprite);
-    
     // Decrease active bomb count
     if (this.player && this.player.activeBombs > 0) {
       this.player.activeBombs -= 1;
     }
 
-    const center = { tx: bomb.tx, ty: bomb.ty, isCenter: true };
-    this._createExplosion(center);
-    this._destroyTileAt(center.tx, center.ty);
-
-    const directions = [
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: 0, dy: -1 },
-    ];
-    
-    const range = this.player?.explosionRange || 1;
-    const canPierce = this.player?.canPierceBlocks || false;
-    
-    for (const dir of directions) {
-      let freeTilesHit = 0;
-      for (let i = 1; i <= this.map.cols + this.map.rows; i++) {
-        const tx = bomb.tx + dir.dx * i;
-        const ty = bomb.ty + dir.dy * i;
-
-        if (this.map.isWall(tx, ty)) break; // Wall always stops explosion
-
-        const isBlock = this.map.isDestructible(tx, ty);
-
-        this._createExplosion({ tx, ty, isCenter: false });
-        this._destroyTileAt(tx, ty);
-
-        if (!isBlock) freeTilesHit++;
-
-        // Without pierce: stop at first block
-        if (isBlock && !canPierce) break;
-
-        // Stop once enough free tiles have been hit
-        if (freeTilesHit >= range) break;
-      }
-    }
+    // Use explosion system for propagation
+    this.explosionSystem.processExplosionPropagation(bomb, this.player, (tx, ty) => this._destroyTileAt(tx, ty));
   }
 
   _destroyTileAt(tx, ty) {
@@ -373,145 +379,14 @@ export class Game {
       if (sprite) {
         this.destroyingBlocks.push({
           sprite: sprite,
-          duration: 15, // animation duration in ticks
+          duration: GAME_CONFIG.BLOCK_DESTRUCTION_DURATION,
           elapsed: 0,
           originalScale: sprite.scale.x
         });
       }
       
-      // Chance to spawn a powerup
-      this._trySpawnPowerup(tx, ty);
-      
-      // Remove any explosion on this tile to prevent further damage
-      this.explosions = this.explosions.filter(exp => !(exp.tx === tx && exp.ty === ty));
-    }
-  }
-
-  _trySpawnPowerup(tx, ty) {
-    // 30% chance to spawn a powerup when a block is destroyed
-    if (Math.random() > 0.3) return;
-    if (!this.itemFrames || !this.itemMapping) return;
-    
-    const powerupTypes = Object.keys(this.itemMapping);
-    const randomType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
-    const frameIndex = this.itemMapping[randomType];
-    
-    const powerup = new Powerup(tx, ty, this.tileSize, randomType, this.itemFrames[frameIndex]);
-    powerup.immuneTicks = 10; // protect from same-frame explosions
-    this.powerups.push(powerup);
-    this.gameContainer.addChild(powerup.sprite);
-  }
-
-  _createExplosion(cell) {
-    const explosion = {
-      tx: cell.tx,
-      ty: cell.ty,
-      timer: 20,
-      hasDamagedMonsters: false,
-      sprite: this._createExplosionSprite(cell.tx, cell.ty, cell.isCenter),
-    };
-    this.explosions.push(explosion);
-    this.gameContainer.addChild(explosion.sprite);
-  }
-
-  _createExplosionSprite(tx, ty, isCenter = false) {
-    const container = new PIXI.Container();
-    const tileSize = this.tileSize;
-    
-    // Position container at the tile
-    container.x = tx * tileSize;
-    container.y = ty * tileSize;
-    
-    // Create single fire layer at this tile only, centered
-    const gfx = new PIXI.Graphics();
-    gfx.x = tileSize / 2;
-    gfx.y = tileSize / 2;
-    container.addChild(gfx);
-
-    // Animation state
-    container.userData = {
-      animFrame: 0,
-      sprites: [gfx],
-      isCenter: isCenter
-    };
-
-    return container;
-  }
-
-  _updateExplosions(delta) {
-    const expire = [];
-    for (const explosion of this.explosions) {
-      explosion.timer -= delta;
-      
-      // Update explosion animation
-      const userData = explosion.sprite.userData;
-      userData.animFrame += 0.15; // Animation speed
-      
-      // Draw animated fire
-      for (const gfx of userData.sprites) {
-        gfx.clear();
-        
-        // Vary size and color based on animation frame
-        const frame = Math.floor(userData.animFrame) % 3;
-        const baseSize = this.tileSize * 0.8;
-        let size = baseSize + Math.sin(userData.animFrame * 0.3) * (baseSize * 0.15);
-        
-        // Color progression: yellow -> orange -> red
-        let color;
-        if (frame === 0) color = 0xFFFF00; // Yellow
-        else if (frame === 1) color = 0xFF8800; // Orange
-        else color = 0xFF3300; // Red
-        
-        // All explosions: pixelated squares
-        gfx.rect(-size / 2, -size / 2, size, size);
-        gfx.fill({ color: color, alpha: 0.9 });
-        
-        // Add glow effect
-        const glowSize = size * 1.3;
-        gfx.rect(-glowSize / 2, -glowSize / 2, glowSize, glowSize);
-        gfx.fill({ color: color, alpha: 0.3 });
-      }
-      
-      // Play damage warning sound 30 ticks after explosion appears
-      if (this.player && !explosion.soundPlayedForPlayer && explosion.timer <= 30 && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
-        explosion.soundPlayedForPlayer = true;
-        this.audioManager.playSoundEffect('damage');
-      }
-      
-      if (this.player && !explosion.hasDamagedPlayer && this._isPlayerOnTile(explosion.tx, explosion.ty)) {
-        explosion.hasDamagedPlayer = true;
-        this.player.takeDamage();
-        this._refreshHUD();
-        if (this.player.lives <= 0) {
-          this._handlePlayerDeath();
-        }
-      }
-      if (!explosion.hasDamagedMonsters) {
-        const hitMonsters = this.monsters.filter((monster) => monster.isOnTile(explosion.tx, explosion.ty));
-        if (hitMonsters.length > 0) {
-          explosion.hasDamagedMonsters = true;
-          for (const monster of hitMonsters) {
-            if (!monster.takeDamage()) {
-              this._removeMonster(monster);
-            }
-          }
-        }
-      }
-      
-      // Check for powerup collision
-      const hitPowerups = this.powerups.filter((powerup) => !powerup.immuneTicks && powerup.isOnTile(explosion.tx, explosion.ty));
-      for (const powerup of hitPowerups) {
-        this.gameContainer.removeChild(powerup.sprite);
-        this.powerups = this.powerups.filter((p) => p !== powerup);
-      }
-      
-      if (explosion.timer <= 0) {
-        expire.push(explosion);
-      }
-    }
-    for (const explosion of expire) {
-      this.gameContainer.removeChild(explosion.sprite);
-      this.explosions = this.explosions.filter((e) => e !== explosion);
+      // Use powerup system for spawning
+      this.powerupSystem.trySpawnPowerup(tx, ty);
     }
   }
 
@@ -551,77 +426,18 @@ export class Game {
   }
 
   _updatePowerups(delta) {
-    const toRemove = [];
-    
-    for (const powerup of this.powerups) {
-      powerup.update(delta);
-      if (powerup.immuneTicks > 0) powerup.immuneTicks = Math.max(0, powerup.immuneTicks - delta);
-      
-      // Check collision with player
-      if (this.player && powerup.isOnTile(
-        Math.floor(this.player.sprite.x / this.tileSize),
-        Math.floor(this.player.sprite.y / this.tileSize)
-      )) {
-        this._applyPowerup(this.player, powerup.type);
-        toRemove.push(powerup);
-        this.gameContainer.removeChild(powerup.sprite);
-      }
-    }
-    
-    // Remove collected powerups
-    this.powerups = this.powerups.filter(p => !toRemove.includes(p));
-  }
-
-  _applyPowerup(player, type) {
-    console.log(`Player collected: ${type}`);
-    
-    switch(type) {
-      case 'speed':
-        player.speed *= 1.2; // 20% speed boost
-        player.speedPowerups += 1;
-        break;
-      case 'bomb':
-        player.maxBombs += 1;
-        break;
-      case 'range':
-        player.explosionRange += 1;
-        break;
-      case 'pierce':
-        player.canPierceBlocks = true;
-        break;
-      case 'shield':
-        player.hasShield = true;
-        break;
-      case 'detonator':
-        player.hasDetonator = true;
-        break;
-    }
-
-    this._refreshHUD();
+    // This is now handled by PowerupSystem
+    // Keeping this method for compatibility during transition
   }
 
   _updateMonsters(delta) {
-    for (const monster of this.monsters.slice()) {
-      monster.update(delta, this.map, this.bombs);
-      if (this.player && monster.isOnTile(Math.floor(this.player.sprite.x / this.tileSize), Math.floor(this.player.sprite.y / this.tileSize))) {
-        if (!monster.lastPlayerTouch) {
-          monster.lastPlayerTouch = true;
-          this.player.takeDamage();
-          this.audioManager.playSoundEffect('damage');
-          this._refreshHUD();
-          if (this.player.lives <= 0) {
-            this._handlePlayerDeath();
-          }
-        }
-      } else {
-        monster.lastPlayerTouch = false;
-      }
-    }
+    // This is now handled by MonsterSystem
+    // Keeping this method for compatibility during transition
   }
 
-  _removeMonster(monster) {
-    this.gameContainer.removeChild(monster.sprite);
-    this.monsters = this.monsters.filter((m) => m !== monster);
+  _updateExplosions(delta) {
+    // This is now handled by ExplosionSystem
+    // Keeping this method for compatibility during transition
   }
 
   _isPlayerOnTile(tx, ty) {
@@ -630,33 +446,68 @@ export class Game {
     return playerTx === tx && playerTy === ty;
   }
 
+  _setupGameStateListeners() {
+    // Route audio events emitted by systems to the audio manager.
+    this.gameState.eventBus.on(GameEvents.AUDIO_PLAY, (data) => {
+      if (!data?.type) return;
+      this.audioManager.playSoundEffect(data.type);
+    });
+
+    // Listen for damage events and apply to actual player
+    this.gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
+      if (data.target === 'player' && this.player) {
+        this.player.takeDamage();
+        this._refreshHUD();
+        if (this.player.lives <= 0) {
+          this._handlePlayerDeath();
+        }
+      }
+    });
+    
+    // Listen for monster damage events
+    this.gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
+      if (data.target === 'monster' && data.monster) {
+        this.monsterSystem.damageMonster(data.monster);
+      }
+    });
+
+    // Ensure powerups destroyed by explosion are removed from PowerupSystem state too.
+    this.gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
+      if (data.target === 'powerup' && data.powerup) {
+        this.powerupSystem.removePowerup(data.powerup);
+      }
+    });
+
+    // Monster touch damage uses a separate event and must also sync to player entity
+    this.gameState.eventBus.on(GameEvents.MONSTER_DAMAGE_PLAYER, () => {
+      if (!this.player) return;
+      this.player.takeDamage();
+      this._refreshHUD();
+      if (this.player.lives <= 0) {
+        this._handlePlayerDeath();
+      }
+    });
+  }
+
   _refreshHUD() {
-    this._refreshLivesText();
-    this._refreshPowerupHUD();
-  }
-
-  _refreshLivesText() {
     if (!this.player) return;
-    this.topHud?.setLives(this.player.lives);
-  }
-
-  _refreshPowerupHUD() {
-    if (!this.player) return;
-    this.sidebarHud?.update(this.player);
+    this.hudManager?.setLives(this.player.lives);
+    this.hudManager?.updatePowerups(this.player);
   }
 
   _refreshTimerText() {
-    this.topHud?.setTimer(this.timeRemaining);
+    this.hudManager?.setTimer(this.gameState.getTimeRemaining());
   }
 
   _handlePlayerDeath() {
-    this.audioManager.stop(); // Stop background music
+    this.audioManager.stop();
     this.audioManager.playSoundEffect('gameOver');
     
     if (this.player) {
       this.player.sprite.tint = 0xff0000;
       this.keys = {};
     }
+    
     const gameOver = new PIXI.BitmapText({
       text: 'Game Over',
       style: {

@@ -1,17 +1,17 @@
 import { AnimatedSprite, Graphics } from 'pixi.js';
+import { GAME_CONFIG } from '../config/Constants.js';
 
 export class Player {
   // textures: optional array of PIXI.Texture frames
   // mapping: optional animation mapping object
-  constructor(x, y, tileSize = 32, textures = null, mapping = null) {
+  constructor(x, y, tileSize = GAME_CONFIG.TILE_SIZE, textures = null, mapping = null) {
     this.tileSize = tileSize;
-    this.spriteScale = 1.5; // Scale multiplier for rendering (1.5 = 48x48, 2 = 64x64)
-    this.baseSpeed = 2.6;
+    this.spriteScale = GAME_CONFIG.PLAYER_SPRITE_SCALE;
+    this.baseSpeed = GAME_CONFIG.PLAYER_BASE_SPEED;
     this.speed = this.baseSpeed; // pixels per tick (multiplied by delta)
     this.speedPowerups = 0;
     this.halfSize = this.tileSize / 2;
-    // collision hitbox slightly smaller than visual — default 26x26
-    this.hitboxSize = 26;
+    this.hitboxSize = GAME_CONFIG.PLAYER_HITBOX_SIZE;
     this.collisionHalf = Math.floor(this.hitboxSize / 2);
 
     this.textures = textures;
@@ -21,7 +21,7 @@ export class Player {
       // create an AnimatedSprite using the idle frame by default
       const idleFrames = (this.mapping.idleDown || [0]).map(i => this.textures[i]).filter(Boolean);
       this.sprite = new AnimatedSprite(idleFrames.length ? idleFrames : [this.textures[0]]);
-      this.sprite.animationSpeed = 0.15;
+      this.sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
       this.sprite.loop = true;
       this.sprite.play();
       this.sprite.scale.set(this.spriteScale, this.spriteScale);
@@ -37,21 +37,21 @@ export class Player {
     this.sprite.x = x;
     this.sprite.y = y;
 
-    this.lives = 3;
+    this.lives = GAME_CONFIG.PLAYER_STARTING_LIVES;
     this._facing = 'down';
     this.blinkTimer = 0;
     this.isBlinking = false;
-    this.blinkDuration = 60; // 3 blinks (6 frames) * 10 ticks each
-    this.maxBombs = 1; // Maximum bombs can have at once
+    this.blinkDuration = GAME_CONFIG.PLAYER_BLINK_DURATION;
+    this.maxBombs = GAME_CONFIG.PLAYER_STARTING_BOMBS;
     this.activeBombs = 0; // Currently active bombs
-    this.explosionRange = 1; // Explosion range in tiles
+    this.explosionRange = GAME_CONFIG.PLAYER_STARTING_RANGE;
     this.canPierceBlocks = false; // Explosions can pass through blocks
     this.hasShield = false;
     this.hasDetonator = false;
   }
 
   takeDamage() {
-    if (this.lives <= 0) return false;
+    if (this.lives <= 0 || this.isBlinking) return false;
     this.lives -= 1;
     this.startBlink();
     return this.lives > 0;
@@ -68,7 +68,7 @@ export class Player {
       this.blinkTimer += delta;
       
       // Alternate between 50% and 100% opacity every 10 ticks
-      const blinkPhase = Math.floor((this.blinkTimer / 10) % 2);
+      const blinkPhase = Math.floor((this.blinkTimer / GAME_CONFIG.PLAYER_BLINK_INTERVAL_TICKS) % 2);
       this.sprite.alpha = blinkPhase === 0 ? 0.5 : 1;
       
       // End blink after duration

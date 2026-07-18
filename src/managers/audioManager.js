@@ -1,3 +1,5 @@
+import { GAME_CONFIG } from '../config/Constants.js';
+
 export class AudioManager {
   constructor() {
     this.audio = null;
@@ -5,13 +7,13 @@ export class AudioManager {
     this.shouldPlay = false;
     this.soundEffects = {};
     this.soundPools = {}; // Pool de sons para evitar delay
-    this.muted = false; // Start the game muted by default
+    this.muted = GAME_CONFIG.AUDIO_START_MUTED;
   }
 
   async loadMusic(url) {
     this.audio = new Audio(url);
     this.audio.loop = true;
-    this.audio.volume = 0.3; // 30% volume to not be too loud
+    this.audio.volume = GAME_CONFIG.MUSIC_VOLUME;
     this.isReady = true;
     
     // Wait for user interaction to play (browsers block autoplay)
@@ -26,7 +28,7 @@ export class AudioManager {
   async loadSoundEffect(name, url) {
     return new Promise((resolve, reject) => {
       const audio = new Audio(url);
-      audio.volume = 0.7; // Sound effects a bit louder than music
+      audio.volume = GAME_CONFIG.SOUND_EFFECT_VOLUME;
       
       // Resolve when audio is ready to play
       const onCanPlay = () => {
@@ -34,11 +36,11 @@ export class AudioManager {
         audio.removeEventListener('error', onError);
         this.soundEffects[name] = audio;
         
-        // Create a pool of 5 copies for instant playback
+        // Create a pool of copies for instant playback
         this.soundPools[name] = [];
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < GAME_CONFIG.SOUND_POOL_SIZE; i++) {
           const poolAudio = new Audio(url);
-          poolAudio.volume = 0.7;
+          poolAudio.volume = GAME_CONFIG.SOUND_EFFECT_VOLUME;
           this.soundPools[name].push({
             audio: poolAudio,
             isPlaying: false
