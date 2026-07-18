@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import { Game } from './game.js';
+import { Game } from './Game.js';
 import { GAME_CONFIG } from './config/Constants.js';
 
 const GAME_ZOOM = GAME_CONFIG.GAME_ZOOM;
