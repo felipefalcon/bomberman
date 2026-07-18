@@ -47,7 +47,8 @@ export async function loadItemSprites() {
         bomb: 2,         // Extra bomb
         speed: 3,        // Speed boost
         shield: 4,       // Shield/Invulnerability (para decidir depois)
-        detonator: 5     // Remote detonator (para decidir depois)
+        detonator: 6,    // Remote detonator (para decidir depois)
+        kick_bomb: 5     // Kick bomb (para decidir depois)
       };
       
       resolve({ frames, mapping });

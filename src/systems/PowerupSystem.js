@@ -132,6 +132,9 @@ export class PowerupSystem {
       case POWERUP_TYPES.DETONATOR:
         player.hasDetonator = true;
         break;
+      case POWERUP_TYPES.KICK_BOMB:
+        player.hasKickBomb = true;
+        break;
     }
     
     this.eventBus.emit(GameEvents.PLAYER_COLLECT_POWERUP, { type, player });

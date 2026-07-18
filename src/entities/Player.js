@@ -48,6 +48,7 @@ export class Player {
     this.canPierceBlocks = false; // Explosions can pass through blocks
     this.hasShield = false;
     this.hasDetonator = false;
+    this.hasKickBomb = false;
   }
 
   takeDamage() {

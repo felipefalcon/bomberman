@@ -27,6 +27,7 @@ export class GameState {
       canPierceBlocks: false,
       hasShield: false,
       hasDetonator: false,
+      hasKickBomb: false,
     };
     
     // Score
@@ -68,6 +69,7 @@ export class GameState {
       canPierceBlocks: false,
       hasShield: false,
       hasDetonator: false,
+      hasKickBomb: false,
     };
     
     this.score = 0;
@@ -174,6 +176,9 @@ export class GameState {
         break;
       case 'detonator':
         this.playerState.hasDetonator = true;
+        break;
+      case 'kick_bomb':
+        this.playerState.hasKickBomb = true;
         break;
     }
     

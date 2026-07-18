@@ -132,6 +132,7 @@ export const POWERUP_TYPES = {
   PIERCE: 'pierce',
   SHIELD: 'shield',
   DETONATOR: 'detonator',
+  KICK_BOMB: 'kick_bomb',
 };
 
 // Directions

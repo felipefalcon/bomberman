@@ -6,7 +6,7 @@ export class Powerup {
     this.tx = tx;
     this.ty = ty;
     this.tileSize = tileSize;
-    this.type = type; // 'speed', 'bomb', 'range', 'shield', 'life', 'detonator'
+    this.type = type; // 'speed', 'bomb', 'range', 'shield', 'life', 'detonator', 'kick_bomb'
     this.spriteScale = GAME_CONFIG.POWERUP_SPRITE_SCALE;
     
     // Create sprite
