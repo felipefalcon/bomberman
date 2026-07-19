@@ -69,6 +69,15 @@ export class BombSystem {
       nextTy: ty,
 
       canMove: false,
+      // Throw bomb properties
+      isThrowing: false,
+      throwDx: 0,
+      throwDy: 0,
+      throwProgress: 0,
+      throwTargetTx: tx,
+      throwTargetTy: ty,
+      throwDistance: 2,
+      throwSpeed: 8,
     };
 
     this.bombs.push(bomb);
@@ -146,6 +155,8 @@ export class BombSystem {
   update(delta, explodeCallback) {
 
     this.updateSliding(delta);
+
+    this.updateThrowing(delta);
 
     this.updateTimers(delta);
 
@@ -283,6 +294,58 @@ export class BombSystem {
 
   }
 
+  updateThrowing(delta) {
+
+    for (const bomb of this.bombs) {
+
+      if (!bomb.isThrowing)
+        continue;
+
+      // Update throw progress
+      bomb.throwProgress += delta * bomb.throwSpeed / this.tileSize;
+
+      if (bomb.throwProgress >= 1) {
+        // Throw complete
+        this.stopThrowingBomb(bomb);
+        continue;
+      }
+
+      // Calculate current position (linear interpolation)
+      const startX = bomb.tx * this.tileSize;
+      const startY = bomb.ty * this.tileSize;
+      const endX = bomb.throwTargetTx * this.tileSize;
+      const endY = bomb.throwTargetTy * this.tileSize;
+
+      // Add arc effect (parabolic jump)
+      const arcHeight = this.tileSize * 0.5;
+      const arcOffset = Math.sin(bomb.throwProgress * Math.PI) * arcHeight;
+
+      bomb.sprite.x = startX + (endX - startX) * bomb.throwProgress;
+      bomb.sprite.y = startY + (endY - startY) * bomb.throwProgress - arcOffset;
+
+      // Scale effect to simulate height
+      const scale = 1 + Math.sin(bomb.throwProgress * Math.PI) * 0.3;
+      bomb.sprite.scale.set(2 * scale);
+
+    }
+
+  }
+
+  stopThrowingBomb(bomb) {
+    bomb.isThrowing = false;
+    bomb.throwDx = 0;
+    bomb.throwDy = 0;
+    bomb.throwProgress = 0;
+    bomb.tx = bomb.throwTargetTx;
+    bomb.ty = bomb.throwTargetTy;
+    bomb.throwTargetTx = bomb.tx;
+    bomb.throwTargetTy = bomb.ty;
+
+    bomb.sprite.x = bomb.tx * this.tileSize;
+    bomb.sprite.y = bomb.ty * this.tileSize;
+    bomb.sprite.scale.set(2);
+  }
+
   updateTimers(delta) {
 
     for (const bomb of this.bombs) {
@@ -401,6 +464,88 @@ export class BombSystem {
     bomb.canMove = true;
 
     this.eventBus.emit(GameEvents.BOMB_KICK, { tx: bomb.tx, ty: bomb.ty, dx, dy });
+
+    return true;
+  }
+
+  /**
+   * Throw a bomb in a specific direction
+   * @param {Object} bomb - Bomb object
+   * @param {number} dx - Direction X (-1, 0, or 1)
+   * @param {number} dy - Direction Y (-1, 0, or 1)
+   * @returns {boolean} True if bomb was thrown
+   */
+  throwBomb(bomb, dx, dy) {
+    if (bomb.isThrowing || bomb.isSliding) return false; // Already moving
+
+    // Check if the direction is valid (only cardinal directions)
+    if (Math.abs(dx) + Math.abs(dy) !== 1) return false;
+
+    // Calculate target position (2 blocks away)
+    let targetTx = bomb.tx + (dx * bomb.throwDistance);
+    let targetTy = bomb.ty + (dy * bomb.throwDistance);
+
+    // Handle map wrapping
+    const mapCols = this.scene.map.cols;
+    const mapRows = this.scene.map.rows;
+
+    // Wrap X coordinate
+    if (targetTx < 0) {
+      targetTx = mapCols + targetTx;
+    } else if (targetTx >= mapCols) {
+      targetTx = targetTx - mapCols;
+    }
+
+    // Wrap Y coordinate
+    if (targetTy < 0) {
+      targetTy = mapRows + targetTy;
+    } else if (targetTy >= mapRows) {
+      targetTy = targetTy - mapRows;
+    }
+
+    // Check if target is blocked
+    if (this.isTileBlocked(targetTx, targetTy)) {
+      // Find next empty block in the same direction
+      let searchTx = targetTx;
+      let searchTy = targetTy;
+      let found = false;
+
+      // Search up to 5 blocks for an empty space
+      for (let i = 0; i < 5; i++) {
+        searchTx += dx;
+        searchTy += dy;
+
+        // Wrap during search
+        if (searchTx < 0) searchTx = mapCols + searchTx;
+        else if (searchTx >= mapCols) searchTx = searchTx - mapCols;
+        if (searchTy < 0) searchTy = mapRows + searchTy;
+        else if (searchTy >= mapRows) searchTy = searchTy - mapRows;
+
+        if (!this.isTileBlocked(searchTx, searchTy)) {
+          targetTx = searchTx;
+          targetTy = searchTy;
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) return false; // No valid landing spot
+    }
+
+    // Check if there's another bomb at the target position
+    if (this.bombs.some((b) => b !== bomb && b.tx === targetTx && b.ty === targetTy)) {
+      return false;
+    }
+
+    // Start throwing
+    bomb.isThrowing = true;
+    bomb.throwDx = dx;
+    bomb.throwDy = dy;
+    bomb.throwProgress = 0;
+    bomb.throwTargetTx = targetTx;
+    bomb.throwTargetTy = targetTy;
+
+    this.eventBus.emit(GameEvents.BOMB_THROW, { tx: bomb.tx, ty: bomb.ty, dx, dy, targetTx, targetTy });
 
     return true;
   }
