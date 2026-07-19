@@ -71,13 +71,18 @@ export class BombSystem {
       canMove: false,
       // Throw bomb properties
       isThrowing: false,
-      throwDx: 0,
-      throwDy: 0,
-      throwProgress: 0,
-      throwTargetTx: tx,
-      throwTargetTy: ty,
-      throwDistance: 2,
-      throwSpeed: 8,
+throwDx: 0,
+throwDy: 0,
+throwProgress: 0,
+
+throwStartTx: tx,
+throwStartTy: ty,
+
+throwTargetTx: tx,
+throwTargetTy: ty,
+
+throwDistance: 2,
+throwSpeed: 8,
     };
 
     this.bombs.push(bomb);
@@ -296,55 +301,129 @@ export class BombSystem {
 
   updateThrowing(delta) {
 
-    for (const bomb of this.bombs) {
+  for (const bomb of this.bombs) {
 
-      if (!bomb.isThrowing)
-        continue;
+    if (!bomb.isThrowing)
+      continue;
 
-      // Update throw progress
-      bomb.throwProgress += delta * bomb.throwSpeed / this.tileSize;
+    // Progress total do arremesso
+    bomb.throwProgress += (delta * bomb.throwSpeed) / this.tileSize;
 
-      if (bomb.throwProgress >= 1) {
-        // Throw complete
-        this.stopThrowingBomb(bomb);
-        continue;
-      }
+    const totalTiles = bomb.throwTiles;
 
-      // Calculate current position (linear interpolation)
-      const startX = bomb.tx * this.tileSize;
-      const startY = bomb.ty * this.tileSize;
-      const endX = bomb.throwTargetTx * this.tileSize;
-      const endY = bomb.throwTargetTy * this.tileSize;
+    // Terminou todo o arremesso
+    if (bomb.throwProgress >= 1) {
+      this.stopThrowingBomb(bomb);
+      continue;
+    }
 
-      // Add arc effect (parabolic jump)
-      const arcHeight = this.tileSize * 0.5;
-      const arcOffset = Math.sin(bomb.throwProgress * Math.PI) * arcHeight;
+    //-------------------------------------------------
+    // Descobre qual tile está atravessando
+    //-------------------------------------------------
 
-      bomb.sprite.x = startX + (endX - startX) * bomb.throwProgress;
-      bomb.sprite.y = startY + (endY - startY) * bomb.throwProgress - arcOffset;
+    const totalProgress = bomb.throwProgress * totalTiles;
 
-      // Scale effect to simulate height
-      const scale = 1 + Math.sin(bomb.throwProgress * Math.PI) * 0.3;
-      bomb.sprite.scale.set(2 * scale);
+    const currentSegment = Math.floor(totalProgress);
+
+    const segmentProgress = totalProgress - currentSegment;
+
+    //-------------------------------------------------
+    // Tile inicial
+    //-------------------------------------------------
+
+    let startTx;
+    let startTy;
+
+    if (currentSegment === 0) {
+
+      startTx = bomb.throwStartTx;
+      startTy = bomb.throwStartTy;
+
+    } else {
+
+      startTx = bomb.throwPath[currentSegment - 1].tx;
+      startTy = bomb.throwPath[currentSegment - 1].ty;
 
     }
 
+    //-------------------------------------------------
+    // Tile final
+    //-------------------------------------------------
+
+    const endTile = bomb.throwPath[currentSegment];
+
+    const startX = startTx * this.tileSize;
+    const startY = startTy * this.tileSize;
+
+    const endX = endTile.tx * this.tileSize;
+    const endY = endTile.ty * this.tileSize;
+
+    //-------------------------------------------------
+    // Parábola
+    //-------------------------------------------------
+
+    const arcHeight = this.tileSize * 0.55;
+
+    const arcOffset =
+      Math.sin(segmentProgress * Math.PI) *
+      arcHeight;
+
+    //-------------------------------------------------
+    // Interpolação
+    //-------------------------------------------------
+
+    bomb.sprite.x =
+      startX +
+      (endX - startX) *
+      segmentProgress;
+
+    bomb.sprite.y =
+      startY +
+      (endY - startY) *
+      segmentProgress -
+      arcOffset;
+
+    //-------------------------------------------------
+    // Escala
+
+    const scale =
+      1 +
+      Math.sin(segmentProgress * Math.PI) *
+      0.20;
+
+    bomb.sprite.scale.set(2 * scale);
+
   }
+
+}
 
   stopThrowingBomb(bomb) {
-    bomb.isThrowing = false;
-    bomb.throwDx = 0;
-    bomb.throwDy = 0;
-    bomb.throwProgress = 0;
-    bomb.tx = bomb.throwTargetTx;
-    bomb.ty = bomb.throwTargetTy;
-    bomb.throwTargetTx = bomb.tx;
-    bomb.throwTargetTy = bomb.ty;
 
-    bomb.sprite.x = bomb.tx * this.tileSize;
-    bomb.sprite.y = bomb.ty * this.tileSize;
-    bomb.sprite.scale.set(2);
-  }
+  bomb.isThrowing = false;
+
+  bomb.throwDx = 0;
+  bomb.throwDy = 0;
+
+  bomb.throwProgress = 0;
+
+  bomb.tx = bomb.throwTargetTx;
+  bomb.ty = bomb.throwTargetTy;
+
+  bomb.throwStartTx = bomb.tx;
+  bomb.throwStartTy = bomb.ty;
+
+  bomb.throwTargetTx = bomb.tx;
+  bomb.throwTargetTy = bomb.ty;
+
+  bomb.throwTiles = 0;
+  bomb.throwPath = [];
+
+  bomb.sprite.x = bomb.tx * this.tileSize;
+  bomb.sprite.y = bomb.ty * this.tileSize;
+
+  bomb.sprite.scale.set(2);
+
+}
 
   updateTimers(delta) {
 
@@ -469,86 +548,127 @@ export class BombSystem {
   }
 
   /**
-   * Throw a bomb in a specific direction
-   * @param {Object} bomb - Bomb object
-   * @param {number} dx - Direction X (-1, 0, or 1)
-   * @param {number} dy - Direction Y (-1, 0, or 1)
-   * @returns {boolean} True if bomb was thrown
-   */
-  throwBomb(bomb, dx, dy) {
-    if (bomb.isThrowing || bomb.isSliding) return false; // Already moving
+ * Throw a bomb in a specific direction
+ * @param {Object} bomb - Bomb object
+ * @param {number} dx - Direction X (-1, 0, or 1)
+ * @param {number} dy - Direction Y (-1, 0, or 1)
+ * @returns {boolean} True if bomb was thrown
+ */
+throwBomb(bomb, dx, dy) {
 
-    // Check if the direction is valid (only cardinal directions)
-    if (Math.abs(dx) + Math.abs(dy) !== 1) return false;
+  if (bomb.isThrowing || bomb.isSliding)
+    return false;
 
-    // Calculate target position (2 blocks away)
-    let targetTx = bomb.tx + (dx * bomb.throwDistance);
-    let targetTy = bomb.ty + (dy * bomb.throwDistance);
+  // Check if the direction is valid (only cardinal directions)
+  if (Math.abs(dx) + Math.abs(dy) !== 1)
+    return false;
 
-    // Handle map wrapping
-    const mapCols = this.scene.map.cols;
-    const mapRows = this.scene.map.rows;
+  const mapCols = this.scene.map.cols;
+  const mapRows = this.scene.map.rows;
 
-    // Wrap X coordinate
-    if (targetTx < 0) {
-      targetTx = mapCols + targetTx;
-    } else if (targetTx >= mapCols) {
-      targetTx = targetTx - mapCols;
-    }
+  // Save start position
+  bomb.throwStartTx = bomb.tx;
+  bomb.throwStartTy = bomb.ty;
 
-    // Wrap Y coordinate
-    if (targetTy < 0) {
-      targetTy = mapRows + targetTy;
-    } else if (targetTy >= mapRows) {
-      targetTy = targetTy - mapRows;
-    }
+  // Build the complete path (tile by tile)
+  const throwPath = [];
 
-    // Check if target is blocked
-    if (this.isTileBlocked(targetTx, targetTy)) {
-      // Find next empty block in the same direction
-      let searchTx = targetTx;
-      let searchTy = targetTy;
-      let found = false;
+  let currentTx = bomb.tx;
+  let currentTy = bomb.ty;
 
-      // Search up to 5 blocks for an empty space
-      for (let i = 0; i < 5; i++) {
-        searchTx += dx;
-        searchTy += dy;
+  // Initial throw distance
+  for (let i = 0; i < bomb.throwDistance; i++) {
 
-        // Wrap during search
-        if (searchTx < 0) searchTx = mapCols + searchTx;
-        else if (searchTx >= mapCols) searchTx = searchTx - mapCols;
-        if (searchTy < 0) searchTy = mapRows + searchTy;
-        else if (searchTy >= mapRows) searchTy = searchTy - mapRows;
+    let nextTx = currentTx + dx;
+    let nextTy = currentTy + dy;
 
-        if (!this.isTileBlocked(searchTx, searchTy)) {
-          targetTx = searchTx;
-          targetTy = searchTy;
-          found = true;
-          break;
-        }
-      }
+    // Wrap X
+    if (nextTx < 0)
+      nextTx = mapCols - 1;
+    else if (nextTx >= mapCols)
+      nextTx = 0;
 
-      if (!found) return false; // No valid landing spot
-    }
+    // Wrap Y
+    if (nextTy < 0)
+      nextTy = mapRows - 1;
+    else if (nextTy >= mapRows)
+      nextTy = 0;
 
-    // Check if there's another bomb at the target position
-    if (this.bombs.some((b) => b !== bomb && b.tx === targetTx && b.ty === targetTy)) {
-      return false;
-    }
+    currentTx = nextTx;
+    currentTy = nextTy;
 
-    // Start throwing
-    bomb.isThrowing = true;
-    bomb.throwDx = dx;
-    bomb.throwDy = dy;
-    bomb.throwProgress = 0;
-    bomb.throwTargetTx = targetTx;
-    bomb.throwTargetTy = targetTy;
-
-    this.eventBus.emit(GameEvents.BOMB_THROW, { tx: bomb.tx, ty: bomb.ty, dx, dy, targetTx, targetTy });
-
-    return true;
+    throwPath.push({
+      tx: currentTx,
+      ty: currentTy
+    });
   }
+
+  // If destination is blocked, continue searching
+  while (this.isTileBlocked(currentTx, currentTy)) {
+
+    let nextTx = currentTx + dx;
+    let nextTy = currentTy + dy;
+
+    if (nextTx < 0)
+      nextTx = mapCols - 1;
+    else if (nextTx >= mapCols)
+      nextTx = 0;
+
+    if (nextTy < 0)
+      nextTy = mapRows - 1;
+    else if (nextTy >= mapRows)
+      nextTy = 0;
+
+    // Safety limit
+    if (throwPath.length > mapCols + mapRows)
+      return false;
+
+    currentTx = nextTx;
+    currentTy = nextTy;
+
+    throwPath.push({
+      tx: currentTx,
+      ty: currentTy
+    });
+  }
+
+  // Check bomb collision only on final landing tile
+  if (
+    this.bombs.some(
+      b =>
+        b !== bomb &&
+        b.tx === currentTx &&
+        b.ty === currentTy
+    )
+  ) {
+    return false;
+  }
+
+  // Start throwing
+  bomb.isThrowing = true;
+  bomb.throwDx = dx;
+  bomb.throwDy = dy;
+
+  bomb.throwProgress = 0;
+
+  bomb.throwTargetTx = currentTx;
+  bomb.throwTargetTy = currentTy;
+
+  // NEW
+  bomb.throwPath = throwPath;
+  bomb.throwTiles = throwPath.length;
+
+  this.eventBus.emit(GameEvents.BOMB_THROW, {
+    tx: bomb.tx,
+    ty: bomb.ty,
+    dx,
+    dy,
+    targetTx: currentTx,
+    targetTy: currentTy
+  });
+
+  return true;
+}
 
   /**
    * Clear all bombs
