@@ -28,6 +28,7 @@ export class GameState {
       hasShield: false,
       hasDetonator: false,
       hasKickBomb: false,
+      hasThrowBomb: false,
     };
     
     // Score
@@ -179,6 +180,9 @@ export class GameState {
         break;
       case 'kick_bomb':
         this.playerState.hasKickBomb = true;
+        break;
+      case 'throw_bomb':
+        this.playerState.hasThrowBomb = true;
         break;
     }
     

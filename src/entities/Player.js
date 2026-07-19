@@ -49,6 +49,7 @@ export class Player {
     this.hasShield = false;
     this.hasDetonator = false;
     this.hasKickBomb = true;
+    this.hasThrowBomb = true;
   }
 
   takeDamage() {

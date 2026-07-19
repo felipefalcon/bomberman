@@ -136,6 +136,7 @@ export const POWERUP_TYPES = {
   SHIELD: 'shield',
   DETONATOR: 'detonator',
   KICK_BOMB: 'kick_bomb',
+  THROW_BOMB: 'throw_bomb',
 };
 
 // Directions
