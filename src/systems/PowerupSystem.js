@@ -141,6 +141,9 @@ export class PowerupSystem {
       case POWERUP_TYPES.CROSS_BLOCK:
         player.hasCrossBlock = true;
         break;
+      case POWERUP_TYPES.CROSS_BOMB:
+        player.hasCrossBomb = true;
+        break;
     }
     
     this.eventBus.emit(GameEvents.PLAYER_COLLECT_POWERUP, { type, player });

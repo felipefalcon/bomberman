@@ -30,6 +30,7 @@ export class GameState {
       hasKickBomb: false,
       hasThrowBomb: false,
       hasCrossBlock: false,
+      hasCrossBomb: false,
     };
     
     // Score
@@ -72,7 +73,9 @@ export class GameState {
       hasShield: false,
       hasDetonator: false,
       hasKickBomb: false,
+      hasThrowBomb: false,
       hasCrossBlock: false,
+      hasCrossBomb: false,
     };
     
     this.score = 0;
@@ -188,6 +191,9 @@ export class GameState {
         break;
       case 'cross_block':
         this.playerState.hasCrossBlock = true;
+        break;
+      case 'cross_bomb':
+        this.playerState.hasCrossBomb = true;
         break;
     }
     

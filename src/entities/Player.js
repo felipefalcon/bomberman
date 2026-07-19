@@ -48,9 +48,10 @@ export class Player {
     this.canPierceBlocks = false; // Explosions can pass through blocks
     this.hasShield = false;
     this.hasDetonator = false;
-    this.hasKickBomb = true;
-    this.hasThrowBomb = true;
-    this.hasCrossBlock = true; // Can cross blocks
+    this.hasKickBomb = false;
+    this.hasThrowBomb = false;
+    this.hasCrossBlock = false; // Can cross blocks
+    this.hasCrossBomb = false; // Can cross bombs
   }
 
   takeDamage() {
@@ -136,6 +137,8 @@ export class Player {
 
       if (this.hasCrossBlock && map.isDestructible(tx, ty)) {
         continue; // Allow movement through cross blocks
+      } else if (this.hasCrossBomb && !map.isWall(tx, ty) && bombs.some(b => b.tx === tx && b.ty === ty)) {
+        continue; // Allow movement through cross bombs
       } else if (map.isBlocked(tx, ty)) return true;
 
       
