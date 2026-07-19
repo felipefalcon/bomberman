@@ -168,6 +168,11 @@ export class HudManager {
         fallbackDraw: () => this.drawThrowBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
+      {
+        key: 'cross_block',
+        fallbackDraw: () => this.drawCrossBlockIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
     ];
 
     powerupRows.forEach((row, index) => {
@@ -503,6 +508,18 @@ export class HudManager {
   }
 
   drawThrowBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.rect(cx - 6, cy - 4, 12, 8);
+    g.fill(0xc7d0d8);
+    g.rect(cx - 2, cy - 8, 4, 4);
+    g.fill(0xe65a3a);
+    g.moveTo(cx + 2, cy - 8);
+    g.lineTo(cx + 6, cy - 12);
+    g.stroke({ color: 0xf0c54e, width: 1.5 });
+    return g;
+  }
+
+  drawCrossBlockIcon(cx, cy) {
     const g = new PIXI.Graphics();
     g.rect(cx - 6, cy - 4, 12, 8);
     g.fill(0xc7d0d8);

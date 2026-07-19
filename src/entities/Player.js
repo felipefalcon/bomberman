@@ -50,6 +50,7 @@ export class Player {
     this.hasDetonator = false;
     this.hasKickBomb = true;
     this.hasThrowBomb = true;
+    this.hasCrossBlock = true; // Can cross blocks
   }
 
   takeDamage() {
@@ -132,7 +133,13 @@ export class Player {
     for (const c of corners) {
       const tx = Math.floor(c.x / this.tileSize);
       const ty = Math.floor(c.y / this.tileSize);
-      if (map.isBlocked(tx, ty)) return true;
+
+      if (this.hasCrossBlock && map.isDestructible(tx, ty)) {
+        continue; // Allow movement through cross blocks
+      } else if (map.isBlocked(tx, ty)) return true;
+
+      
+      // if (map.isBlocked(tx, ty)) return true;
 
       const bomb = bombs.find((bomb) => bomb.tx === tx && bomb.ty === ty);
       if (bomb) {
