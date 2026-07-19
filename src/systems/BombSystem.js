@@ -394,6 +394,20 @@ export class BombSystem {
 
       const endTile = bomb.throwPath[currentSegment];
 
+      const mapCols = this.scene.map.cols;
+      const mapRows = this.scene.map.rows;
+
+      // Check if we're wrapping (going from out of bounds to in bounds)
+      const isWrappingX = (startTx < 0 || startTx >= mapCols) && (endTile.tx >= 0 && endTile.tx < mapCols);
+      const isWrappingY = (startTy < 0 || startTy >= mapRows) && (endTile.ty >= 0 && endTile.ty < mapRows);
+
+      // Hide bomb during wrapping transition
+      if (isWrappingX || isWrappingY) {
+        bomb.sprite.visible = false;
+      } else {
+        bomb.sprite.visible = true;
+      }
+
       const startX = startTx * this.tileSize;
       const startY = startTy * this.tileSize;
 
