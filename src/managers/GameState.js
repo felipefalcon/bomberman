@@ -195,6 +195,9 @@ export class GameState {
       case 'cross_bomb':
         this.playerState.hasCrossBomb = true;
         break;
+      case 'follower_bomb':
+        this.playerState.hasFollowerBomb = true;
+        break;
     }
     
     this.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.playerState });

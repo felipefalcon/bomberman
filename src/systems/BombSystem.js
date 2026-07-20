@@ -41,9 +41,10 @@ export class BombSystem {
    * @param {number} tx - Tile X position
    * @param {number} ty - Tile Y position
    * @param {Object} player - Player entity (for bomb count tracking)
+   * @param {Array} enemies - Array of enemy entities (for follower bomb targeting)
    * @returns {boolean} True if bomb was placed
    */
-  placeBomb(tx, ty, player) {
+  placeBomb(tx, ty, player, enemies = []) {
     // Check if player has reached max bomb limit
     if (player.activeBombs >= player.maxBombs) return false;
 
@@ -83,7 +84,18 @@ export class BombSystem {
 
       throwDistance: 2,
       throwSpeed: 4,
+
+      // Follower bomb properties
+      isFollower: false,
+      targetEnemy: null,
+      followSpeed: GAME_CONFIG.BOMB_FOLLOW_SPEED || 2,
     };
+
+    // Set as follower bomb if player has the powerup
+    if (player.hasFollowerBomb && enemies.length > 0) {
+      bomb.isFollower = true;
+      bomb.targetEnemy = this.findNearestEnemy(tx, ty, enemies);
+    }
 
     this.bombs.push(bomb);
     player.activeBombs += 1;
@@ -106,6 +118,33 @@ export class BombSystem {
   }
 
   /**
+   * Find the nearest enemy to a bomb position
+   * @param {number} tx - Bomb tile X position
+   * @param {number} ty - Bomb tile Y position
+   * @param {Array} enemies - Array of enemy entities
+   * @returns {Object|null} Nearest enemy or null
+   */
+  findNearestEnemy(tx, ty, enemies) {
+    if (!enemies || enemies.length === 0) return null;
+
+    let nearest = null;
+    let minDistance = Infinity;
+
+    for (const enemy of enemies) {
+      const enemyTx = Math.floor(enemy.sprite.x / this.tileSize);
+      const enemyTy = Math.floor(enemy.sprite.y / this.tileSize);
+      const distance = Math.abs(enemyTx - tx) + Math.abs(enemyTy - ty);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearest = enemy;
+      }
+    }
+
+    return nearest;
+  }
+
+  /**
    * Create bomb sprite
    * @param {number} tx - Tile X position
    * @param {number} ty - Tile Y position
@@ -125,7 +164,7 @@ export class BombSystem {
         sprite.play();
         // Scale from 16x16 to 32x32 (2x scale)
         sprite.scale.set(2);
-        sprite.anchor.set(0, 0);
+        sprite.anchor.set(0.5, 0.5);
       } else {
         sprite = this.createBombGraphics();
       }
@@ -134,8 +173,10 @@ export class BombSystem {
       sprite = this.createBombGraphics();
     }
 
-    sprite.x = tx * this.tileSize;
-    sprite.y = ty * this.tileSize;
+    // Position at center of tile
+    const half = this.tileSize / 2;
+    sprite.x = tx * this.tileSize + half;
+    sprite.y = ty * this.tileSize + half;
     sprite.roundPixels = true;
     return sprite;
   }
@@ -147,7 +188,7 @@ export class BombSystem {
   createBombGraphics() {
     const bomb = new PIXI.Graphics();
     const radius = this.tileSize / 2 - 3;
-    bomb.circle(this.tileSize / 2, this.tileSize / 2, radius);
+    bomb.circle(0, 0, radius);
     bomb.fill(0x000000);
     return bomb;
   }
@@ -156,12 +197,15 @@ export class BombSystem {
    * Update bombs - called every frame
    * @param {number} delta - Time delta
    * @param {Function} explodeCallback - Callback when bomb explodes
+   * @param {Array} enemies - Array of enemy entities (for follower bomb targeting)
    */
-  update(delta, explodeCallback) {
+  update(delta, explodeCallback, enemies = []) {
 
     this.updateSliding(delta);
 
     this.updateThrowing(delta);
+
+    this.updateFollowerBombs(delta, enemies);
 
     this.updateTimers(delta);
 
@@ -292,8 +336,9 @@ export class BombSystem {
       bomb.tx = bomb.nextTx;
       bomb.ty = bomb.nextTy;
 
-      bomb.sprite.x = bomb.tx * this.tileSize;
-      bomb.sprite.y = bomb.ty * this.tileSize;
+      const half = this.tileSize / 2;
+      bomb.sprite.x = bomb.tx * this.tileSize + half;
+      bomb.sprite.y = bomb.ty * this.tileSize + half;
 
     }
 
@@ -453,6 +498,84 @@ export class BombSystem {
 
   }
 
+  updateFollowerBombs(delta, enemies) {
+    for (const bomb of this.bombs) {
+      if (!bomb.isFollower) continue;
+
+      // If target enemy is dead or doesn't exist, find a new target
+      if (!bomb.targetEnemy || !enemies.includes(bomb.targetEnemy)) {
+        bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies);
+        if (!bomb.targetEnemy) continue;
+      }
+
+      // Get target enemy position
+      const targetTx = Math.floor(bomb.targetEnemy.sprite.x / this.tileSize);
+      const targetTy = Math.floor(bomb.targetEnemy.sprite.y / this.tileSize);
+
+      // Calculate direction to target
+      const dx = targetTx - bomb.tx;
+      const dy = targetTy - bomb.ty;
+
+      // If already at target, stop following
+      if (dx === 0 && dy === 0) continue;
+
+      // Try both axes to find a valid path
+      const directions = [];
+      
+      if (Math.abs(dx) > Math.abs(dy)) {
+        directions.push({ dx: dx > 0 ? 1 : -1, dy: 0 });
+        if (dy !== 0) directions.push({ dx: 0, dy: dy > 0 ? 1 : -1 });
+      } else {
+        directions.push({ dx: 0, dy: dy > 0 ? 1 : -1 });
+        if (dx !== 0) directions.push({ dx: dx > 0 ? 1 : -1, dy: 0 });
+      }
+
+      // Try each direction until we find a valid move
+      for (const dir of directions) {
+        const nextTx = bomb.tx + dir.dx;
+        const nextTy = bomb.ty + dir.dy;
+
+        // Check if next tile is within map bounds and free
+        if (this._isValidTileCoord(nextTx, nextTy) &&
+            !this.isTileBlocked(nextTx, nextTy) && 
+            !this.bombs.some(b => b !== bomb && b.tx === nextTx && b.ty === nextTy)) {
+          
+          // Move bomb towards target using tile-based movement
+          const half = this.tileSize / 2;
+          const targetX = nextTx * this.tileSize + half;
+          const targetY = nextTy * this.tileSize + half;
+          const speed = bomb.followSpeed * delta;
+
+          const currentX = bomb.sprite.x;
+          const currentY = bomb.sprite.y;
+          const distX = targetX - currentX;
+          const distY = targetY - currentY;
+          const distance = Math.sqrt(distX * distX + distY * distY);
+
+          if (distance <= speed) {
+            // Reached the tile - snap to grid and update tile coordinates
+            bomb.sprite.x = targetX;
+            bomb.sprite.y = targetY;
+            bomb.tx = nextTx;
+            bomb.ty = nextTy;
+          } else {
+            // Move towards the tile
+            bomb.sprite.x += (distX / distance) * speed;
+            bomb.sprite.y += (distY / distance) * speed;
+          }
+          
+          // Successfully moved, break out of direction loop
+          break;
+        }
+      }
+    }
+  }
+
+  _isValidTileCoord(tx, ty) {
+    if (!this.scene || !this.scene.map) return false;
+    return tx >= 0 && ty >= 0 && tx < this.scene.map.cols && ty < this.scene.map.rows;
+  }
+
   stopThrowingBomb(bomb) {
 
     // Check if final landing tile has another bomb
@@ -496,8 +619,9 @@ export class BombSystem {
     bomb.throwTiles = 0;
     bomb.throwPath = [];
 
-    bomb.sprite.x = bomb.tx * this.tileSize;
-    bomb.sprite.y = bomb.ty * this.tileSize;
+    const half = this.tileSize / 2;
+    bomb.sprite.x = bomb.tx * this.tileSize + half;
+    bomb.sprite.y = bomb.ty * this.tileSize + half;
 
     bomb.sprite.scale.set(2);
 
@@ -548,8 +672,9 @@ export class BombSystem {
     bomb.nextTy = bomb.ty;
     bomb.canMove = false;
 
-    bomb.sprite.x = bomb.tx * this.tileSize;
-    bomb.sprite.y = bomb.ty * this.tileSize;
+    const half = this.tileSize / 2;
+    bomb.sprite.x = bomb.tx * this.tileSize + half;
+    bomb.sprite.y = bomb.ty * this.tileSize + half;
   }
 
   /**

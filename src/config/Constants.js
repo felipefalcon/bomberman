@@ -97,6 +97,9 @@ export const GAME_CONFIG = {
   // Bomb slide settings
   BOMB_SLIDE_SPEED: 4, // pixels per tick
   
+  // Follower bomb settings
+  BOMB_FOLLOW_SPEED: 2, // pixels per tick
+  
   // Block destruction animation
   BLOCK_DESTRUCTION_DURATION: 15, // ticks
   
@@ -139,6 +142,7 @@ export const POWERUP_TYPES = {
   THROW_BOMB: 'throw_bomb',
   CROSS_BLOCK: 'cross_block',
   CROSS_BOMB: 'cross_bomb',
+  FOLLOWER_BOMB: 'follower_bomb',
 };
 
 // Directions
