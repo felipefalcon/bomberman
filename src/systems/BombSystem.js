@@ -118,13 +118,14 @@ export class BombSystem {
   }
 
   /**
-   * Find the nearest enemy to a bomb position
+   * Find the nearest enemy to a bomb position within max distance
    * @param {number} tx - Bomb tile X position
    * @param {number} ty - Bomb tile Y position
    * @param {Array} enemies - Array of enemy entities
+   * @param {number} maxDistance - Maximum distance to consider (default: 2)
    * @returns {Object|null} Nearest enemy or null
    */
-  findNearestEnemy(tx, ty, enemies) {
+  findNearestEnemy(tx, ty, enemies, maxDistance = 2) {
     if (!enemies || enemies.length === 0) return null;
 
     let nearest = null;
@@ -135,7 +136,8 @@ export class BombSystem {
       const enemyTy = Math.floor(enemy.sprite.y / this.tileSize);
       const distance = Math.abs(enemyTx - tx) + Math.abs(enemyTy - ty);
 
-      if (distance < minDistance) {
+      // Only consider enemies within max distance
+      if (distance <= maxDistance && distance < minDistance) {
         minDistance = distance;
         nearest = enemy;
       }
@@ -502,10 +504,19 @@ export class BombSystem {
     for (const bomb of this.bombs) {
       if (!bomb.isFollower) continue;
 
-      // If target enemy is dead or doesn't exist, find a new target
+      // If target enemy is dead, doesn't exist, or moved out of range, find a new target
       if (!bomb.targetEnemy || !enemies.includes(bomb.targetEnemy)) {
-        bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies);
+        bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 2);
         if (!bomb.targetEnemy) continue;
+      } else {
+        // Check if current target is still within 2 tiles
+        const targetTx = Math.floor(bomb.targetEnemy.sprite.x / this.tileSize);
+        const targetTy = Math.floor(bomb.targetEnemy.sprite.y / this.tileSize);
+        const distance = Math.abs(targetTx - bomb.tx) + Math.abs(targetTy - bomb.ty);
+        if (distance > 2) {
+          bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 2);
+          if (!bomb.targetEnemy) continue;
+        }
       }
 
       // Get target enemy position
