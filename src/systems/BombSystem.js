@@ -54,11 +54,14 @@ export class BombSystem {
     // Check if bomb already exists at this position
     if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return false;
 
+    // Determine if this will be a follower bomb before creating sprite
+    const willBeFollower = player.hasFollowerBomb && enemies.length > 0;
+
     const bomb = {
       tx,
       ty,
       timer: this.bombFuseTicks,
-      sprite: this.createBombSprite(tx, ty),
+      sprite: this.createBombSprite(tx, ty, willBeFollower),
       soundPlayed: false,
       // Kick bomb properties
       isSliding: false,
@@ -92,7 +95,7 @@ export class BombSystem {
     };
 
     // Set as follower bomb if player has the powerup
-    if (player.hasFollowerBomb && enemies.length > 0) {
+    if (willBeFollower) {
       bomb.isFollower = true;
       bomb.targetEnemy = this.findNearestEnemy(tx, ty, enemies);
     }
@@ -122,10 +125,10 @@ export class BombSystem {
    * @param {number} tx - Bomb tile X position
    * @param {number} ty - Bomb tile Y position
    * @param {Array} enemies - Array of enemy entities
-   * @param {number} maxDistance - Maximum distance to consider (default: 2)
+   * @param {number} maxDistance - Maximum distance to consider (default: 3)
    * @returns {Object|null} Nearest enemy or null
    */
-  findNearestEnemy(tx, ty, enemies, maxDistance = 2) {
+  findNearestEnemy(tx, ty, enemies, maxDistance = 3) {
     if (!enemies || enemies.length === 0) return null;
 
     let nearest = null;
@@ -150,23 +153,31 @@ export class BombSystem {
    * Create bomb sprite
    * @param {number} tx - Tile X position
    * @param {number} ty - Tile Y position
+   * @param {boolean} isFollower - Whether this is a follower bomb
    * @returns {PIXI.DisplayObject}
    */
-  createBombSprite(tx, ty) {
+  createBombSprite(tx, ty, isFollower = false) {
     let sprite;
 
-    if (this.bombFrames && this.bombFrames.length > 0 && this.bombMapping?.bomb) {
-      // Use animated sprite with ping-pong animation
-      const frameIndices = this.bombMapping.bomb;
-      const textures = frameIndices.map(i => this.bombFrames[i]).filter(Boolean);
+    if (this.bombFrames && this.bombFrames.length > 0) {
+      // Use animated sprite with appropriate animation
+      const frameIndices = isFollower && this.bombMapping?.follower_bomb 
+        ? this.bombMapping.follower_bomb 
+        : this.bombMapping?.bomb;
+      
+      if (frameIndices) {
+        const textures = frameIndices.map(i => this.bombFrames[i]).filter(Boolean);
 
-      if (textures.length > 0) {
-        sprite = new PIXI.AnimatedSprite(textures);
-        sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
-        sprite.play();
-        // Scale from 16x16 to 32x32 (2x scale)
-        sprite.scale.set(2);
-        sprite.anchor.set(0.5, 0.5);
+        if (textures.length > 0) {
+          sprite = new PIXI.AnimatedSprite(textures);
+          sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
+          sprite.play();
+          // Scale from 16x16 to 32x32 (2x scale)
+          sprite.scale.set(2);
+          sprite.anchor.set(0.5, 0.5);
+        } else {
+          sprite = this.createBombGraphics();
+        }
       } else {
         sprite = this.createBombGraphics();
       }
@@ -506,15 +517,15 @@ export class BombSystem {
 
       // If target enemy is dead, doesn't exist, or moved out of range, find a new target
       if (!bomb.targetEnemy || !enemies.includes(bomb.targetEnemy)) {
-        bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 2);
+        bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 3);
         if (!bomb.targetEnemy) continue;
       } else {
-        // Check if current target is still within 2 tiles
+        // Check if current target is still within 3 tiles
         const targetTx = Math.floor(bomb.targetEnemy.sprite.x / this.tileSize);
         const targetTy = Math.floor(bomb.targetEnemy.sprite.y / this.tileSize);
         const distance = Math.abs(targetTx - bomb.tx) + Math.abs(targetTy - bomb.ty);
-        if (distance > 2) {
-          bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 2);
+        if (distance > 3) {
+          bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 3);
           if (!bomb.targetEnemy) continue;
         }
       }
