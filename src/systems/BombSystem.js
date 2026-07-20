@@ -516,8 +516,10 @@ export class BombSystem {
       const dx = targetTx - bomb.tx;
       const dy = targetTy - bomb.ty;
 
-      // If already at target, stop following
-      if (dx === 0 && dy === 0) continue;
+      // If bomb is adjacent to target enemy (1 tile away), stop following
+      if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && !(dx === 0 && dy === 0)) {
+        continue;
+      }
 
       // Try both axes to find a valid path
       const directions = [];
