@@ -53,6 +53,7 @@ export class Player {
     this.hasCrossBlock = false; // Can cross blocks
     this.hasCrossBomb = false; // Can cross bombs
     this.hasFollowerBomb = false; // Follower bomb - follows enemies
+    this.hasLandMine = true; // Land mine - triggered by stepping on it
   }
 
   takeDamage() {
@@ -147,6 +148,11 @@ export class Player {
 
       const bomb = bombs.find((bomb) => bomb.tx === tx && bomb.ty === ty);
       if (bomb) {
+        // Land mines are traversable
+        if (bomb.isLandMine) {
+          continue;
+        }
+        
         if (currentTiles.has(`${tx},${ty}`)) {
           continue;
         }

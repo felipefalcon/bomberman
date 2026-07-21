@@ -54,15 +54,16 @@ export class BombSystem {
     // Check if bomb already exists at this position
     if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return false;
 
-    // Determine if this will be a follower bomb before creating sprite
-    // Bomb is follower if player has the powerup, regardless of enemies
-    const willBeFollower = player.hasFollowerBomb;
+    // Determine bomb type based on player powerups
+    // Priority: land mine > follower bomb > normal bomb
+    const willBeLandMine = player.hasLandMine;
+    const willBeFollower = !willBeLandMine && player.hasFollowerBomb;
 
     const bomb = {
       tx,
       ty,
       timer: this.bombFuseTicks,
-      sprite: this.createBombSprite(tx, ty, willBeFollower),
+      sprite: this.createBombSprite(tx, ty, willBeFollower, willBeLandMine),
       soundPlayed: false,
       // Kick bomb properties
       isSliding: false,
@@ -93,10 +94,27 @@ export class BombSystem {
       isFollower: false,
       targetEnemy: null,
       followSpeed: GAME_CONFIG.BOMB_FOLLOW_SPEED || 2,
+
+      // Land mine properties
+      isLandMine: false,
+      isTriggered: false,
+      triggerTimer: GAME_CONFIG.LAND_MINE_TRIGGER_TICKS,
+      blinkTimer: 0,
+      playerTileOnPlacement: null, // Track if player was on tile when placed
     };
 
-    // Set as follower bomb if player has the powerup
-    if (willBeFollower) {
+    // Set as land mine if player has the powerup
+    if (willBeLandMine) {
+      bomb.isLandMine = true;
+      bomb.timer = Infinity; // Land mines don't explode on timer
+      
+      // Check if player is on the tile when placing the mine
+      const playerTx = Math.floor(player.sprite.x / this.tileSize);
+      const playerTy = Math.floor(player.sprite.y / this.tileSize);
+      if (playerTx === tx && playerTy === ty) {
+        bomb.playerTileOnPlacement = true;
+      }
+    } else if (willBeFollower) {
       bomb.isFollower = true;
       bomb.targetEnemy = this.findNearestEnemy(tx, ty, enemies);
     }
@@ -155,28 +173,38 @@ export class BombSystem {
    * @param {number} tx - Tile X position
    * @param {number} ty - Tile Y position
    * @param {boolean} isFollower - Whether this is a follower bomb
+   * @param {boolean} isLandMine - Whether this is a land mine
    * @returns {PIXI.DisplayObject}
    */
-  createBombSprite(tx, ty, isFollower = false) {
+  createBombSprite(tx, ty, isFollower = false, isLandMine = false) {
     let sprite;
 
     if (this.bombFrames && this.bombFrames.length > 0) {
       // Use animated sprite with appropriate animation
-      // If it's a follower bomb, always use follower_bomb frames if available
-      // This ensures the sprite stays as follower even after enemies die
-      const frameIndices = isFollower && this.bombMapping?.follower_bomb 
-        ? this.bombMapping.follower_bomb 
-        : this.bombMapping?.bomb;
+      // Priority: land mine > follower bomb > normal bomb
+      let frameIndices;
+      if (isLandMine && this.bombMapping?.land_mine) {
+        frameIndices = this.bombMapping.land_mine;
+      } else if (isFollower && this.bombMapping?.follower_bomb) {
+        frameIndices = this.bombMapping.follower_bomb;
+      } else {
+        frameIndices = this.bombMapping?.bomb;
+      }
       
       if (frameIndices) {
         const textures = frameIndices.map(i => this.bombFrames[i]).filter(Boolean);
 
         if (textures.length > 0) {
-          sprite = new PIXI.AnimatedSprite(textures);
-          sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
-          sprite.play();
-          // Scale from 16x16 to 32x32 (2x scale)
-          sprite.scale.set(2);
+          // Land mines use static sprite (single frame), others use animated sprite
+          if (isLandMine) {
+            sprite = new PIXI.Sprite(textures[0]);
+          } else {
+            sprite = new PIXI.AnimatedSprite(textures);
+            sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
+            sprite.play();
+          }
+          // Scale from 16x16 to 24x24 (1.5x scale for land mines, 2x for others)
+          sprite.scale.set(isLandMine ? 1.5 : 2);
           sprite.anchor.set(0.5, 0.5);
         } else {
           sprite = this.createBombGraphics();
@@ -214,14 +242,17 @@ export class BombSystem {
    * @param {number} delta - Time delta
    * @param {Function} explodeCallback - Callback when bomb explodes
    * @param {Array} enemies - Array of enemy entities (for follower bomb targeting)
+   * @param {Object} player - Player entity (for land mine detection)
    */
-  update(delta, explodeCallback, enemies = []) {
+  update(delta, explodeCallback, enemies = [], player = null) {
 
     this.updateSliding(delta);
 
     this.updateThrowing(delta);
 
     this.updateFollowerBombs(delta, enemies);
+
+    this.updateLandMines(delta, enemies, player);
 
     this.updateTimers(delta);
 
@@ -604,6 +635,92 @@ export class BombSystem {
     return tx >= 0 && ty >= 0 && tx < this.scene.map.cols && ty < this.scene.map.rows;
   }
 
+  /**
+   * Update land mines - check for triggers and handle blinking
+   * @param {number} delta - Time delta
+   * @param {Array} enemies - Array of enemy entities
+   * @param {Object} player - Player entity
+   */
+  updateLandMines(delta, enemies = [], player = null) {
+    for (const bomb of this.bombs) {
+      if (!bomb.isLandMine) continue;
+
+      // Initialize blink timer if not exists
+      if (!bomb.blinkTimer) bomb.blinkTimer = 0;
+
+      // If triggered, count down and blink
+      if (bomb.isTriggered) {
+        bomb.triggerTimer -= delta;
+        bomb.blinkTimer += delta;
+
+        // Blink animation - alternate between visible and invisible
+        const blinkPhase = Math.floor((bomb.blinkTimer / 10) % 2);
+        bomb.sprite.alpha = blinkPhase === 0 ? 0.3 : 1;
+
+        // Play sound when about to explode
+        if (bomb.triggerTimer <= GAME_CONFIG.EXPLOSION_SOUND_TICKS && !bomb.soundPlayed) {
+          bomb.soundPlayed = true;
+          this.eventBus.emit(GameEvents.AUDIO_PLAY, { type: "explosion" });
+        }
+      } else {
+        // Check if player or enemy is on the land mine
+        if (player) {
+          const playerTx = Math.floor(player.sprite.x / this.tileSize);
+          const playerTy = Math.floor(player.sprite.y / this.tileSize);
+          
+          // If player was on tile when mine was placed, don't trigger until they leave
+          if (bomb.playerTileOnPlacement) {
+            if (playerTx !== bomb.tx || playerTy !== bomb.ty) {
+              // Player left the tile, now mine can be triggered normally
+              bomb.playerTileOnPlacement = false;
+            }
+            // Don't trigger while player is still on tile from placement
+            continue;
+          }
+          
+          if (playerTx === bomb.tx && playerTy === bomb.ty) {
+            this.triggerLandMine(bomb);
+            continue;
+          }
+        }
+
+        // Check enemies
+        for (const enemy of enemies) {
+          const enemyTx = Math.floor(enemy.sprite.x / this.tileSize);
+          const enemyTy = Math.floor(enemy.sprite.y / this.tileSize);
+          if (enemyTx === bomb.tx && enemyTy === bomb.ty) {
+            this.triggerLandMine(bomb);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if an entity is on a bomb
+   * @param {Object} entity - Entity with sprite
+   * @param {Object} bomb - Bomb object
+   * @returns {boolean}
+   */
+  isEntityOnBomb(entity, bomb) {
+    if (!entity || !entity.sprite) return false;
+    const entityTx = Math.floor(entity.sprite.x / this.tileSize);
+    const entityTy = Math.floor(entity.sprite.y / this.tileSize);
+    return entityTx === bomb.tx && entityTy === bomb.ty;
+  }
+
+  /**
+   * Trigger a land mine
+   * @param {Object} bomb - Land mine bomb object
+   */
+  triggerLandMine(bomb) {
+    if (bomb.isTriggered) return;
+    bomb.isTriggered = true;
+    bomb.triggerTimer = GAME_CONFIG.LAND_MINE_TRIGGER_TICKS;
+    this.eventBus.emit(GameEvents.LAND_MINE_TRIGGERED, { tx: bomb.tx, ty: bomb.ty });
+  }
+
   stopThrowingBomb(bomb) {
 
     // Check if final landing tile has another bomb
@@ -658,6 +775,8 @@ export class BombSystem {
   updateTimers(delta) {
 
     for (const bomb of this.bombs) {
+      // Land mines have their own timer logic, skip here
+      if (bomb.isLandMine) continue;
 
       bomb.timer -= delta;
 
@@ -681,7 +800,9 @@ export class BombSystem {
 
   explodeExpiredBombs(callback) {
 
-    const expired = this.bombs.filter(b => b.timer <= 0);
+    const expired = this.bombs.filter(b => 
+      b.timer <= 0 || (b.isLandMine && b.isTriggered && b.triggerTimer <= 0)
+    );
 
     for (const bomb of expired) {
 

@@ -57,6 +57,7 @@ export const GAME_CONFIG = {
   
   // Game timing
   BOMB_FUSE_TICKS: 180, // 3 seconds at 60 FPS
+  LAND_MINE_TRIGGER_TICKS: 140, // 3 seconds for land mine to explode after being triggered
   TIME_REMAINING: 200, // seconds
   
   // Player settings
@@ -143,6 +144,7 @@ export const POWERUP_TYPES = {
   CROSS_BLOCK: 'cross_block',
   CROSS_BOMB: 'cross_bomb',
   FOLLOWER_BOMB: 'follower_bomb',
+  LAND_MINE: 'land_mine',
 };
 
 // Directions

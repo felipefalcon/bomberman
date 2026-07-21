@@ -253,7 +253,7 @@ export class Game {
     }
     
     // Update systems
-    this.bombSystem.update(tickDelta, (bomb) => this._explodeBomb(bomb), this.monsterSystem.getMonsters());
+    this.bombSystem.update(tickDelta, (bomb) => this._explodeBomb(bomb), this.monsterSystem.getMonsters(), this.player);
     this.explosionSystem.update(tickDelta, this.player, this.monsterSystem.getMonsters(), this.powerupSystem.getPowerups());
     this.powerupSystem.update(tickDelta, this.player);
     this.monsterSystem.update(tickDelta, this.player, this.bombSystem.getBombs());

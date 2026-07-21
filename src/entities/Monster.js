@@ -163,7 +163,7 @@ export class Monster {
 
     if (this.direction) {
       const forward = { tx: this.tx + this.direction.dx, ty: this.ty + this.direction.dy, direction: this.direction };
-      if (!map.isBlocked(forward.tx, forward.ty) && !bombs.some((bomb) => bomb.tx === forward.tx && bomb.ty === forward.ty)) {
+      if (!map.isBlocked(forward.tx, forward.ty) && !bombs.some((bomb) => bomb.tx === forward.tx && bomb.ty === forward.ty && !bomb.isLandMine)) {
         this.target = forward;
         this.isTrapped = false;
         return;
@@ -174,7 +174,7 @@ export class Monster {
       .map((dir) => ({ tx: this.tx + dir.dx, ty: this.ty + dir.dy, direction: dir }))
       .filter(({ tx, ty }) => {
         if (map.isBlocked(tx, ty)) return false;
-        if (bombs.some((bomb) => bomb.tx === tx && bomb.ty === ty)) return false;
+        if (bombs.some((bomb) => bomb.tx === tx && bomb.ty === ty && !bomb.isLandMine)) return false;
         return true;
       });
 

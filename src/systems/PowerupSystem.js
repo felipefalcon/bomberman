@@ -147,6 +147,9 @@ export class PowerupSystem {
       case POWERUP_TYPES.FOLLOWER_BOMB:
         player.hasFollowerBomb = true;
         break;
+      case POWERUP_TYPES.LAND_MINE:
+        player.hasLandMine = true;
+        break;
     }
     
     this.eventBus.emit(GameEvents.PLAYER_COLLECT_POWERUP, { type, player });

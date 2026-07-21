@@ -50,6 +50,7 @@ export async function loadItemSprites() {
         detonator: 7,    // Remote detonator (para decidir depois)
         kick_bomb: 5,     // Kick bomb (para decidir depois)
         throw_bomb: 6,    // Throw bomb (para decidir depois)
+        land_mine: 6,    // Land mine - triggered by player/monster stepping on it
         cross_block: 8,    // Cross block (para decidir depois)
         cross_bomb: 9,    // Cross bomb (para decidir depois)
         follower_bomb: 15, // Follower bomb - follows enemies

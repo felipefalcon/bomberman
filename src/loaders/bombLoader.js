@@ -77,7 +77,8 @@ export async function loadBombSprite() {
 
     const mapping = {
       bomb: pingPongFrames,
-      follower_bomb: followerBombFrames
+      follower_bomb: followerBombFrames,
+      land_mine: [6] // Land mine - single sprite, no animation
     };
 
     return { frames, mapping };
