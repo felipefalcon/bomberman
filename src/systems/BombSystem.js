@@ -399,8 +399,9 @@ export class BombSystem {
       if (currentSegment >= bomb.throwPath.length - 1 && segmentProgress > 0.8) {
         const lastTile = bomb.throwPath[bomb.throwPath.length - 1];
 
-        // Check if current target is blocked
-        if (this.isTileBlocked(lastTile.tx, lastTile.ty)) {
+        // Check if current target is blocked (by walls/blocks OR other bombs)
+        const hasBombAtTarget = this.bombs.some(b => b !== bomb && b.tx === lastTile.tx && b.ty === lastTile.ty);
+        if (this.isTileBlocked(lastTile.tx, lastTile.ty) || hasBombAtTarget) {
           const mapCols = this.scene.map.cols;
           const mapRows = this.scene.map.rows;
 
