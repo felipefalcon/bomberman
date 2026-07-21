@@ -515,19 +515,19 @@ export class BombSystem {
     for (const bomb of this.bombs) {
       if (!bomb.isFollower) continue;
 
-      // If target enemy is dead, doesn't exist, or moved out of range, find a new target
+      // Initialize bobbing animation timer if not exists
+      if (!bomb.bobTimer) bomb.bobTimer = 0;
+      bomb.bobTimer += delta;
+
+      // Apply bobbing animation using scale instead of position
+      const bobScale = 1 + Math.sin(bomb.bobTimer * 0.3) * 0.1;
+      bomb.sprite.scale.set(2 * bobScale);
+
+      // If target enemy is dead or doesn't exist, find a new target
+      // Once a target is locked, it will NOT change even if it moves out of range
       if (!bomb.targetEnemy || !enemies.includes(bomb.targetEnemy)) {
         bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 3);
-        if (!bomb.targetEnemy) continue;
-      } else {
-        // Check if current target is still within 3 tiles
-        const targetTx = Math.floor(bomb.targetEnemy.sprite.x / this.tileSize);
-        const targetTy = Math.floor(bomb.targetEnemy.sprite.y / this.tileSize);
-        const distance = Math.abs(targetTx - bomb.tx) + Math.abs(targetTy - bomb.ty);
-        if (distance > 3) {
-          bomb.targetEnemy = this.findNearestEnemy(bomb.tx, bomb.ty, enemies, 3);
-          if (!bomb.targetEnemy) continue;
-        }
+        if (!bomb.targetEnemy) continue; // No target available, but still show as follower bomb
       }
 
       // Get target enemy position
