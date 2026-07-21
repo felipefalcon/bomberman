@@ -55,7 +55,8 @@ export class BombSystem {
     if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return false;
 
     // Determine if this will be a follower bomb before creating sprite
-    const willBeFollower = player.hasFollowerBomb && enemies.length > 0;
+    // Bomb is follower if player has the powerup, regardless of enemies
+    const willBeFollower = player.hasFollowerBomb;
 
     const bomb = {
       tx,
@@ -161,6 +162,8 @@ export class BombSystem {
 
     if (this.bombFrames && this.bombFrames.length > 0) {
       // Use animated sprite with appropriate animation
+      // If it's a follower bomb, always use follower_bomb frames if available
+      // This ensures the sprite stays as follower even after enemies die
       const frameIndices = isFollower && this.bombMapping?.follower_bomb 
         ? this.bombMapping.follower_bomb 
         : this.bombMapping?.bomb;

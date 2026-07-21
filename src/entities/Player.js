@@ -52,7 +52,7 @@ export class Player {
     this.hasThrowBomb = false;
     this.hasCrossBlock = false; // Can cross blocks
     this.hasCrossBomb = false; // Can cross bombs
-    this.hasFollowerBomb = true; // Follower bomb - follows enemies
+    this.hasFollowerBomb = false; // Follower bomb - follows enemies
   }
 
   takeDamage() {
