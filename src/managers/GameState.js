@@ -198,6 +198,9 @@ export class GameState {
       case 'follower_bomb':
         this.playerState.hasFollowerBomb = true;
         break;
+      case 'land_mine':
+        this.playerState.hasLandMine = true;
+        break;
     }
     
     this.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.playerState });

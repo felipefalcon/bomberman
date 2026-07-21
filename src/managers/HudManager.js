@@ -183,6 +183,11 @@ export class HudManager {
         fallbackDraw: () => this.drawFollowerBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
+      {
+        key: 'land_mine',
+        fallbackDraw: () => this.drawLandMineIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
     ];
 
     powerupRows.forEach((row, index) => {
@@ -326,6 +331,7 @@ export class HudManager {
     this.setPowerupSlotState('cross_block', '', player.hasCrossBlock);
     this.setPowerupSlotState('cross_bomb', '', player.hasCrossBomb);
     this.setPowerupSlotState('follower_bomb', '', player.hasFollowerBomb);
+    this.setPowerupSlotState('land_mine', '', player.hasLandMine);
   }
 
   /**
@@ -557,6 +563,18 @@ export class HudManager {
   }
 
   drawFollowerBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.rect(cx - 6, cy - 4, 12, 8);
+    g.fill(0xc7d0d8);
+    g.rect(cx - 2, cy - 8, 4, 4);
+    g.fill(0xe65a3a);
+    g.moveTo(cx + 2, cy - 8);
+    g.lineTo(cx + 6, cy - 12);
+    g.stroke({ color: 0xf0c54e, width: 1.5 });
+    return g;
+  }
+
+  drawLandMineIcon(cx, cy) {
     const g = new PIXI.Graphics();
     g.rect(cx - 6, cy - 4, 12, 8);
     g.fill(0xc7d0d8);

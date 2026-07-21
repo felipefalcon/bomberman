@@ -53,7 +53,7 @@ export class Player {
     this.hasCrossBlock = false; // Can cross blocks
     this.hasCrossBomb = false; // Can cross bombs
     this.hasFollowerBomb = false; // Follower bomb - follows enemies
-    this.hasLandMine = true; // Land mine - triggered by stepping on it
+    this.hasLandMine = false; // Land mine - triggered by stepping on it
   }
 
   takeDamage() {

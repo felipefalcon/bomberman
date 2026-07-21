@@ -40,7 +40,7 @@ export const GAME_CONFIG = {
     SIDEBAR: {
       SLOT_START_X: 2,
       SLOT_START_Y: 0,
-      SLOT_GAP_Y: 28,
+      SLOT_GAP_Y: 26,
       POWERUP_ICON_X: 8,
       POWERUP_ICON_Y: 9,
       SLOT_TEXT_X: 7,

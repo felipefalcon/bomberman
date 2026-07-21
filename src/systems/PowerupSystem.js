@@ -146,9 +146,11 @@ export class PowerupSystem {
         break;
       case POWERUP_TYPES.FOLLOWER_BOMB:
         player.hasFollowerBomb = true;
+        player.hasLandMine = false;
         break;
       case POWERUP_TYPES.LAND_MINE:
         player.hasLandMine = true;
+        player.hasFollowerBomb = false;
         break;
     }
     
