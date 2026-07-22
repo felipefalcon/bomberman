@@ -52,6 +52,7 @@ export async function loadItemSprites() {
         cross_block: 8,    // Cross block (para decidir depois)
         cross_bomb: 9,    // Cross bomb (para decidir depois)
         follower_bomb: 15, // Follower bomb - follows enemies
+        extra_life: 11,    // Extra life
       };
       
       resolve({ frames, mapping });

@@ -146,6 +146,9 @@ export class PowerupSystem {
         player.hasLandMine = true;
         player.hasFollowerBomb = false;
         break;
+      case POWERUP_TYPES.EXTRA_LIFE:
+        player.lives += 1;
+        break;
     }
     
     this.eventBus.emit(GameEvents.PLAYER_COLLECT_POWERUP, { type, player });

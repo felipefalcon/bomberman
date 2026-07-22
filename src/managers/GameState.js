@@ -191,6 +191,10 @@ export class GameState {
       case 'land_mine':
         this.playerState.hasLandMine = true;
         break;
+      case 'extra_life':
+        this.playerState.lives += 1;
+        this.eventBus.emit(GameEvents.UI_UPDATE_LIVES, { value: this.playerState.lives });
+        break;
     }
     
     this.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.playerState });

@@ -143,6 +143,7 @@ export const POWERUP_TYPES = {
   CROSS_BOMB: 'cross_bomb',
   FOLLOWER_BOMB: 'follower_bomb',
   LAND_MINE: 'land_mine',
+  EXTRA_LIFE: 'extra_life',
 };
 
 // Directions
