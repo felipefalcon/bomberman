@@ -103,6 +103,24 @@ export class Player {
   }
 
   _tryMove(dx, dy, map, bombs, bombSystem = null) {
+    // Apply snapping when changing direction perpendicular to current movement
+    if (dx !== 0 && dy === 0) {
+      // Moving horizontally - snap Y to tile center if close
+      const tileCenterY = (Math.floor(this.sprite.y / this.tileSize) * this.tileSize) + (this.tileSize / 2);
+      const distFromCenter = Math.abs(this.sprite.y - tileCenterY);
+      if (distFromCenter < 8) {
+        this.sprite.y = tileCenterY;
+      }
+    }
+    if (dy !== 0 && dx === 0) {
+      // Moving vertically - snap X to tile center if close
+      const tileCenterX = (Math.floor(this.sprite.x / this.tileSize) * this.tileSize) + (this.tileSize / 2);
+      const distFromCenter = Math.abs(this.sprite.x - tileCenterX);
+      if (distFromCenter < 8) {
+        this.sprite.x = tileCenterX;
+      }
+    }
+
     // Axis-separated movement for smoother sliding along walls
     if (dx !== 0) {
       const nx = this.sprite.x + dx;
