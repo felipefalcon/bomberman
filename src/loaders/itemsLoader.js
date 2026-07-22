@@ -46,8 +46,6 @@ export async function loadItemSprites() {
         pierce: 1,       // Explosion pierces through blocks
         bomb: 2,         // Extra bomb
         speed: 3,        // Speed boost
-        shield: 4,       // Shield/Invulnerability (para decidir depois)
-        detonator: 7,    // Remote detonator (para decidir depois)
         kick_bomb: 5,     // Kick bomb (para decidir depois)
         throw_bomb: 6,    // Throw bomb (para decidir depois)
         land_mine: 14,    // Land mine - triggered by player/monster stepping on it

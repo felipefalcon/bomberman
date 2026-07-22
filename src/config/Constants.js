@@ -137,8 +137,6 @@ export const POWERUP_TYPES = {
   BOMB: 'bomb',
   RANGE: 'range',
   PIERCE: 'pierce',
-  SHIELD: 'shield',
-  DETONATOR: 'detonator',
   KICK_BOMB: 'kick_bomb',
   THROW_BOMB: 'throw_bomb',
   CROSS_BLOCK: 'cross_block',

@@ -46,8 +46,6 @@ export class Player {
     this.activeBombs = 0; // Currently active bombs
     this.explosionRange = GAME_CONFIG.PLAYER_STARTING_RANGE;
     this.canPierceBlocks = false; // Explosions can pass through blocks
-    this.hasShield = false;
-    this.hasDetonator = false;
     this.hasKickBomb = false;
     this.hasThrowBomb = false;
     this.hasCrossBlock = false; // Can cross blocks

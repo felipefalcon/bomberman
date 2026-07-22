@@ -25,8 +25,6 @@ export class GameState {
       explosionRange: GAME_CONFIG.PLAYER_STARTING_RANGE,
       speedPowerups: 0,
       canPierceBlocks: false,
-      hasShield: false,
-      hasDetonator: false,
       hasKickBomb: false,
       hasThrowBomb: false,
       hasCrossBlock: false,
@@ -70,8 +68,6 @@ export class GameState {
       explosionRange: GAME_CONFIG.PLAYER_STARTING_RANGE,
       speedPowerups: 0,
       canPierceBlocks: false,
-      hasShield: false,
-      hasDetonator: false,
       hasKickBomb: false,
       hasThrowBomb: false,
       hasCrossBlock: false,
@@ -176,12 +172,6 @@ export class GameState {
         break;
       case 'pierce':
         this.playerState.canPierceBlocks = true;
-        break;
-      case 'shield':
-        this.playerState.hasShield = true;
-        break;
-      case 'detonator':
-        this.playerState.hasDetonator = true;
         break;
       case 'kick_bomb':
         this.playerState.hasKickBomb = true;

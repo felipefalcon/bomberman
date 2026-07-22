@@ -126,12 +126,6 @@ export class PowerupSystem {
       case POWERUP_TYPES.PIERCE:
         player.canPierceBlocks = true;
         break;
-      case POWERUP_TYPES.SHIELD:
-        player.hasShield = true;
-        break;
-      case POWERUP_TYPES.DETONATOR:
-        player.hasDetonator = true;
-        break;
       case POWERUP_TYPES.KICK_BOMB:
         player.hasKickBomb = true;
         break;
