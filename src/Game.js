@@ -32,9 +32,7 @@ export class Game {
     this.mapCols = GAME_CONFIG.MAP_COLS;
     this.mapRows = GAME_CONFIG.MAP_ROWS;
     
-    // Legacy state (will be phased out)
-    this.keys = {};
-    this.lastZ = false;
+    // Block destruction animation state
     this.destroyingBlocks = [];
     
     // Asset storage
@@ -130,9 +128,6 @@ export class Game {
     // Initialize HUD with default game state values (bomb/range level 1, etc.)
     this.hudManager.updatePowerups(this.gameState.getPlayerState());
 
-    // Legacy keyboard state (will be phased out)
-    window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; });
-    window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
 
     // place player near top-left free tile
     const startX = this.tileSize * GAME_CONFIG.PLAYER_START_X;
@@ -243,14 +238,16 @@ export class Game {
 
     // Update game state (timer, etc.)
     this.gameState.update(tickDelta);
-    this.inputManager.update();
 
     if (this.player) {
       // Use collision system for player movement
       const bombs = this.bombSystem.getBombs();
-      this.player.update(tickDelta, this.keys, this.map, bombs, this.bombSystem);
+      this.player.update(tickDelta, this.inputManager.keys, this.map, bombs, this.bombSystem);
       this._processBombInput();
     }
+    
+    // Update input manager after processing input (for next frame)
+    this.inputManager.update();
     
     // Update systems
     this.bombSystem.update(tickDelta, (bomb) => this._explodeBomb(bomb), this.monsterSystem.getMonsters(), this.player);
@@ -258,16 +255,14 @@ export class Game {
     this.powerupSystem.update(tickDelta, this.player);
     this.monsterSystem.update(tickDelta, this.player, this.bombSystem.getBombs());
     
-    // Legacy updates (will be phased out)
+    // Block destruction animation
     this._updateDestroyingBlocks(tickDelta);
   }
 
   _processBombInput() {
-    const zPressed = !!this.keys['z'];
-    if (zPressed && !this.lastZ) {
+    if (this.inputManager.isKeyPressed('z')) {
       this._handleBombAction();
     }
-    this.lastZ = zPressed;
   }
 
   _handleBombAction() {
@@ -309,11 +304,6 @@ export class Game {
     this.bombSystem.throwBomb(bomb, dx, dy);
   }
 
-  _placeBomb() {
-    const tx = Math.floor(this.player.sprite.x / this.tileSize);
-    const ty = Math.floor(this.player.sprite.y / this.tileSize);
-    this.bombSystem.placeBomb(tx, ty, this.player);
-  }
 
   _createBombSprite(tx, ty) {
     let sprite;
@@ -352,53 +342,8 @@ export class Game {
     return bomb;
   }
 
-  _updateBombs(delta) {
-    const expire = [];
-    for (const bomb of this.bombs) {
-      bomb.timer -= delta;
-      
-      // Play explosion sound early before detonation.
-      if (bomb.timer <= GAME_CONFIG.EXPLOSION_SOUND_TICKS && !bomb.soundPlayed) {
-        bomb.soundPlayed = true;
-        this.audioManager.playSoundEffect('explosion');
-      }
-      
-      if (bomb.timer <= 0) {
-        expire.push(bomb);
-      }
-    }
-    for (const bomb of expire) {
-      this._explodeBomb(bomb);
-    }
-  }
 
-  _spawnMonsters(count) {
-    const spawnTiles = this._findMonsterSpawnTiles(count);
-    for (const { tx, ty } of spawnTiles) {
-      const monster = new Monster(tx, ty, this.tileSize, this.enemyFrames, this.enemyMapping);
-      this.monsters.push(monster);
-      this.gameContainer.addChild(monster.sprite);
-    }
-  }
 
-  _findMonsterSpawnTiles(count) {
-    const positions = [];
-    for (let ty = 1; ty < this.map.rows - 1; ty++) {
-      for (let tx = 1; tx < this.map.cols - 1; tx++) {
-        const isStartArea = (tx === 1 && ty === 1) || (tx === 2 && ty === 1) || (tx === 1 && ty === 2);
-        if (isStartArea) continue;
-        if (this.map.isBlocked(tx, ty)) continue;
-        const distanceFromStart = Math.abs(tx - 1) + Math.abs(ty - 1);
-        if (distanceFromStart < GAME_CONFIG.MONSTER_START_DISTANCE) continue;
-        positions.push({ tx, ty });
-      }
-    }
-    for (let i = positions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [positions[i], positions[j]] = [positions[j], positions[i]];
-    }
-    return positions.slice(0, count);
-  }
 
   _explodeBomb(bomb) {
     // Decrease active bomb count
@@ -464,20 +409,8 @@ export class Game {
     this.destroyingBlocks = this.destroyingBlocks.filter(b => !toRemove.includes(b));
   }
 
-  _updatePowerups(delta) {
-    // This is now handled by PowerupSystem
-    // Keeping this method for compatibility during transition
-  }
 
-  _updateMonsters(delta) {
-    // This is now handled by MonsterSystem
-    // Keeping this method for compatibility during transition
-  }
 
-  _updateExplosions(delta) {
-    // This is now handled by ExplosionSystem
-    // Keeping this method for compatibility during transition
-  }
 
   _isPlayerOnTile(tx, ty) {
     const playerTx = Math.floor(this.player.sprite.x / this.tileSize);
@@ -544,7 +477,7 @@ export class Game {
     
     if (this.player) {
       this.player.sprite.tint = 0xff0000;
-      this.keys = {};
+      this.inputManager.clear();
     }
     
     const gameOver = new PIXI.BitmapText({
