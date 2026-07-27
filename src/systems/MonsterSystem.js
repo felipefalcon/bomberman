@@ -6,24 +6,31 @@ import { Monster } from '../entities/Monster.js';
  * MonsterSystem - Manages monster spawning, AI, and updates
  */
 export class MonsterSystem {
-  constructor(eventBus = globalEventBus) {
+  constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
     this.eventBus = eventBus;
+    this.map = map;
+    this.gameContainer = gameContainer;
     this.monsters = [];
     this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.spawnCount = GAME_CONFIG.MONSTER_SPAWN_COUNT;
     this.enemyFrames = null;
     this.enemyMapping = null;
-    this.scene = null;
-    this.gameContainer = null;
   }
 
   /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
+   * Set the map for this system
+   * @param {Object} map - TileMap instance
    */
-  setScene(scene) {
-    this.scene = scene;
-    this.gameContainer = scene.getContainer();
+  setMap(map) {
+    this.map = map;
+  }
+
+  /**
+   * Set the game container for this system
+   * @param {PIXI.Container} container - Game container
+   */
+  setGameContainer(container) {
+    this.gameContainer = container;
   }
 
   /**
@@ -60,10 +67,10 @@ export class MonsterSystem {
    * @returns {Array} Array of {tx, ty} positions
    */
   findMonsterSpawnTiles(count) {
-    if (!this.scene || !this.scene.map) return [];
+    if (!this.map) return [];
     
     const positions = [];
-    const map = this.scene.map;
+    const map = this.map;
     
     for (let ty = 1; ty < map.rows - 1; ty++) {
       for (let tx = 1; tx < map.cols - 1; tx++) {
@@ -99,7 +106,7 @@ export class MonsterSystem {
    */
   update(delta, player, bombs) {
     for (const monster of this.monsters.slice()) {
-      monster.update(delta, this.scene?.map, bombs);
+      monster.update(delta, this.map, bombs);
       
       // Check collision with player
       if (player && this.isMonsterOnPlayer(monster, player)) {
@@ -192,7 +199,7 @@ export class MonsterSystem {
    */
   destroy() {
     this.clear();
-    this.scene = null;
+    this.map = null;
     this.gameContainer = null;
   }
 }

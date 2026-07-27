@@ -19,7 +19,7 @@ import { ExplosionSystem } from './systems/ExplosionSystem.js';
 import { PowerupSystem } from './systems/PowerupSystem.js';
 import { MonsterSystem } from './systems/MonsterSystem.js';
 import { CollisionSystem } from './systems/CollisionSystem.js';
-import { GameEvents } from './engine/EventBus.js';
+import { globalEventBus, GameEvents } from './engine/EventBus.js';
 
 export class Game {
   constructor(app) {
@@ -76,21 +76,15 @@ export class Game {
     this.gameContainer.addChild(this.map.container);
 
     // Initialize systems
-    this.bombSystem = new BombSystem();
-    this.bombSystem.setScene({ getContainer: () => this.gameContainer, map: this.map });
+    this.bombSystem = new BombSystem(globalEventBus, this.map, this.gameContainer);
     
-    this.explosionSystem = new ExplosionSystem();
-    this.explosionSystem.setScene({ getContainer: () => this.gameContainer, map: this.map });
-    this.explosionSystem.setMap(this.map); // Set map directly for wall/destructible checks
+    this.explosionSystem = new ExplosionSystem(globalEventBus, this.map, this.gameContainer);
     
-    this.powerupSystem = new PowerupSystem();
-    this.powerupSystem.setScene({ getContainer: () => this.gameContainer });
+    this.powerupSystem = new PowerupSystem(globalEventBus, this.gameContainer);
     
-    this.monsterSystem = new MonsterSystem();
-    this.monsterSystem.setScene({ getContainer: () => this.gameContainer, map: this.map });
+    this.monsterSystem = new MonsterSystem(globalEventBus, this.map, this.gameContainer);
     
-    this.collisionSystem = new CollisionSystem();
-    this.collisionSystem.setScene({ map: this.map });
+    this.collisionSystem = new CollisionSystem(globalEventBus, this.map);
 
     // Initialize input manager
     this.inputManager.bind();
@@ -139,12 +133,12 @@ export class Game {
         this.playerFrames = frames;
         this.playerMapping = mapping;
         console.log('Game: Player spritesheet loaded');
-        this.player = new Player(startX, startY, this.tileSize, frames, mapping);
+        this.player = new Player(startX, startY, this.tileSize, frames, mapping, this.gameState);
         this.gameContainer.addChild(this.player.sprite);
       })
       .catch((err) => {
         console.warn('Could not load player spritesheet, using placeholder. Error:', err);
-        this.player = new Player(startX, startY, this.tileSize);
+        this.player = new Player(startX, startY, this.tileSize, null, null, this.gameState);
         this.gameContainer.addChild(this.player.sprite);
       });
 

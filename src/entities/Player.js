@@ -4,18 +4,18 @@ import { GAME_CONFIG } from '../config/Constants.js';
 export class Player {
   // textures: optional array of PIXI.Texture frames
   // mapping: optional animation mapping object
-  constructor(x, y, tileSize = GAME_CONFIG.TILE_SIZE, textures = null, mapping = null) {
+  constructor(x, y, tileSize = GAME_CONFIG.TILE_SIZE, textures = null, mapping = null, gameState = null) {
     this.tileSize = tileSize;
     this.spriteScale = GAME_CONFIG.PLAYER_SPRITE_SCALE;
     this.baseSpeed = GAME_CONFIG.PLAYER_BASE_SPEED;
     this.speed = this.baseSpeed; // pixels per tick (multiplied by delta)
-    this.speedPowerups = 0;
     this.halfSize = this.tileSize / 2;
     this.hitboxSize = GAME_CONFIG.PLAYER_HITBOX_SIZE;
     this.collisionHalf = Math.floor(this.hitboxSize / 2);
 
     this.textures = textures;
     this.mapping = mapping;
+    this.gameState = gameState; // Reference to GameState for reading state
 
     if (this.textures && this.mapping) {
       // create an AnimatedSprite using the idle frame by default
@@ -37,26 +37,74 @@ export class Player {
     this.sprite.x = x;
     this.sprite.y = y;
 
-    this.lives = GAME_CONFIG.PLAYER_STARTING_LIVES;
+    // Visual/animation state only (game state is in GameState)
     this._facing = 'down';
     this.blinkTimer = 0;
     this.isBlinking = false;
     this.blinkDuration = GAME_CONFIG.PLAYER_BLINK_DURATION;
-    this.maxBombs = GAME_CONFIG.PLAYER_STARTING_BOMBS;
-    this.activeBombs = 0; // Currently active bombs
-    this.explosionRange = GAME_CONFIG.PLAYER_STARTING_RANGE;
-    this.canPierceBlocks = false; // Explosions can pass through blocks
-    this.hasKickBomb = false;
-    this.hasThrowBomb = false;
-    this.hasCrossBlock = false; // Can cross blocks
-    this.hasCrossBomb = false; // Can cross bombs
-    this.hasFollowerBomb = false; // Follower bomb - follows enemies
-    this.hasLandMine = false; // Land mine - triggered by stepping on it
+  }
+
+  // Getters for player state from GameState
+  get lives() {
+    return this.gameState?.playerState?.lives ?? GAME_CONFIG.PLAYER_STARTING_LIVES;
+  }
+
+  get maxBombs() {
+    return this.gameState?.playerState?.maxBombs ?? GAME_CONFIG.PLAYER_STARTING_BOMBS;
+  }
+
+  get activeBombs() {
+    return this.gameState?.playerState?.activeBombs ?? 0;
+  }
+
+  set activeBombs(value) {
+    if (this.gameState) {
+      this.gameState.playerState.activeBombs = value;
+    }
+  }
+
+  get explosionRange() {
+    return this.gameState?.playerState?.explosionRange ?? GAME_CONFIG.PLAYER_STARTING_RANGE;
+  }
+
+  get speedPowerups() {
+    return this.gameState?.playerState?.speedPowerups ?? 0;
+  }
+
+  get canPierceBlocks() {
+    return this.gameState?.playerState?.canPierceBlocks ?? false;
+  }
+
+  get hasKickBomb() {
+    return this.gameState?.playerState?.hasKickBomb ?? false;
+  }
+
+  get hasThrowBomb() {
+    return this.gameState?.playerState?.hasThrowBomb ?? false;
+  }
+
+  get hasCrossBlock() {
+    return this.gameState?.playerState?.hasCrossBlock ?? false;
+  }
+
+  get hasCrossBomb() {
+    return this.gameState?.playerState?.hasCrossBomb ?? false;
+  }
+
+  get hasFollowerBomb() {
+    return this.gameState?.playerState?.hasFollowerBomb ?? false;
+  }
+
+  get hasLandMine() {
+    return this.gameState?.playerState?.hasLandMine ?? false;
   }
 
   takeDamage() {
     if (this.lives <= 0 || this.isBlinking) return false;
-    this.lives -= 1;
+    // Update GameState instead of local state
+    if (this.gameState) {
+      this.gameState.playerState.lives -= 1;
+    }
     this.startBlink();
     return this.lives > 0;
   }

@@ -5,18 +5,18 @@ import { globalEventBus, GameEvents } from '../engine/EventBus.js';
  * CollisionSystem - Handles collision detection between entities and tiles
  */
 export class CollisionSystem {
-  constructor(eventBus = globalEventBus) {
+  constructor(eventBus = globalEventBus, map = null) {
     this.eventBus = eventBus;
+    this.map = map;
     this.tileSize = GAME_CONFIG.TILE_SIZE;
-    this.scene = null;
   }
 
   /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
+   * Set the map for this system
+   * @param {Object} map - TileMap instance
    */
-  setScene(scene) {
-    this.scene = scene;
+  setMap(map) {
+    this.map = map;
   }
 
   /**
@@ -81,8 +81,8 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isTileBlocked(tx, ty) {
-    if (!this.scene || !this.scene.map) return true;
-    return this.scene.map.isBlocked(tx, ty);
+    if (!this.map) return true;
+    return this.map.isBlocked(tx, ty);
   }
 
   /**
@@ -92,8 +92,8 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isTileWall(tx, ty) {
-    if (!this.scene || !this.scene.map) return true;
-    return this.scene.map.isWall(tx, ty);
+    if (!this.map) return true;
+    return this.map.isWall(tx, ty);
   }
 
   /**
@@ -103,8 +103,8 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isTileDestructible(tx, ty) {
-    if (!this.scene || !this.scene.map) return false;
-    return this.scene.map.isDestructible(tx, ty);
+    if (!this.map) return false;
+    return this.map.isDestructible(tx, ty);
   }
 
   /**
@@ -219,16 +219,16 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isValidTileCoord(tx, ty) {
-    if (!this.scene || !this.scene.map) return false;
+    if (!this.map) return false;
     return Number.isInteger(tx) && Number.isInteger(ty) && 
            tx >= 0 && ty >= 0 && 
-           tx < this.scene.map.cols && ty < this.scene.map.rows;
+           tx < this.map.cols && ty < this.map.rows;
   }
 
   /**
    * Called when system is destroyed
    */
   destroy() {
-    this.scene = null;
+    this.map = null;
   }
 }

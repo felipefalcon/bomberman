@@ -6,30 +6,29 @@ import { globalEventBus, GameEvents } from '../engine/EventBus.js';
  * ExplosionSystem - Manages explosions, damage, and visual effects
  */
 export class ExplosionSystem {
-  constructor(eventBus = globalEventBus) {
+  constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
     this.eventBus = eventBus;
+    this.map = map;
+    this.gameContainer = gameContainer;
     this.explosions = [];
     this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.explosionDuration = GAME_CONFIG.EXPLOSION_DURATION;
-    this.scene = null;
-    this.gameContainer = null;
   }
 
   /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
-   */
-  setScene(scene) {
-    this.scene = scene;
-    this.gameContainer = scene.getContainer();
-  }
-
-  /**
-   * Set the map directly for wall/destructible checks
+   * Set the map for this system
    * @param {Object} map - TileMap instance
    */
   setMap(map) {
     this.map = map;
+  }
+
+  /**
+   * Set the game container for this system
+   * @param {PIXI.Container} container - Game container
+   */
+  setGameContainer(container) {
+    this.gameContainer = container;
   }
 
   /**
@@ -254,9 +253,8 @@ export class ExplosionSystem {
    * @returns {boolean}
    */
   isWall(tx, ty) {
-    if (this.map) return this.map.isWall(tx, ty);
-    if (!this.scene || !this.scene.map) return true;
-    return this.scene.map.isWall(tx, ty);
+    if (!this.map) return true;
+    return this.map.isWall(tx, ty);
   }
 
   /**
@@ -266,9 +264,8 @@ export class ExplosionSystem {
    * @returns {boolean}
    */
   isDestructible(tx, ty) {
-    if (this.map) return this.map.isDestructible(tx, ty);
-    if (!this.scene || !this.scene.map) return false;
-    return this.scene.map.isDestructible(tx, ty);
+    if (!this.map) return false;
+    return this.map.isDestructible(tx, ty);
   }
 
   /**
@@ -296,7 +293,7 @@ export class ExplosionSystem {
    */
   destroy() {
     this.clear();
-    this.scene = null;
+    this.map = null;
     this.gameContainer = null;
   }
 }

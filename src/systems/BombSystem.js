@@ -6,24 +6,31 @@ import { globalEventBus, GameEvents } from '../engine/EventBus.js';
  * BombSystem - Manages bomb placement, timing, and explosion triggers
  */
 export class BombSystem {
-  constructor(eventBus = globalEventBus) {
+  constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
     this.eventBus = eventBus;
+    this.map = map;
+    this.gameContainer = gameContainer;
     this.bombs = [];
     this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.bombFuseTicks = GAME_CONFIG.BOMB_FUSE_TICKS;
     this.bombFrames = null;
     this.bombMapping = null;
-    this.scene = null;
-    this.gameContainer = null;
   }
 
   /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
+   * Set the map for this system
+   * @param {Object} map - TileMap instance
    */
-  setScene(scene) {
-    this.scene = scene;
-    this.gameContainer = scene.getContainer();
+  setMap(map) {
+    this.map = map;
+  }
+
+  /**
+   * Set the game container for this system
+   * @param {PIXI.Container} container - Game container
+   */
+  setGameContainer(container) {
+    this.gameContainer = container;
   }
 
   /**
@@ -135,8 +142,8 @@ export class BombSystem {
    * @returns {boolean}
    */
   isTileBlocked(tx, ty) {
-    if (!this.scene || !this.scene.map) return true;
-    return this.scene.map.isBlocked(tx, ty);
+    if (!this.map) return true;
+    return this.map.isBlocked(tx, ty);
   }
 
   /**
@@ -433,8 +440,8 @@ export class BombSystem {
         // Check if current target is blocked (by walls/blocks OR other bombs)
         const hasBombAtTarget = this.bombs.some(b => b !== bomb && b.tx === lastTile.tx && b.ty === lastTile.ty);
         if (this.isTileBlocked(lastTile.tx, lastTile.ty) || hasBombAtTarget) {
-          const mapCols = this.scene.map.cols;
-          const mapRows = this.scene.map.rows;
+          const mapCols = this.map.cols;
+          const mapRows = this.map.rows;
 
           // Calculate next tile in same direction
           let nextTx = lastTile.tx + bomb.throwDx;
@@ -487,8 +494,8 @@ export class BombSystem {
 
       const endTile = bomb.throwPath[currentSegment];
 
-      const mapCols = this.scene.map.cols;
-      const mapRows = this.scene.map.rows;
+      const mapCols = this.map.cols;
+      const mapRows = this.map.rows;
 
       // Check if we're wrapping (going from out of bounds to in bounds)
       const isWrappingX = (startTx < 0 || startTx >= mapCols) && (endTile.tx >= 0 && endTile.tx < mapCols);
@@ -631,8 +638,8 @@ export class BombSystem {
   }
 
   _isValidTileCoord(tx, ty) {
-    if (!this.scene || !this.scene.map) return false;
-    return tx >= 0 && ty >= 0 && tx < this.scene.map.cols && ty < this.scene.map.rows;
+    if (!this.map) return false;
+    return tx >= 0 && ty >= 0 && tx < this.map.cols && ty < this.map.rows;
   }
 
   /**
@@ -915,8 +922,8 @@ export class BombSystem {
     if (Math.abs(dx) + Math.abs(dy) !== 1)
       return false;
 
-    const mapCols = this.scene.map.cols;
-    const mapRows = this.scene.map.rows;
+    const mapCols = this.map.cols;
+    const mapRows = this.map.rows;
 
     // Save start position
     bomb.throwStartTx = bomb.tx;
@@ -984,7 +991,7 @@ export class BombSystem {
    */
   destroy() {
     this.clear();
-    this.scene = null;
+    this.map = null;
     this.gameContainer = null;
   }
 }

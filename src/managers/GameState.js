@@ -29,6 +29,8 @@ export class GameState {
       hasThrowBomb: false,
       hasCrossBlock: false,
       hasCrossBomb: false,
+      hasFollowerBomb: false,
+      hasLandMine: false,
     };
     
     // Score
@@ -72,6 +74,8 @@ export class GameState {
       hasThrowBomb: false,
       hasCrossBlock: false,
       hasCrossBomb: false,
+      hasFollowerBomb: false,
+      hasLandMine: false,
     };
     
     this.score = 0;
@@ -160,41 +164,10 @@ export class GameState {
   handlePowerupCollect(data) {
     const { type } = data;
     
-    switch(type) {
-      case 'speed':
-        this.playerState.speedPowerups += 1;
-        break;
-      case 'bomb':
-        this.playerState.maxBombs += 1;
-        break;
-      case 'range':
-        this.playerState.explosionRange += 1;
-        break;
-      case 'pierce':
-        this.playerState.canPierceBlocks = true;
-        break;
-      case 'kick_bomb':
-        this.playerState.hasKickBomb = true;
-        break;
-      case 'throw_bomb':
-        this.playerState.hasThrowBomb = true;
-        break;
-      case 'cross_block':
-        this.playerState.hasCrossBlock = true;
-        break;
-      case 'cross_bomb':
-        this.playerState.hasCrossBomb = true;
-        break;
-      case 'follower_bomb':
-        this.playerState.hasFollowerBomb = true;
-        break;
-      case 'land_mine':
-        this.playerState.hasLandMine = true;
-        break;
-      case 'extra_life':
-        this.playerState.lives += 1;
-        this.eventBus.emit(GameEvents.UI_UPDATE_LIVES, { value: this.playerState.lives });
-        break;
+    // Powerup effects are now applied directly by PowerupSystem
+    // This handler only emits UI updates
+    if (type === 'extra_life') {
+      this.eventBus.emit(GameEvents.UI_UPDATE_LIVES, { value: this.playerState.lives });
     }
     
     this.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.playerState });

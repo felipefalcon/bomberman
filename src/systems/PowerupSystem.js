@@ -6,24 +6,22 @@ import { Powerup } from '../entities/Powerup.js';
  * PowerupSystem - Manages powerup spawning, collection, and effects
  */
 export class PowerupSystem {
-  constructor(eventBus = globalEventBus) {
+  constructor(eventBus = globalEventBus, gameContainer = null) {
     this.eventBus = eventBus;
+    this.gameContainer = gameContainer;
     this.powerups = [];
     this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.spawnChance = GAME_CONFIG.POWERUP_SPAWN_CHANCE;
     this.itemFrames = null;
     this.itemMapping = null;
-    this.scene = null;
-    this.gameContainer = null;
   }
 
   /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
+   * Set the game container for this system
+   * @param {PIXI.Container} container - Game container
    */
-  setScene(scene) {
-    this.scene = scene;
-    this.gameContainer = scene.getContainer();
+  setGameContainer(container) {
+    this.gameContainer = container;
   }
 
   /**
@@ -115,39 +113,61 @@ export class PowerupSystem {
     switch(type) {
       case POWERUP_TYPES.SPEED:
         player.speed *= 1.2; // 20% speed boost
-        player.speedPowerups += 1;
+        if (player.gameState) {
+          player.gameState.playerState.speedPowerups += 1;
+        }
         break;
       case POWERUP_TYPES.BOMB:
-        player.maxBombs += 1;
+        if (player.gameState) {
+          player.gameState.playerState.maxBombs += 1;
+        }
         break;
       case POWERUP_TYPES.RANGE:
-        player.explosionRange += 1;
+        if (player.gameState) {
+          player.gameState.playerState.explosionRange += 1;
+        }
         break;
       case POWERUP_TYPES.PIERCE:
-        player.canPierceBlocks = true;
+        if (player.gameState) {
+          player.gameState.playerState.canPierceBlocks = true;
+        }
         break;
       case POWERUP_TYPES.KICK_BOMB:
-        player.hasKickBomb = true;
+        if (player.gameState) {
+          player.gameState.playerState.hasKickBomb = true;
+        }
         break;
       case POWERUP_TYPES.THROW_BOMB:
-        player.hasThrowBomb = true;
+        if (player.gameState) {
+          player.gameState.playerState.hasThrowBomb = true;
+        }
         break;
       case POWERUP_TYPES.CROSS_BLOCK:
-        player.hasCrossBlock = true;
+        if (player.gameState) {
+          player.gameState.playerState.hasCrossBlock = true;
+        }
         break;
       case POWERUP_TYPES.CROSS_BOMB:
-        player.hasCrossBomb = true;
+        if (player.gameState) {
+          player.gameState.playerState.hasCrossBomb = true;
+        }
         break;
       case POWERUP_TYPES.FOLLOWER_BOMB:
-        player.hasFollowerBomb = true;
-        player.hasLandMine = false;
+        if (player.gameState) {
+          player.gameState.playerState.hasFollowerBomb = true;
+          player.gameState.playerState.hasLandMine = false;
+        }
         break;
       case POWERUP_TYPES.LAND_MINE:
-        player.hasLandMine = true;
-        player.hasFollowerBomb = false;
+        if (player.gameState) {
+          player.gameState.playerState.hasLandMine = true;
+          player.gameState.playerState.hasFollowerBomb = false;
+        }
         break;
       case POWERUP_TYPES.EXTRA_LIFE:
-        player.lives += 1;
+        if (player.gameState) {
+          player.gameState.playerState.lives += 1;
+        }
         break;
     }
     
@@ -203,7 +223,6 @@ export class PowerupSystem {
    */
   destroy() {
     this.clear();
-    this.scene = null;
     this.gameContainer = null;
   }
 }
