@@ -1,5 +1,6 @@
 import { AnimatedSprite, Graphics } from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
+import { ComponentManager } from '../components/ComponentManager.js';
 
 export class Player {
   // textures: optional array of PIXI.Texture frames
@@ -16,6 +17,9 @@ export class Player {
     this.textures = textures;
     this.mapping = mapping;
     this.gameState = gameState; // Reference to GameState for reading state
+    
+    // Component system for powerups
+    this.componentManager = new ComponentManager();
 
     if (this.textures && this.mapping) {
       // create an AnimatedSprite using the idle frame by default
@@ -72,31 +76,31 @@ export class Player {
   }
 
   get canPierceBlocks() {
-    return this.gameState?.playerState?.canPierceBlocks ?? false;
+    return (this.componentManager.hasComponent('pierce') || this.gameState?.playerState?.canPierceBlocks) ?? false;
   }
 
   get hasKickBomb() {
-    return this.gameState?.playerState?.hasKickBomb ?? false;
+    return (this.componentManager.hasComponent('kick_bomb') || this.gameState?.playerState?.hasKickBomb) ?? false;
   }
 
   get hasThrowBomb() {
-    return this.gameState?.playerState?.hasThrowBomb ?? false;
+    return (this.componentManager.hasComponent('throw_bomb') || this.gameState?.playerState?.hasThrowBomb) ?? false;
   }
 
   get hasCrossBlock() {
-    return this.gameState?.playerState?.hasCrossBlock ?? false;
+    return (this.componentManager.hasComponent('cross_block') || this.gameState?.playerState?.hasCrossBlock) ?? false;
   }
 
   get hasCrossBomb() {
-    return this.gameState?.playerState?.hasCrossBomb ?? false;
+    return (this.componentManager.hasComponent('cross_bomb') || this.gameState?.playerState?.hasCrossBomb) ?? false;
   }
 
   get hasFollowerBomb() {
-    return this.gameState?.playerState?.hasFollowerBomb ?? false;
+    return (this.componentManager.hasComponent('follower_bomb') || this.gameState?.playerState?.hasFollowerBomb) ?? false;
   }
 
   get hasLandMine() {
-    return this.gameState?.playerState?.hasLandMine ?? false;
+    return (this.componentManager.hasComponent('land_mine') || this.gameState?.playerState?.hasLandMine) ?? false;
   }
 
   takeDamage() {
