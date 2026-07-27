@@ -248,12 +248,12 @@ export class Game {
     if (this.player) {
       // Use collision system for player movement
       const bombs = this.bombSystem.getBombs();
-      this.player.update(tickDelta, this.keys, this.map, bombs);
+      this.player.update(tickDelta, this.keys, this.map, bombs, this.bombSystem);
       this._processBombInput();
     }
     
     // Update systems
-    this.bombSystem.update(tickDelta, (bomb) => this._explodeBomb(bomb));
+    this.bombSystem.update(tickDelta, (bomb) => this._explodeBomb(bomb), this.monsterSystem.getMonsters(), this.player);
     this.explosionSystem.update(tickDelta, this.player, this.monsterSystem.getMonsters(), this.powerupSystem.getPowerups());
     this.powerupSystem.update(tickDelta, this.player);
     this.monsterSystem.update(tickDelta, this.player, this.bombSystem.getBombs());
@@ -265,9 +265,48 @@ export class Game {
   _processBombInput() {
     const zPressed = !!this.keys['z'];
     if (zPressed && !this.lastZ) {
-      this._placeBomb();
+      this._handleBombAction();
     }
     this.lastZ = zPressed;
+  }
+
+  _handleBombAction() {
+    const tx = Math.floor(this.player.sprite.x / this.tileSize);
+    const ty = Math.floor(this.player.sprite.y / this.tileSize);
+
+    // Check if player has throw_bomb powerup and is standing on a bomb
+    if (this.player.hasThrowBomb) {
+      const bomb = this.bombSystem.getBombAt(tx, ty);
+      if (bomb) {
+        // Throw the bomb in player's facing direction
+        this._throwBomb(bomb);
+        return;
+      }
+    }
+
+    // Otherwise, place a new bomb
+    this.bombSystem.placeBomb(tx, ty, this.player, this.monsterSystem.getMonsters());
+  }
+
+  _throwBomb(bomb) {
+    // Determine throw direction based on player's facing direction
+    let dx = 0, dy = 0;
+    switch (this.player._facing) {
+      case 'up':
+        dy = -1;
+        break;
+      case 'down':
+        dy = 1;
+        break;
+      case 'left':
+        dx = -1;
+        break;
+      case 'right':
+        dx = 1;
+        break;
+    }
+
+    this.bombSystem.throwBomb(bomb, dx, dy);
   }
 
   _placeBomb() {

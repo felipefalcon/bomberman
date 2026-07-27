@@ -126,11 +126,28 @@ export class PowerupSystem {
       case POWERUP_TYPES.PIERCE:
         player.canPierceBlocks = true;
         break;
-      case POWERUP_TYPES.SHIELD:
-        player.hasShield = true;
+      case POWERUP_TYPES.KICK_BOMB:
+        player.hasKickBomb = true;
         break;
-      case POWERUP_TYPES.DETONATOR:
-        player.hasDetonator = true;
+      case POWERUP_TYPES.THROW_BOMB:
+        player.hasThrowBomb = true;
+        break;
+      case POWERUP_TYPES.CROSS_BLOCK:
+        player.hasCrossBlock = true;
+        break;
+      case POWERUP_TYPES.CROSS_BOMB:
+        player.hasCrossBomb = true;
+        break;
+      case POWERUP_TYPES.FOLLOWER_BOMB:
+        player.hasFollowerBomb = true;
+        player.hasLandMine = false;
+        break;
+      case POWERUP_TYPES.LAND_MINE:
+        player.hasLandMine = true;
+        player.hasFollowerBomb = false;
+        break;
+      case POWERUP_TYPES.EXTRA_LIFE:
+        player.lives += 1;
         break;
     }
     

@@ -25,8 +25,10 @@ export class GameState {
       explosionRange: GAME_CONFIG.PLAYER_STARTING_RANGE,
       speedPowerups: 0,
       canPierceBlocks: false,
-      hasShield: false,
-      hasDetonator: false,
+      hasKickBomb: false,
+      hasThrowBomb: false,
+      hasCrossBlock: false,
+      hasCrossBomb: false,
     };
     
     // Score
@@ -66,8 +68,10 @@ export class GameState {
       explosionRange: GAME_CONFIG.PLAYER_STARTING_RANGE,
       speedPowerups: 0,
       canPierceBlocks: false,
-      hasShield: false,
-      hasDetonator: false,
+      hasKickBomb: false,
+      hasThrowBomb: false,
+      hasCrossBlock: false,
+      hasCrossBomb: false,
     };
     
     this.score = 0;
@@ -169,11 +173,27 @@ export class GameState {
       case 'pierce':
         this.playerState.canPierceBlocks = true;
         break;
-      case 'shield':
-        this.playerState.hasShield = true;
+      case 'kick_bomb':
+        this.playerState.hasKickBomb = true;
         break;
-      case 'detonator':
-        this.playerState.hasDetonator = true;
+      case 'throw_bomb':
+        this.playerState.hasThrowBomb = true;
+        break;
+      case 'cross_block':
+        this.playerState.hasCrossBlock = true;
+        break;
+      case 'cross_bomb':
+        this.playerState.hasCrossBomb = true;
+        break;
+      case 'follower_bomb':
+        this.playerState.hasFollowerBomb = true;
+        break;
+      case 'land_mine':
+        this.playerState.hasLandMine = true;
+        break;
+      case 'extra_life':
+        this.playerState.lives += 1;
+        this.eventBus.emit(GameEvents.UI_UPDATE_LIVES, { value: this.playerState.lives });
         break;
     }
     

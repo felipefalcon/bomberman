@@ -72,8 +72,13 @@ export async function loadBombSprite() {
     const bombFrames = [0, 1, 2];
     const pingPongFrames = bombFrames.concat(bombFrames.slice(1, -1).reverse()); // [0, 1, 2, 1]
 
+    // Create follower bomb animation with frames 10, 11, 12, 13
+    const followerBombFrames = [10, 11, 12, 13];
+
     const mapping = {
-      bomb: pingPongFrames
+      bomb: pingPongFrames,
+      follower_bomb: followerBombFrames,
+      land_mine: [6] // Land mine - single sprite, no animation
     };
 
     return { frames, mapping };

@@ -149,13 +149,33 @@ export class HudManager {
         withText: false,
       },
       {
-        key: 'shield',
-        fallbackDraw: () => this.drawShieldIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        key: 'kick_bomb',
+        fallbackDraw: () => this.drawKickBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
       {
-        key: 'detonator',
-        fallbackDraw: () => this.drawDetonatorIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        key: 'throw_bomb',
+        fallbackDraw: () => this.drawThrowBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
+      {
+        key: 'cross_block',
+        fallbackDraw: () => this.drawCrossBlockIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
+      {
+        key: 'cross_bomb',
+        fallbackDraw: () => this.drawCrossBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
+      {
+        key: 'follower_bomb',
+        fallbackDraw: () => this.drawFollowerBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        withText: false,
+      },
+      {
+        key: 'land_mine',
+        fallbackDraw: () => this.drawLandMineIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
     ];
@@ -294,8 +314,12 @@ export class HudManager {
     this.setPowerupSlotState('range', `${player.explosionRange}`, true);
     this.setPowerupSlotState('speed', `${player.speedPowerups}`, player.speedPowerups > 0);
     this.setPowerupSlotState('pierce', '', player.canPierceBlocks);
-    this.setPowerupSlotState('shield', '', player.hasShield);
-    this.setPowerupSlotState('detonator', '', player.hasDetonator);
+    this.setPowerupSlotState('kick_bomb', '', player.hasKickBomb);
+    this.setPowerupSlotState('throw_bomb', '', player.hasThrowBomb);
+    this.setPowerupSlotState('cross_block', '', player.hasCrossBlock);
+    this.setPowerupSlotState('cross_bomb', '', player.hasCrossBomb);
+    this.setPowerupSlotState('follower_bomb', '', player.hasFollowerBomb);
+    this.setPowerupSlotState('land_mine', '', player.hasLandMine);
   }
 
   /**
@@ -432,27 +456,6 @@ export class HudManager {
     return g;
   }
 
-  drawShieldIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.moveTo(cx, cy - 7);
-    g.lineTo(cx + 6, cy - 4);
-    g.lineTo(cx + 5, cy + 3);
-    g.lineTo(cx, cy + 7);
-    g.lineTo(cx - 5, cy + 3);
-    g.lineTo(cx - 6, cy - 4);
-    g.lineTo(cx, cy - 7);
-    g.fill(0x4fc3f7);
-    g.moveTo(cx, cy - 4);
-    g.lineTo(cx + 3, cy - 2);
-    g.lineTo(cx + 2, cy + 2);
-    g.lineTo(cx, cy + 4);
-    g.lineTo(cx - 2, cy + 2);
-    g.lineTo(cx - 3, cy - 2);
-    g.lineTo(cx, cy - 4);
-    g.fill(0xe8f7ff);
-    return g;
-  }
-
   drawSpeedIcon(cx, cy) {
     const g = new PIXI.Graphics();
     g.moveTo(cx - 2, cy - 8);
@@ -466,7 +469,67 @@ export class HudManager {
     return g;
   }
 
-  drawDetonatorIcon(cx, cy) {
+  drawKickBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.rect(cx - 6, cy - 4, 12, 8);
+    g.fill(0xc7d0d8);
+    g.rect(cx - 2, cy - 8, 4, 4);
+    g.fill(0xe65a3a);
+    g.moveTo(cx + 2, cy - 8);
+    g.lineTo(cx + 6, cy - 12);
+    g.stroke({ color: 0xf0c54e, width: 1.5 });
+    return g;
+  }
+
+  drawThrowBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.rect(cx - 6, cy - 4, 12, 8);
+    g.fill(0xc7d0d8);
+    g.rect(cx - 2, cy - 8, 4, 4);
+    g.fill(0xe65a3a);
+    g.moveTo(cx + 2, cy - 8);
+    g.lineTo(cx + 6, cy - 12);
+    g.stroke({ color: 0xf0c54e, width: 1.5 });
+    return g;
+  }
+
+  drawCrossBlockIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.rect(cx - 6, cy - 4, 12, 8);
+    g.fill(0xc7d0d8);
+    g.rect(cx - 2, cy - 8, 4, 4);
+    g.fill(0xe65a3a);
+    g.moveTo(cx + 2, cy - 8);
+    g.lineTo(cx + 6, cy - 12);
+    g.stroke({ color: 0xf0c54e, width: 1.5 });
+    return g;
+  }
+
+  drawCrossBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.rect(cx - 6, cy - 4, 12, 8);
+    g.fill(0xc7d0d8);
+    g.rect(cx - 2, cy - 8, 4, 4);
+    g.fill(0xe65a3a);
+    g.moveTo(cx + 2, cy - 8);
+    g.lineTo(cx + 6, cy - 12);
+    g.stroke({ color: 0xf0c54e, width: 1.5 });
+    return g;
+  }
+
+  drawFollowerBombIcon(cx, cy) {
+    const g = new PIXI.Graphics();
+    g.rect(cx - 6, cy - 4, 12, 8);
+    g.fill(0xc7d0d8);
+    g.rect(cx - 2, cy - 8, 4, 4);
+    g.fill(0xe65a3a);
+    g.moveTo(cx + 2, cy - 8);
+    g.lineTo(cx + 6, cy - 12);
+    g.stroke({ color: 0xf0c54e, width: 1.5 });
+    return g;
+  }
+
+  drawLandMineIcon(cx, cy) {
     const g = new PIXI.Graphics();
     g.rect(cx - 6, cy - 4, 12, 8);
     g.fill(0xc7d0d8);

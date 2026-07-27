@@ -40,7 +40,7 @@ export const GAME_CONFIG = {
     SIDEBAR: {
       SLOT_START_X: 2,
       SLOT_START_Y: 0,
-      SLOT_GAP_Y: 28,
+      SLOT_GAP_Y: 26,
       POWERUP_ICON_X: 8,
       POWERUP_ICON_Y: 9,
       SLOT_TEXT_X: 7,
@@ -57,6 +57,7 @@ export const GAME_CONFIG = {
   
   // Game timing
   BOMB_FUSE_TICKS: 180, // 3 seconds at 60 FPS
+  LAND_MINE_TRIGGER_TICKS: 140, // 3 seconds for land mine to explode after being triggered
   TIME_REMAINING: 200, // seconds
   
   // Player settings
@@ -94,6 +95,12 @@ export const GAME_CONFIG = {
   EXPLOSION_SOUND_TICKS: 40, // ticks before explosion to play sound
   EXPLOSION_DAMAGE_WARNING_TICKS: 30, // ticks to play damage warning
   
+  // Bomb slide settings
+  BOMB_SLIDE_SPEED: 4, // pixels per tick
+  
+  // Follower bomb settings
+  BOMB_FOLLOW_SPEED: 2, // pixels per tick
+  
   // Block destruction animation
   BLOCK_DESTRUCTION_DURATION: 15, // ticks
   
@@ -104,7 +111,7 @@ export const GAME_CONFIG = {
   MUSIC_VOLUME: 0.3,
   SOUND_EFFECT_VOLUME: 0.7,
   SOUND_POOL_SIZE: 5,
-  AUDIO_START_MUTED: false,
+  AUDIO_START_MUTED: true,
   
   // Asset paths
   ASSETS_PATH: `${import.meta.env.BASE_URL}assets/`,
@@ -130,8 +137,13 @@ export const POWERUP_TYPES = {
   BOMB: 'bomb',
   RANGE: 'range',
   PIERCE: 'pierce',
-  SHIELD: 'shield',
-  DETONATOR: 'detonator',
+  KICK_BOMB: 'kick_bomb',
+  THROW_BOMB: 'throw_bomb',
+  CROSS_BLOCK: 'cross_block',
+  CROSS_BOMB: 'cross_bomb',
+  FOLLOWER_BOMB: 'follower_bomb',
+  LAND_MINE: 'land_mine',
+  EXTRA_LIFE: 'extra_life',
 };
 
 // Directions
