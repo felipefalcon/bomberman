@@ -177,6 +177,8 @@ export class TileMap {
     const blockSprite = this.spriteMap.get(spriteKey);
     
     if (blockSprite) {
+      // Remove sprite from container
+      this.container.removeChild(blockSprite);
       // Mark as destroyed but keep sprite for animation
       this.spriteMap.delete(spriteKey);
     }

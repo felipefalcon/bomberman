@@ -1,29 +1,19 @@
 import { GAME_CONFIG, POWERUP_TYPES } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { Powerup } from '../entities/Powerup.js';
+import { BaseGameSystem } from './BaseGameSystem.js';
+import { spriteToTile } from '../utils/tileUtils.js';
 
 /**
  * PowerupSystem - Manages powerup spawning, collection, and effects
  */
-export class PowerupSystem {
-  constructor(eventBus = globalEventBus) {
-    this.eventBus = eventBus;
+export class PowerupSystem extends BaseGameSystem {
+  constructor(eventBus = globalEventBus, gameContainer = null) {
+    super(eventBus, null, gameContainer);
     this.powerups = [];
-    this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.spawnChance = GAME_CONFIG.POWERUP_SPAWN_CHANCE;
     this.itemFrames = null;
     this.itemMapping = null;
-    this.scene = null;
-    this.gameContainer = null;
-  }
-
-  /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
-   */
-  setScene(scene) {
-    this.scene = scene;
-    this.gameContainer = scene.getContainer();
   }
 
   /**
@@ -46,8 +36,8 @@ export class PowerupSystem {
     if (Math.random() > this.spawnChance) return;
     if (!this.itemFrames || !this.itemMapping) return;
     
-    const powerupTypes = Object.keys(this.itemMapping);
-    const randomType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+    // Weighted random selection based on rarity
+    const randomType = this._getRandomPowerupType();
     const frameIndex = this.itemMapping[randomType];
     
     const powerup = new Powerup(tx, ty, this.tileSize, randomType, this.itemFrames[frameIndex]);
@@ -57,6 +47,50 @@ export class PowerupSystem {
     this.gameContainer.addChild(powerup.sprite);
     
     this.eventBus.emit(GameEvents.POWERUP_SPAWN, { tx, ty, type: randomType });
+  }
+
+  /**
+   * Get a random powerup type based on rarity weights
+   * @returns {string} Powerup type
+   */
+  _getRandomPowerupType() {
+    // Powerup rarity weights (higher = more common)
+    const weights = {
+      range: 25,      // Common
+      pierce: 15,     // Uncommon
+      bomb: 25,       // Common
+      speed: 20,      // Common
+      kick_bomb: 8,   // Rare
+      throw_bomb: 8,  // Rare
+      cross_block: 5,  // Very rare
+      cross_bomb: 5,  // Very rare
+      follower_bomb: 3, // Extremely rare
+      land_mine: 3,   // Extremely rare
+      extra_life: 2,  // Legendary
+    };
+    
+    // Filter to only available powerup types
+    const availableTypes = Object.keys(this.itemMapping);
+    const filteredWeights = {};
+    let totalWeight = 0;
+    
+    for (const type of availableTypes) {
+      const weight = weights[type] || 5; // Default weight if not defined
+      filteredWeights[type] = weight;
+      totalWeight += weight;
+    }
+    
+    // Weighted random selection
+    let random = Math.random() * totalWeight;
+    for (const type of availableTypes) {
+      random -= filteredWeights[type];
+      if (random <= 0) {
+        return type;
+      }
+    }
+    
+    // Fallback to first available type
+    return availableTypes[0];
   }
 
   /**
@@ -88,7 +122,9 @@ export class PowerupSystem {
     }
     
     // Remove collected powerups
-    this.powerups = this.powerups.filter(p => !toRemove.includes(p));
+    if (toRemove.length === 0) return;
+    const removed = new Set(toRemove);
+    this.powerups = this.powerups.filter((powerup) => !removed.has(powerup));
   }
 
   /**
@@ -99,9 +135,9 @@ export class PowerupSystem {
    */
   isPlayerOnPowerup(player, powerup) {
     if (!player || !player.sprite) return false;
-    const playerTx = Math.floor(player.sprite.x / this.tileSize);
-    const playerTy = Math.floor(player.sprite.y / this.tileSize);
-    return powerup.isOnTile(playerTx, playerTy);
+    const playerTile = spriteToTile(player.sprite, this.tileSize);
+    if (!playerTile) return false;
+    return powerup.isOnTile(playerTile.tx, playerTile.ty);
   }
 
   /**
@@ -112,46 +148,84 @@ export class PowerupSystem {
   applyPowerup(player, type) {
     console.log(`Player collected: ${type}`);
     
-    switch(type) {
-      case POWERUP_TYPES.SPEED:
-        player.speed *= 1.2; // 20% speed boost
-        player.speedPowerups += 1;
-        break;
-      case POWERUP_TYPES.BOMB:
-        player.maxBombs += 1;
-        break;
-      case POWERUP_TYPES.RANGE:
-        player.explosionRange += 1;
-        break;
-      case POWERUP_TYPES.PIERCE:
-        player.canPierceBlocks = true;
-        break;
-      case POWERUP_TYPES.KICK_BOMB:
-        player.hasKickBomb = true;
-        break;
-      case POWERUP_TYPES.THROW_BOMB:
-        player.hasThrowBomb = true;
-        break;
-      case POWERUP_TYPES.CROSS_BLOCK:
-        player.hasCrossBlock = true;
-        break;
-      case POWERUP_TYPES.CROSS_BOMB:
-        player.hasCrossBomb = true;
-        break;
-      case POWERUP_TYPES.FOLLOWER_BOMB:
-        player.hasFollowerBomb = true;
-        player.hasLandMine = false;
-        break;
-      case POWERUP_TYPES.LAND_MINE:
-        player.hasLandMine = true;
-        player.hasFollowerBomb = false;
-        break;
-      case POWERUP_TYPES.EXTRA_LIFE:
-        player.lives += 1;
-        break;
+    // Use component manager to apply powerup
+    if (player.componentManager) {
+      player.componentManager.addComponent(type, player, player.gameState);
+    } else {
+      // Fallback to direct state update if component manager not available
+      this._applyDirectStateUpdate(player, type);
     }
     
     this.eventBus.emit(GameEvents.PLAYER_COLLECT_POWERUP, { type, player });
+  }
+
+  /**
+   * Fallback method to apply powerup directly to state
+   * Used if component manager is not available
+   * @param {Object} player - Player entity
+   * @param {string} type - Powerup type
+   */
+  _applyDirectStateUpdate(player, type) {
+    switch(type) {
+      case POWERUP_TYPES.SPEED:
+        player.speed *= 1.2;
+        if (player.gameState) {
+          player.gameState.playerState.speedPowerups += 1;
+        }
+        break;
+      case POWERUP_TYPES.BOMB:
+        if (player.gameState) {
+          player.gameState.playerState.maxBombs += 1;
+        }
+        break;
+      case POWERUP_TYPES.RANGE:
+        if (player.gameState) {
+          player.gameState.playerState.explosionRange += 1;
+        }
+        break;
+      case POWERUP_TYPES.PIERCE:
+        if (player.gameState) {
+          player.gameState.playerState.canPierceBlocks = true;
+        }
+        break;
+      case POWERUP_TYPES.KICK_BOMB:
+        if (player.gameState) {
+          player.gameState.playerState.hasKickBomb = true;
+        }
+        break;
+      case POWERUP_TYPES.THROW_BOMB:
+        if (player.gameState) {
+          player.gameState.playerState.hasThrowBomb = true;
+        }
+        break;
+      case POWERUP_TYPES.CROSS_BLOCK:
+        if (player.gameState) {
+          player.gameState.playerState.hasCrossBlock = true;
+        }
+        break;
+      case POWERUP_TYPES.CROSS_BOMB:
+        if (player.gameState) {
+          player.gameState.playerState.hasCrossBomb = true;
+        }
+        break;
+      case POWERUP_TYPES.FOLLOWER_BOMB:
+        if (player.gameState) {
+          player.gameState.playerState.hasFollowerBomb = true;
+          player.gameState.playerState.hasLandMine = false;
+        }
+        break;
+      case POWERUP_TYPES.LAND_MINE:
+        if (player.gameState) {
+          player.gameState.playerState.hasLandMine = true;
+          player.gameState.playerState.hasFollowerBomb = false;
+        }
+        break;
+      case POWERUP_TYPES.EXTRA_LIFE:
+        if (player.gameState) {
+          player.gameState.playerState.lives += 1;
+        }
+        break;
+    }
   }
 
   /**
@@ -203,7 +277,6 @@ export class PowerupSystem {
    */
   destroy() {
     this.clear();
-    this.scene = null;
-    this.gameContainer = null;
+    super.destroy();
   }
 }

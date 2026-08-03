@@ -1,29 +1,19 @@
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { Monster } from '../entities/Monster.js';
+import { BaseGameSystem } from './BaseGameSystem.js';
+import { spriteToTile } from '../utils/tileUtils.js';
 
 /**
  * MonsterSystem - Manages monster spawning, AI, and updates
  */
-export class MonsterSystem {
-  constructor(eventBus = globalEventBus) {
-    this.eventBus = eventBus;
+export class MonsterSystem extends BaseGameSystem {
+  constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
+    super(eventBus, map, gameContainer);
     this.monsters = [];
-    this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.spawnCount = GAME_CONFIG.MONSTER_SPAWN_COUNT;
     this.enemyFrames = null;
     this.enemyMapping = null;
-    this.scene = null;
-    this.gameContainer = null;
-  }
-
-  /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
-   */
-  setScene(scene) {
-    this.scene = scene;
-    this.gameContainer = scene.getContainer();
   }
 
   /**
@@ -60,10 +50,10 @@ export class MonsterSystem {
    * @returns {Array} Array of {tx, ty} positions
    */
   findMonsterSpawnTiles(count) {
-    if (!this.scene || !this.scene.map) return [];
+    if (!this.map) return [];
     
     const positions = [];
-    const map = this.scene.map;
+    const map = this.map;
     
     for (let ty = 1; ty < map.rows - 1; ty++) {
       for (let tx = 1; tx < map.cols - 1; tx++) {
@@ -99,7 +89,7 @@ export class MonsterSystem {
    */
   update(delta, player, bombs) {
     for (const monster of this.monsters.slice()) {
-      monster.update(delta, this.scene?.map, bombs);
+      monster.update(delta, this.map, bombs);
       
       // Check collision with player
       if (player && this.isMonsterOnPlayer(monster, player)) {
@@ -123,9 +113,9 @@ export class MonsterSystem {
    */
   isMonsterOnPlayer(monster, player) {
     if (!player || !player.sprite) return false;
-    const playerTx = Math.floor(player.sprite.x / this.tileSize);
-    const playerTy = Math.floor(player.sprite.y / this.tileSize);
-    return monster.isOnTile(playerTx, playerTy);
+    const playerTile = spriteToTile(player.sprite, this.tileSize);
+    if (!playerTile) return false;
+    return monster.isOnTile(playerTile.tx, playerTile.ty);
   }
 
   /**
@@ -192,7 +182,6 @@ export class MonsterSystem {
    */
   destroy() {
     this.clear();
-    this.scene = null;
-    this.gameContainer = null;
+    super.destroy();
   }
 }

@@ -8,6 +8,7 @@ import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 export class GameState {
   constructor(eventBus = globalEventBus) {
     this.eventBus = eventBus;
+    this.unsubscribers = [];
     
     // Game status
     this.isRunning = false;
@@ -29,12 +30,15 @@ export class GameState {
       hasThrowBomb: false,
       hasCrossBlock: false,
       hasCrossBomb: false,
+      hasFollowerBomb: false,
+      hasLandMine: false,
     };
     
     // Score
     this.score = 0;
     this.monstersKilled = 0;
     this.blocksDestroyed = 0;
+    this.lastUiSecond = -1;
     
     this.setupEventListeners();
   }
@@ -43,13 +47,13 @@ export class GameState {
    * Setup event listeners for state changes
    */
   setupEventListeners() {
-    this.eventBus.on(GameEvents.PLAYER_DAMAGE, () => this.handlePlayerDamage());
-    this.eventBus.on(GameEvents.MONSTER_DAMAGE_PLAYER, () => this.handlePlayerDamage());
-    this.eventBus.on(GameEvents.PLAYER_DEATH, () => this.handlePlayerDeath());
-    this.eventBus.on(GameEvents.MONSTER_DEATH, () => this.handleMonsterDeath());
-    this.eventBus.on(GameEvents.BLOCK_DESTROY, () => this.handleBlockDestroy());
-    this.eventBus.on(GameEvents.PLAYER_COLLECT_POWERUP, (data) => this.handlePowerupCollect(data));
-    this.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => this.handleExplosionDamage(data));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.PLAYER_DAMAGE, () => this.handlePlayerDamage()));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.MONSTER_DAMAGE_PLAYER, () => this.handlePlayerDamage()));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.PLAYER_DEATH, () => this.handlePlayerDeath()));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.MONSTER_DEATH, () => this.handleMonsterDeath()));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.BLOCK_DESTROY, () => this.handleBlockDestroy()));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.PLAYER_COLLECT_POWERUP, (data) => this.handlePowerupCollect(data)));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => this.handleExplosionDamage(data)));
   }
 
   /**
@@ -72,11 +76,14 @@ export class GameState {
       hasThrowBomb: false,
       hasCrossBlock: false,
       hasCrossBomb: false,
+      hasFollowerBomb: false,
+      hasLandMine: false,
     };
     
     this.score = 0;
     this.monstersKilled = 0;
     this.blocksDestroyed = 0;
+    this.lastUiSecond = -1;
     
     this.eventBus.emit(GameEvents.GAME_START);
   }
@@ -92,8 +99,11 @@ export class GameState {
     if (this.timeRemaining > 0) {
       this.timeRemaining -= delta / 60;
       if (this.timeRemaining < 0) this.timeRemaining = 0;
-      
-      this.eventBus.emit(GameEvents.UI_UPDATE_TIMER, { value: this.timeRemaining });
+      const currentUiSecond = Math.ceil(this.timeRemaining);
+      if (currentUiSecond !== this.lastUiSecond) {
+        this.lastUiSecond = currentUiSecond;
+        this.eventBus.emit(GameEvents.UI_UPDATE_TIMER, { value: this.timeRemaining });
+      }
       
       if (this.timeRemaining <= 0) {
         this.handleTimeUp();
@@ -160,41 +170,10 @@ export class GameState {
   handlePowerupCollect(data) {
     const { type } = data;
     
-    switch(type) {
-      case 'speed':
-        this.playerState.speedPowerups += 1;
-        break;
-      case 'bomb':
-        this.playerState.maxBombs += 1;
-        break;
-      case 'range':
-        this.playerState.explosionRange += 1;
-        break;
-      case 'pierce':
-        this.playerState.canPierceBlocks = true;
-        break;
-      case 'kick_bomb':
-        this.playerState.hasKickBomb = true;
-        break;
-      case 'throw_bomb':
-        this.playerState.hasThrowBomb = true;
-        break;
-      case 'cross_block':
-        this.playerState.hasCrossBlock = true;
-        break;
-      case 'cross_bomb':
-        this.playerState.hasCrossBomb = true;
-        break;
-      case 'follower_bomb':
-        this.playerState.hasFollowerBomb = true;
-        break;
-      case 'land_mine':
-        this.playerState.hasLandMine = true;
-        break;
-      case 'extra_life':
-        this.playerState.lives += 1;
-        this.eventBus.emit(GameEvents.UI_UPDATE_LIVES, { value: this.playerState.lives });
-        break;
+    // Powerup effects are now applied directly by PowerupSystem
+    // This handler only emits UI updates
+    if (type === 'extra_life') {
+      this.eventBus.emit(GameEvents.UI_UPDATE_LIVES, { value: this.playerState.lives });
     }
     
     this.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.playerState });
@@ -308,11 +287,10 @@ export class GameState {
    * Called when manager is destroyed
    */
   destroy() {
-    this.eventBus.off(GameEvents.PLAYER_DAMAGE);
-    this.eventBus.off(GameEvents.PLAYER_DEATH);
-    this.eventBus.off(GameEvents.MONSTER_DEATH);
-    this.eventBus.off(GameEvents.BLOCK_DESTROY);
-    this.eventBus.off(GameEvents.PLAYER_COLLECT_POWERUP);
+    for (const unsubscribe of this.unsubscribers) {
+      unsubscribe();
+    }
+    this.unsubscribers = [];
     
     this.isRunning = false;
     this.isPaused = false;

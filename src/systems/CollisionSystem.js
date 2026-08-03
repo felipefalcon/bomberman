@@ -1,22 +1,22 @@
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { BaseGameSystem } from './BaseGameSystem.js';
+import {
+  getCornerTileKeys,
+  getCorners,
+  pixelToTile,
+  spriteToTile,
+  tileCenter,
+  tileKey,
+  toTile,
+} from '../utils/tileUtils.js';
 
 /**
  * CollisionSystem - Handles collision detection between entities and tiles
  */
-export class CollisionSystem {
-  constructor(eventBus = globalEventBus) {
-    this.eventBus = eventBus;
-    this.tileSize = GAME_CONFIG.TILE_SIZE;
-    this.scene = null;
-  }
-
-  /**
-   * Set the scene for this system
-   * @param {Object} scene - Game scene
-   */
-  setScene(scene) {
-    this.scene = scene;
+export class CollisionSystem extends BaseGameSystem {
+  constructor(eventBus = globalEventBus, map = null) {
+    super(eventBus, map, null);
   }
 
   /**
@@ -36,35 +36,25 @@ export class CollisionSystem {
     const currentX = entity.sprite?.x || x;
     const currentY = entity.sprite?.y || y;
     
-    const currentCorners = [
-      { x: currentX - collisionHalf, y: currentY - collisionHalf },
-      { x: currentX + collisionHalf - 1, y: currentY - collisionHalf },
-      { x: currentX - collisionHalf, y: currentY + collisionHalf - 1 },
-      { x: currentX + collisionHalf - 1, y: currentY + collisionHalf - 1 },
-    ];
-    const currentTiles = new Set(currentCorners.map((c) => 
-      `${Math.floor(c.x / this.tileSize)},${Math.floor(c.y / this.tileSize)}`
-    ));
-
-    const corners = [
-      { x: x - collisionHalf, y: y - collisionHalf },
-      { x: x + collisionHalf - 1, y: y - collisionHalf },
-      { x: x - collisionHalf, y: y + collisionHalf - 1 },
-      { x: x + collisionHalf - 1, y: y + collisionHalf - 1 },
-    ];
+    const currentTiles = getCornerTileKeys(currentX, currentY, collisionHalf, this.tileSize);
+    const corners = getCorners(x, y, collisionHalf);
+    const bombByTile = new Map();
+    for (const bomb of bombs) {
+      bombByTile.set(tileKey(bomb.tx, bomb.ty), bomb);
+    }
 
     for (const corner of corners) {
-      const tx = Math.floor(corner.x / this.tileSize);
-      const ty = Math.floor(corner.y / this.tileSize);
+      const tx = toTile(corner.x, this.tileSize);
+      const ty = toTile(corner.y, this.tileSize);
       
       // Check tile collision
       if (this.isTileBlocked(tx, ty)) return true;
 
       // Check bomb collision
-      const bomb = bombs.find((bomb) => bomb.tx === tx && bomb.ty === ty);
+      const bomb = bombByTile.get(tileKey(tx, ty));
       if (bomb) {
         // Allow entity to walk through bomb if it's currently on that tile
-        if (currentTiles.has(`${tx},${ty}`)) {
+        if (currentTiles.has(tileKey(tx, ty))) {
           continue;
         }
         return true;
@@ -81,8 +71,8 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isTileBlocked(tx, ty) {
-    if (!this.scene || !this.scene.map) return true;
-    return this.scene.map.isBlocked(tx, ty);
+    if (!this.map) return true;
+    return this.map.isBlocked(tx, ty);
   }
 
   /**
@@ -92,8 +82,8 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isTileWall(tx, ty) {
-    if (!this.scene || !this.scene.map) return true;
-    return this.scene.map.isWall(tx, ty);
+    if (!this.map) return true;
+    return this.map.isWall(tx, ty);
   }
 
   /**
@@ -103,8 +93,8 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isTileDestructible(tx, ty) {
-    if (!this.scene || !this.scene.map) return false;
-    return this.scene.map.isDestructible(tx, ty);
+    if (!this.map) return false;
+    return this.map.isDestructible(tx, ty);
   }
 
   /**
@@ -141,11 +131,10 @@ export class CollisionSystem {
    */
   collidesWithBomb(entity, bombs) {
     if (!entity?.sprite) return null;
+    const tile = spriteToTile(entity.sprite, this.tileSize);
+    if (!tile) return null;
     
-    const entityTx = Math.floor(entity.sprite.x / this.tileSize);
-    const entityTy = Math.floor(entity.sprite.y / this.tileSize);
-    
-    return bombs.find((bomb) => bomb.tx === entityTx && bomb.ty === entityTy) || null;
+    return bombs.find((bomb) => bomb.tx === tile.tx && bomb.ty === tile.ty) || null;
   }
 
   /**
@@ -156,11 +145,10 @@ export class CollisionSystem {
    */
   collidesWithPowerup(entity, powerups) {
     if (!entity?.sprite) return null;
+    const tile = spriteToTile(entity.sprite, this.tileSize);
+    if (!tile) return null;
     
-    const entityTx = Math.floor(entity.sprite.x / this.tileSize);
-    const entityTy = Math.floor(entity.sprite.y / this.tileSize);
-    
-    return powerups.find((powerup) => powerup.isOnTile(entityTx, entityTy)) || null;
+    return powerups.find((powerup) => powerup.isOnTile(tile.tx, tile.ty)) || null;
   }
 
   /**
@@ -171,11 +159,10 @@ export class CollisionSystem {
    */
   collidesWithMonsters(entity, monsters) {
     if (!entity?.sprite) return [];
+    const tile = spriteToTile(entity.sprite, this.tileSize);
+    if (!tile) return [];
     
-    const entityTx = Math.floor(entity.sprite.x / this.tileSize);
-    const entityTy = Math.floor(entity.sprite.y / this.tileSize);
-    
-    return monsters.filter((monster) => monster.isOnTile(entityTx, entityTy));
+    return monsters.filter((monster) => monster.isOnTile(tile.tx, tile.ty));
   }
 
   /**
@@ -185,10 +172,7 @@ export class CollisionSystem {
    * @returns {Object} {tx, ty}
    */
   getTilePosition(x, y) {
-    return {
-      tx: Math.floor(x / this.tileSize),
-      ty: Math.floor(y / this.tileSize)
-    };
+    return pixelToTile(x, y, this.tileSize);
   }
 
   /**
@@ -200,11 +184,7 @@ export class CollisionSystem {
    */
   getPixelPosition(tx, ty, center = true) {
     if (center) {
-      const half = this.tileSize / 2;
-      return {
-        x: tx * this.tileSize + half,
-        y: ty * this.tileSize + half
-      };
+      return tileCenter(tx, ty, this.tileSize);
     }
     return {
       x: tx * this.tileSize,
@@ -219,16 +199,16 @@ export class CollisionSystem {
    * @returns {boolean}
    */
   isValidTileCoord(tx, ty) {
-    if (!this.scene || !this.scene.map) return false;
+    if (!this.map) return false;
     return Number.isInteger(tx) && Number.isInteger(ty) && 
            tx >= 0 && ty >= 0 && 
-           tx < this.scene.map.cols && ty < this.scene.map.rows;
+           tx < this.map.cols && ty < this.map.rows;
   }
 
   /**
    * Called when system is destroyed
    */
   destroy() {
-    this.scene = null;
+    super.destroy();
   }
 }

@@ -1,21 +1,26 @@
 import { AnimatedSprite, Graphics } from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
+import { ComponentManager } from '../components/ComponentManager.js';
+import { getCornerTileKeys, getCorners, tileCenter, tileKey, toTile } from '../utils/tileUtils.js';
 
 export class Player {
   // textures: optional array of PIXI.Texture frames
   // mapping: optional animation mapping object
-  constructor(x, y, tileSize = GAME_CONFIG.TILE_SIZE, textures = null, mapping = null) {
+  constructor(x, y, tileSize = GAME_CONFIG.TILE_SIZE, textures = null, mapping = null, gameState = null) {
     this.tileSize = tileSize;
     this.spriteScale = GAME_CONFIG.PLAYER_SPRITE_SCALE;
     this.baseSpeed = GAME_CONFIG.PLAYER_BASE_SPEED;
     this.speed = this.baseSpeed; // pixels per tick (multiplied by delta)
-    this.speedPowerups = 0;
     this.halfSize = this.tileSize / 2;
     this.hitboxSize = GAME_CONFIG.PLAYER_HITBOX_SIZE;
     this.collisionHalf = Math.floor(this.hitboxSize / 2);
 
     this.textures = textures;
     this.mapping = mapping;
+    this.gameState = gameState; // Reference to GameState for reading state
+    
+    // Component system for powerups
+    this.componentManager = new ComponentManager();
 
     if (this.textures && this.mapping) {
       // create an AnimatedSprite using the idle frame by default
@@ -37,26 +42,74 @@ export class Player {
     this.sprite.x = x;
     this.sprite.y = y;
 
-    this.lives = GAME_CONFIG.PLAYER_STARTING_LIVES;
+    // Visual/animation state only (game state is in GameState)
     this._facing = 'down';
     this.blinkTimer = 0;
     this.isBlinking = false;
     this.blinkDuration = GAME_CONFIG.PLAYER_BLINK_DURATION;
-    this.maxBombs = GAME_CONFIG.PLAYER_STARTING_BOMBS;
-    this.activeBombs = 0; // Currently active bombs
-    this.explosionRange = GAME_CONFIG.PLAYER_STARTING_RANGE;
-    this.canPierceBlocks = false; // Explosions can pass through blocks
-    this.hasKickBomb = false;
-    this.hasThrowBomb = false;
-    this.hasCrossBlock = false; // Can cross blocks
-    this.hasCrossBomb = false; // Can cross bombs
-    this.hasFollowerBomb = false; // Follower bomb - follows enemies
-    this.hasLandMine = false; // Land mine - triggered by stepping on it
+  }
+
+  // Getters for player state from GameState
+  get lives() {
+    return this.gameState?.playerState?.lives ?? GAME_CONFIG.PLAYER_STARTING_LIVES;
+  }
+
+  get maxBombs() {
+    return this.gameState?.playerState?.maxBombs ?? GAME_CONFIG.PLAYER_STARTING_BOMBS;
+  }
+
+  get activeBombs() {
+    return this.gameState?.playerState?.activeBombs ?? 0;
+  }
+
+  set activeBombs(value) {
+    if (this.gameState) {
+      this.gameState.playerState.activeBombs = value;
+    }
+  }
+
+  get explosionRange() {
+    return this.gameState?.playerState?.explosionRange ?? GAME_CONFIG.PLAYER_STARTING_RANGE;
+  }
+
+  get speedPowerups() {
+    return this.gameState?.playerState?.speedPowerups ?? 0;
+  }
+
+  get canPierceBlocks() {
+    return (this.componentManager.hasComponent('pierce') || this.gameState?.playerState?.canPierceBlocks) ?? false;
+  }
+
+  get hasKickBomb() {
+    return (this.componentManager.hasComponent('kick_bomb') || this.gameState?.playerState?.hasKickBomb) ?? false;
+  }
+
+  get hasThrowBomb() {
+    return (this.componentManager.hasComponent('throw_bomb') || this.gameState?.playerState?.hasThrowBomb) ?? false;
+  }
+
+  get hasCrossBlock() {
+    return (this.componentManager.hasComponent('cross_block') || this.gameState?.playerState?.hasCrossBlock) ?? false;
+  }
+
+  get hasCrossBomb() {
+    return (this.componentManager.hasComponent('cross_bomb') || this.gameState?.playerState?.hasCrossBomb) ?? false;
+  }
+
+  get hasFollowerBomb() {
+    return (this.componentManager.hasComponent('follower_bomb') || this.gameState?.playerState?.hasFollowerBomb) ?? false;
+  }
+
+  get hasLandMine() {
+    return (this.componentManager.hasComponent('land_mine') || this.gameState?.playerState?.hasLandMine) ?? false;
   }
 
   takeDamage() {
     if (this.lives <= 0 || this.isBlinking) return false;
-    this.lives -= 1;
+    // Update GameState instead of local state
+    if (this.gameState) {
+      this.gameState.playerState.lives -= 1;
+    }
     this.startBlink();
     return this.lives > 0;
   }
@@ -106,18 +159,18 @@ export class Player {
     // Apply snapping when changing direction perpendicular to current movement
     if (dx !== 0 && dy === 0) {
       // Moving horizontally - snap Y to tile center if close
-      const tileCenterY = (Math.floor(this.sprite.y / this.tileSize) * this.tileSize) + (this.tileSize / 2);
-      const distFromCenter = Math.abs(this.sprite.y - tileCenterY);
+      const centeredTileY = tileCenter(0, toTile(this.sprite.y, this.tileSize), this.tileSize).y;
+      const distFromCenter = Math.abs(this.sprite.y - centeredTileY);
       if (distFromCenter < 8) {
-        this.sprite.y = tileCenterY;
+        this.sprite.y = centeredTileY;
       }
     }
     if (dy !== 0 && dx === 0) {
       // Moving vertically - snap X to tile center if close
-      const tileCenterX = (Math.floor(this.sprite.x / this.tileSize) * this.tileSize) + (this.tileSize / 2);
-      const distFromCenter = Math.abs(this.sprite.x - tileCenterX);
+      const centeredTileX = tileCenter(toTile(this.sprite.x, this.tileSize), 0, this.tileSize).x;
+      const distFromCenter = Math.abs(this.sprite.x - centeredTileX);
       if (distFromCenter < 8) {
-        this.sprite.x = tileCenterX;
+        this.sprite.x = centeredTileX;
       }
     }
 
@@ -134,42 +187,37 @@ export class Player {
 
   _collidesAt(cx, cy, map, bombs, bombSystem = null) {
     // check collision box corners using collisionHalf
-    const currentCorners = [
-      { x: this.sprite.x - this.collisionHalf, y: this.sprite.y - this.collisionHalf },
-      { x: this.sprite.x + this.collisionHalf - 1, y: this.sprite.y - this.collisionHalf },
-      { x: this.sprite.x - this.collisionHalf, y: this.sprite.y + this.collisionHalf - 1 },
-      { x: this.sprite.x + this.collisionHalf - 1, y: this.sprite.y + this.collisionHalf - 1 },
-    ];
-    const currentTiles = new Set(currentCorners.map((c) => `${Math.floor(c.x / this.tileSize)},${Math.floor(c.y / this.tileSize)}`));
+    const currentTiles = getCornerTileKeys(this.sprite.x, this.sprite.y, this.collisionHalf, this.tileSize);
+    const corners = getCorners(cx, cy, this.collisionHalf);
+    const bombByTile = new Map();
 
-    const corners = [
-      { x: cx - this.collisionHalf, y: cy - this.collisionHalf },
-      { x: cx + this.collisionHalf - 1, y: cy - this.collisionHalf },
-      { x: cx - this.collisionHalf, y: cy + this.collisionHalf - 1 },
-      { x: cx + this.collisionHalf - 1, y: cy + this.collisionHalf - 1 },
-    ];
+    for (const bomb of bombs) {
+      bombByTile.set(tileKey(bomb.tx, bomb.ty), bomb);
+    }
 
     for (const c of corners) {
-      const tx = Math.floor(c.x / this.tileSize);
-      const ty = Math.floor(c.y / this.tileSize);
+      const tx = toTile(c.x, this.tileSize);
+      const ty = toTile(c.y, this.tileSize);
+
+      const tile = tileKey(tx, ty);
 
       if (this.hasCrossBlock && map.isDestructible(tx, ty)) {
         continue; // Allow movement through cross blocks
-      } else if (this.hasCrossBomb && !map.isWall(tx, ty) && bombs.some(b => b.tx === tx && b.ty === ty)) {
+      } else if (this.hasCrossBomb && !map.isWall(tx, ty) && bombByTile.has(tile)) {
         continue; // Allow movement through cross bombs
       } else if (map.isBlocked(tx, ty)) return true;
 
       
       // if (map.isBlocked(tx, ty)) return true;
 
-      const bomb = bombs.find((bomb) => bomb.tx === tx && bomb.ty === ty);
+      const bomb = bombByTile.get(tile);
       if (bomb) {
         // Land mines are traversable
         if (bomb.isLandMine) {
           continue;
         }
         
-        if (currentTiles.has(`${tx},${ty}`)) {
+        if (currentTiles.has(tile)) {
           continue;
         }
         

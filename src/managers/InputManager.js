@@ -9,6 +9,8 @@ export class InputManager {
     this.keys = {};
     this.previousKeys = {};
     this.bound = false;
+    this._onKeyDown = this.handleKeyDown.bind(this);
+    this._onKeyUp = this.handleKeyUp.bind(this);
   }
 
   /**
@@ -17,8 +19,8 @@ export class InputManager {
   bind() {
     if (this.bound) return;
     
-    window.addEventListener('keydown', (e) => this.handleKeyDown(e));
-    window.addEventListener('keyup', (e) => this.handleKeyUp(e));
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
     this.bound = true;
     
     console.log('InputManager: Bound to keyboard events');
@@ -30,8 +32,8 @@ export class InputManager {
   unbind() {
     if (!this.bound) return;
     
-    window.removeEventListener('keydown', (e) => this.handleKeyDown(e));
-    window.removeEventListener('keyup', (e) => this.handleKeyUp(e));
+    window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('keyup', this._onKeyUp);
     this.bound = false;
     
     console.log('InputManager: Unbound from keyboard events');

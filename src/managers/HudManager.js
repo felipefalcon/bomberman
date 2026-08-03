@@ -26,6 +26,9 @@ export class HudManager {
     
     this.itemFrames = null;
     this.itemMapping = null;
+    this.lastRenderedLives = null;
+    this.lastRenderedTimer = null;
+    this.unsubscribers = [];
     
     this.fontSize = GAME_CONFIG.HUD.FONT_SIZE;
     
@@ -150,32 +153,32 @@ export class HudManager {
       },
       {
         key: 'kick_bomb',
-        fallbackDraw: () => this.drawKickBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        fallbackDraw: () => this.drawSharedBadgeIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
       {
         key: 'throw_bomb',
-        fallbackDraw: () => this.drawThrowBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        fallbackDraw: () => this.drawSharedBadgeIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
       {
         key: 'cross_block',
-        fallbackDraw: () => this.drawCrossBlockIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        fallbackDraw: () => this.drawSharedBadgeIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
       {
         key: 'cross_bomb',
-        fallbackDraw: () => this.drawCrossBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        fallbackDraw: () => this.drawSharedBadgeIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
       {
         key: 'follower_bomb',
-        fallbackDraw: () => this.drawFollowerBombIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        fallbackDraw: () => this.drawSharedBadgeIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
       {
         key: 'land_mine',
-        fallbackDraw: () => this.drawLandMineIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
+        fallbackDraw: () => this.drawSharedBadgeIcon(hudSidebar.POWERUP_ICON_X, hudSidebar.POWERUP_ICON_Y),
         withText: false,
       },
     ];
@@ -249,9 +252,9 @@ export class HudManager {
    * Setup event listeners
    */
   setupEventListeners() {
-    this.eventBus.on(GameEvents.UI_UPDATE_LIVES, (data) => this.setLives(data.value));
-    this.eventBus.on(GameEvents.UI_UPDATE_TIMER, (data) => this.setTimer(data.value));
-    this.eventBus.on(GameEvents.UI_UPDATE_POWERUPS, (data) => this.updatePowerups(data.player));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.UI_UPDATE_LIVES, (data) => this.setLives(data.value)));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.UI_UPDATE_TIMER, (data) => this.setTimer(data.value)));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.UI_UPDATE_POWERUPS, (data) => this.updatePowerups(data.player)));
   }
 
   /**
@@ -290,7 +293,11 @@ export class HudManager {
    * Set lives display
    */
   setLives(value) {
-    if (this.livesText) this.livesText.text = `${value}`;
+    if (!this.livesText) return;
+    const nextLives = `${value}`;
+    if (nextLives === this.lastRenderedLives) return;
+    this.lastRenderedLives = nextLives;
+    this.livesText.text = nextLives;
   }
 
   /**
@@ -301,7 +308,10 @@ export class HudManager {
     const t = Math.max(0, Math.ceil(timeRemaining));
     const mins = Math.floor(t / 60);
     const secs = t % 60;
-    this.timerText.text = `${mins}:${secs.toString().padStart(2, '0')}`;
+    const nextTimer = `${mins}:${secs.toString().padStart(2, '0')}`;
+    if (nextTimer === this.lastRenderedTimer) return;
+    this.lastRenderedTimer = nextTimer;
+    this.timerText.text = nextTimer;
   }
 
   /**
@@ -469,67 +479,7 @@ export class HudManager {
     return g;
   }
 
-  drawKickBombIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.rect(cx - 6, cy - 4, 12, 8);
-    g.fill(0xc7d0d8);
-    g.rect(cx - 2, cy - 8, 4, 4);
-    g.fill(0xe65a3a);
-    g.moveTo(cx + 2, cy - 8);
-    g.lineTo(cx + 6, cy - 12);
-    g.stroke({ color: 0xf0c54e, width: 1.5 });
-    return g;
-  }
-
-  drawThrowBombIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.rect(cx - 6, cy - 4, 12, 8);
-    g.fill(0xc7d0d8);
-    g.rect(cx - 2, cy - 8, 4, 4);
-    g.fill(0xe65a3a);
-    g.moveTo(cx + 2, cy - 8);
-    g.lineTo(cx + 6, cy - 12);
-    g.stroke({ color: 0xf0c54e, width: 1.5 });
-    return g;
-  }
-
-  drawCrossBlockIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.rect(cx - 6, cy - 4, 12, 8);
-    g.fill(0xc7d0d8);
-    g.rect(cx - 2, cy - 8, 4, 4);
-    g.fill(0xe65a3a);
-    g.moveTo(cx + 2, cy - 8);
-    g.lineTo(cx + 6, cy - 12);
-    g.stroke({ color: 0xf0c54e, width: 1.5 });
-    return g;
-  }
-
-  drawCrossBombIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.rect(cx - 6, cy - 4, 12, 8);
-    g.fill(0xc7d0d8);
-    g.rect(cx - 2, cy - 8, 4, 4);
-    g.fill(0xe65a3a);
-    g.moveTo(cx + 2, cy - 8);
-    g.lineTo(cx + 6, cy - 12);
-    g.stroke({ color: 0xf0c54e, width: 1.5 });
-    return g;
-  }
-
-  drawFollowerBombIcon(cx, cy) {
-    const g = new PIXI.Graphics();
-    g.rect(cx - 6, cy - 4, 12, 8);
-    g.fill(0xc7d0d8);
-    g.rect(cx - 2, cy - 8, 4, 4);
-    g.fill(0xe65a3a);
-    g.moveTo(cx + 2, cy - 8);
-    g.lineTo(cx + 6, cy - 12);
-    g.stroke({ color: 0xf0c54e, width: 1.5 });
-    return g;
-  }
-
-  drawLandMineIcon(cx, cy) {
+  drawSharedBadgeIcon(cx, cy) {
     const g = new PIXI.Graphics();
     g.rect(cx - 6, cy - 4, 12, 8);
     g.fill(0xc7d0d8);
@@ -552,9 +502,10 @@ export class HudManager {
       this.sidebarContainer.parent.removeChild(this.sidebarContainer);
     }
     
-    this.eventBus.off(GameEvents.UI_UPDATE_LIVES);
-    this.eventBus.off(GameEvents.UI_UPDATE_TIMER);
-    this.eventBus.off(GameEvents.UI_UPDATE_POWERUPS);
+    for (const unsubscribe of this.unsubscribers) {
+      unsubscribe();
+    }
+    this.unsubscribers = [];
     
     this.topContainer = null;
     this.sidebarContainer = null;
