@@ -1,8 +1,8 @@
-import * as PIXI from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { spriteToTile } from '../utils/tileUtils.js';
+import { ExplosionRenderer } from './explosion/ExplosionRenderer.js';
 
 /**
  * ExplosionSystem - Manages explosions, damage, and visual effects
@@ -12,6 +12,7 @@ export class ExplosionSystem extends BaseGameSystem {
     super(eventBus, map, gameContainer);
     this.explosions = [];
     this.explosionDuration = GAME_CONFIG.EXPLOSION_DURATION;
+    this.renderer = new ExplosionRenderer();
   }
 
   /**
@@ -28,44 +29,13 @@ export class ExplosionSystem extends BaseGameSystem {
       hasDamagedMonsters: false,
       hasDamagedPlayer: false,
       soundPlayedForPlayer: false,
-      sprite: this.createExplosionSprite(tx, ty, isCenter),
+      sprite: this.renderer.createSprite(tx, ty, this.tileSize, isCenter),
     };
     
     this.explosions.push(explosion);
     this.gameContainer.addChild(explosion.sprite);
     
     this.eventBus.emit(GameEvents.EXPLOSION_CREATE, { tx, ty, isCenter });
-  }
-
-  /**
-   * Create explosion sprite
-   * @param {number} tx - Tile X position
-   * @param {number} ty - Tile Y position
-   * @param {boolean} isCenter - Whether this is the center explosion
-   * @returns {PIXI.Container}
-   */
-  createExplosionSprite(tx, ty, isCenter = false) {
-    const container = new PIXI.Container();
-    const tileSize = this.tileSize;
-    
-    // Position container at the tile
-    container.x = tx * tileSize;
-    container.y = ty * tileSize;
-    
-    // Create single fire layer at this tile only, centered
-    const gfx = new PIXI.Graphics();
-    gfx.x = tileSize / 2;
-    gfx.y = tileSize / 2;
-    container.addChild(gfx);
-
-    // Animation state
-    container.userData = {
-      animFrame: 0,
-      sprites: [gfx],
-      isCenter: isCenter
-    };
-
-    return container;
   }
 
   /**
@@ -80,35 +50,7 @@ export class ExplosionSystem extends BaseGameSystem {
     
     for (const explosion of this.explosions) {
       explosion.timer -= delta;
-      
-      // Update explosion animation
-      const userData = explosion.sprite.userData;
-      userData.animFrame += GAME_CONFIG.ANIMATION_SPEED;
-      
-      // Draw animated fire
-      for (const gfx of userData.sprites) {
-        gfx.clear();
-        
-        // Vary size and color based on animation frame
-        const frame = Math.floor(userData.animFrame) % 3;
-        const baseSize = this.tileSize * 0.8;
-        let size = baseSize + Math.sin(userData.animFrame * 0.3) * (baseSize * 0.15);
-        
-        // Color progression: yellow -> orange -> red
-        let color;
-        if (frame === 0) color = 0xFFFF00; // Yellow
-        else if (frame === 1) color = 0xFF8800; // Orange
-        else color = 0xFF3300; // Red
-        
-        // All explosions: pixelated squares
-        gfx.rect(-size / 2, -size / 2, size, size);
-        gfx.fill({ color: color, alpha: 0.9 });
-        
-        // Add glow effect
-        const glowSize = size * 1.3;
-        gfx.rect(-glowSize / 2, -glowSize / 2, glowSize, glowSize);
-        gfx.fill({ color: color, alpha: 0.3 });
-      }
+      this.renderer.updateSprite(explosion.sprite, this.tileSize);
       
       // Check for player damage
       if (player && this.isPlayerOnTile(explosion.tx, explosion.ty, player)) {

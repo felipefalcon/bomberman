@@ -3,6 +3,7 @@ import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { isSpriteOnTile, spriteToTile, tileCenter } from '../utils/tileUtils.js';
+import { BombFactory } from './bomb/BombFactory.js';
 
 /**
  * BombSystem - Manages bomb placement, timing, and explosion triggers
@@ -44,68 +45,17 @@ export class BombSystem extends BaseGameSystem {
     // Check if bomb already exists at this position
     if (this.bombs.some((b) => b.tx === tx && b.ty === ty)) return false;
 
-    // Determine bomb type based on player powerups
-    // Priority: land mine > follower bomb > normal bomb
-    const willBeLandMine = player.hasLandMine;
-    const willBeFollower = !willBeLandMine && player.hasFollowerBomb;
-
-    const bomb = {
+    const bomb = BombFactory.createBomb({
       tx,
       ty,
-      timer: this.bombFuseTicks,
-      sprite: this.createBombSprite(tx, ty, willBeFollower, willBeLandMine),
-      soundPlayed: false,
-      // Kick bomb properties
-      isSliding: false,
-      slideDx: 0,
-      slideDy: 0,
-      slideSpeed: GAME_CONFIG.BOMB_SLIDE_SPEED || 4,
-      slideProgress: 0,
-      nextTx: tx,
-      nextTy: ty,
-
-      canMove: false,
-      // Throw bomb properties
-      isThrowing: false,
-      throwDx: 0,
-      throwDy: 0,
-      throwProgress: 0,
-
-      throwStartTx: tx,
-      throwStartTy: ty,
-
-      throwTargetTx: tx,
-      throwTargetTy: ty,
-
-      throwDistance: 2,
-      throwSpeed: 4,
-
-      // Follower bomb properties
-      isFollower: false,
-      targetEnemy: null,
-      followSpeed: GAME_CONFIG.BOMB_FOLLOW_SPEED || 2,
-
-      // Land mine properties
-      isLandMine: false,
-      isTriggered: false,
-      triggerTimer: GAME_CONFIG.LAND_MINE_TRIGGER_TICKS,
-      blinkTimer: 0,
-      playerTileOnPlacement: null, // Track if player was on tile when placed
-    };
-
-    // Set as land mine if player has the powerup
-    if (willBeLandMine) {
-      bomb.isLandMine = true;
-      bomb.timer = Infinity; // Land mines don't explode on timer
-      
-      // Check if player is on the tile when placing the mine
-      if (isSpriteOnTile(player.sprite, tx, ty, this.tileSize)) {
-        bomb.playerTileOnPlacement = true;
-      }
-    } else if (willBeFollower) {
-      bomb.isFollower = true;
-      bomb.targetEnemy = this.findNearestEnemy(tx, ty, enemies);
-    }
+      player,
+      enemies,
+      tileSize: this.tileSize,
+      bombFuseTicks: this.bombFuseTicks,
+      createBombSprite: (tileX, tileY, isFollower, isLandMine) =>
+        this.createBombSprite(tileX, tileY, isFollower, isLandMine),
+      findNearestEnemy: (tileX, tileY, nearbyEnemies) => this.findNearestEnemy(tileX, tileY, nearbyEnemies),
+    });
 
     this.bombs.push(bomb);
     player.activeBombs += 1;
