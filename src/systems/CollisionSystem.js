@@ -38,6 +38,10 @@ export class CollisionSystem extends BaseGameSystem {
     
     const currentTiles = getCornerTileKeys(currentX, currentY, collisionHalf, this.tileSize);
     const corners = getCorners(x, y, collisionHalf);
+    const bombByTile = new Map();
+    for (const bomb of bombs) {
+      bombByTile.set(tileKey(bomb.tx, bomb.ty), bomb);
+    }
 
     for (const corner of corners) {
       const tx = toTile(corner.x, this.tileSize);
@@ -47,7 +51,7 @@ export class CollisionSystem extends BaseGameSystem {
       if (this.isTileBlocked(tx, ty)) return true;
 
       // Check bomb collision
-      const bomb = bombs.find((bomb) => bomb.tx === tx && bomb.ty === ty);
+      const bomb = bombByTile.get(tileKey(tx, ty));
       if (bomb) {
         // Allow entity to walk through bomb if it's currently on that tile
         if (currentTiles.has(tileKey(tx, ty))) {

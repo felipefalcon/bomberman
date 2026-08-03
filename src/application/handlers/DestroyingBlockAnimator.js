@@ -25,6 +25,8 @@ export class DestroyingBlockAnimator {
       }
     }
 
-    this.components.destroyingBlocks = this.components.destroyingBlocks.filter((block) => !toRemove.includes(block));
+    if (toRemove.length === 0) return;
+    const removed = new Set(toRemove);
+    this.components.destroyingBlocks = this.components.destroyingBlocks.filter((block) => !removed.has(block));
   }
 }

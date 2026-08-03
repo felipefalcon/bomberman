@@ -160,6 +160,9 @@ export const GameEvents = {
   UI_UPDATE_TIMER: 'ui:update_timer',
   UI_UPDATE_POWERUPS: 'ui:update_powerups',
   
+  // Diagnostics
+  RUNTIME_METRICS: 'runtime:metrics',
+  
   // Input events
   INPUT_KEY_DOWN: 'input:key_down',
   INPUT_KEY_UP: 'input:key_up',

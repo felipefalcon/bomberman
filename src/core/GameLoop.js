@@ -2,7 +2,6 @@ import {
   BombActionHandler,
   BombLifecycleHandler,
   DestroyingBlockAnimator,
-  HudTimerSync,
 } from '../application/index.js';
 
 /**
@@ -14,10 +13,10 @@ export class GameLoop {
     this.components = gameComponents;
     this.isRunning = false;
     this.ticker = null;
+    this.boundUpdate = this.update.bind(this);
     this.bombActionHandler = new BombActionHandler(this.components);
     this.bombLifecycleHandler = new BombLifecycleHandler(this.components);
     this.destroyingBlockAnimator = new DestroyingBlockAnimator(this.components);
-    this.hudTimerSync = new HudTimerSync(this.components);
   }
 
   /**
@@ -29,7 +28,7 @@ export class GameLoop {
     
     this.isRunning = true;
     this.ticker = app.ticker;
-    this.ticker.add(this.update.bind(this));
+    this.ticker.add(this.boundUpdate);
   }
 
   /**
@@ -40,7 +39,7 @@ export class GameLoop {
     
     this.isRunning = false;
     if (this.ticker) {
-      this.ticker.remove(this.update.bind(this));
+      this.ticker.remove(this.boundUpdate);
     }
   }
 
@@ -78,7 +77,6 @@ export class GameLoop {
     // Block destruction animation
     this.destroyingBlockAnimator.update(tickDelta);
     
-    // Update HUD timer
-    this.hudTimerSync.refresh();
+    // HUD timer is updated by GameState UI event emission.
   }
 }

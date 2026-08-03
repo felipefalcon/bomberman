@@ -26,6 +26,8 @@ export class HudManager {
     
     this.itemFrames = null;
     this.itemMapping = null;
+    this.lastRenderedLives = null;
+    this.lastRenderedTimer = null;
     
     this.fontSize = GAME_CONFIG.HUD.FONT_SIZE;
     
@@ -290,7 +292,11 @@ export class HudManager {
    * Set lives display
    */
   setLives(value) {
-    if (this.livesText) this.livesText.text = `${value}`;
+    if (!this.livesText) return;
+    const nextLives = `${value}`;
+    if (nextLives === this.lastRenderedLives) return;
+    this.lastRenderedLives = nextLives;
+    this.livesText.text = nextLives;
   }
 
   /**
@@ -301,7 +307,10 @@ export class HudManager {
     const t = Math.max(0, Math.ceil(timeRemaining));
     const mins = Math.floor(t / 60);
     const secs = t % 60;
-    this.timerText.text = `${mins}:${secs.toString().padStart(2, '0')}`;
+    const nextTimer = `${mins}:${secs.toString().padStart(2, '0')}`;
+    if (nextTimer === this.lastRenderedTimer) return;
+    this.lastRenderedTimer = nextTimer;
+    this.timerText.text = nextTimer;
   }
 
   /**

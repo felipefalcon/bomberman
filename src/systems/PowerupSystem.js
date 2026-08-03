@@ -122,7 +122,9 @@ export class PowerupSystem extends BaseGameSystem {
     }
     
     // Remove collected powerups
-    this.powerups = this.powerups.filter(p => !toRemove.includes(p));
+    if (toRemove.length === 0) return;
+    const removed = new Set(toRemove);
+    this.powerups = this.powerups.filter((powerup) => !removed.has(powerup));
   }
 
   /**

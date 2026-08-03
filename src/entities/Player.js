@@ -189,28 +189,35 @@ export class Player {
     // check collision box corners using collisionHalf
     const currentTiles = getCornerTileKeys(this.sprite.x, this.sprite.y, this.collisionHalf, this.tileSize);
     const corners = getCorners(cx, cy, this.collisionHalf);
+    const bombByTile = new Map();
+
+    for (const bomb of bombs) {
+      bombByTile.set(tileKey(bomb.tx, bomb.ty), bomb);
+    }
 
     for (const c of corners) {
       const tx = toTile(c.x, this.tileSize);
       const ty = toTile(c.y, this.tileSize);
 
+      const tile = tileKey(tx, ty);
+
       if (this.hasCrossBlock && map.isDestructible(tx, ty)) {
         continue; // Allow movement through cross blocks
-      } else if (this.hasCrossBomb && !map.isWall(tx, ty) && bombs.some(b => b.tx === tx && b.ty === ty)) {
+      } else if (this.hasCrossBomb && !map.isWall(tx, ty) && bombByTile.has(tile)) {
         continue; // Allow movement through cross bombs
       } else if (map.isBlocked(tx, ty)) return true;
 
       
       // if (map.isBlocked(tx, ty)) return true;
 
-      const bomb = bombs.find((bomb) => bomb.tx === tx && bomb.ty === ty);
+      const bomb = bombByTile.get(tile);
       if (bomb) {
         // Land mines are traversable
         if (bomb.isLandMine) {
           continue;
         }
         
-        if (currentTiles.has(tileKey(tx, ty))) {
+        if (currentTiles.has(tile)) {
           continue;
         }
         

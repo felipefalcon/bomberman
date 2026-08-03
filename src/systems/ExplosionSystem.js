@@ -1,7 +1,7 @@
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
-import { spriteToTile } from '../utils/tileUtils.js';
+import { spriteToTile, tileKey } from '../utils/tileUtils.js';
 import { ExplosionRenderer } from '../presentation/renderers/ExplosionRenderer.js';
 
 /**
@@ -47,6 +47,31 @@ export class ExplosionSystem extends BaseGameSystem {
    */
   update(delta, player, monsters, powerups) {
     const expire = [];
+    const monstersByTile = new Map();
+    const powerupsByTile = new Map();
+
+    for (const monster of monsters) {
+      const tx = Math.floor(monster.sprite.x / this.tileSize);
+      const ty = Math.floor(monster.sprite.y / this.tileSize);
+      const key = tileKey(tx, ty);
+      const bucket = monstersByTile.get(key);
+      if (bucket) {
+        bucket.push(monster);
+      } else {
+        monstersByTile.set(key, [monster]);
+      }
+    }
+
+    for (const powerup of powerups) {
+      if (powerup.immuneTicks) continue;
+      const key = tileKey(powerup.tx, powerup.ty);
+      const bucket = powerupsByTile.get(key);
+      if (bucket) {
+        bucket.push(powerup);
+      } else {
+        powerupsByTile.set(key, [powerup]);
+      }
+    }
     
     for (const explosion of this.explosions) {
       explosion.timer -= delta;
@@ -73,7 +98,7 @@ export class ExplosionSystem extends BaseGameSystem {
       
       // Check for monster damage
       if (!explosion.hasDamagedMonsters) {
-        const hitMonsters = monsters.filter((monster) => monster.isOnTile(explosion.tx, explosion.ty));
+        const hitMonsters = monstersByTile.get(tileKey(explosion.tx, explosion.ty)) || [];
         if (hitMonsters.length > 0) {
           explosion.hasDamagedMonsters = true;
           for (const monster of hitMonsters) {
@@ -88,7 +113,7 @@ export class ExplosionSystem extends BaseGameSystem {
       }
       
       // Check for powerup collision (destroy powerups in explosion)
-      const hitPowerups = powerups.filter((powerup) => !powerup.immuneTicks && powerup.isOnTile(explosion.tx, explosion.ty));
+      const hitPowerups = powerupsByTile.get(tileKey(explosion.tx, explosion.ty)) || [];
       for (const powerup of hitPowerups) {
         this.gameContainer.removeChild(powerup.sprite);
         this.eventBus.emit(GameEvents.EXPLOSION_DAMAGE, { 
@@ -105,11 +130,15 @@ export class ExplosionSystem extends BaseGameSystem {
     }
     
     // Remove expired explosions
+    if (expire.length === 0) return;
+
+    const expiredSet = new Set(expire);
     for (const explosion of expire) {
       this.gameContainer.removeChild(explosion.sprite);
-      this.explosions = this.explosions.filter((e) => e !== explosion);
       this.eventBus.emit(GameEvents.EXPLOSION_END, { tx: explosion.tx, ty: explosion.ty });
     }
+
+    this.explosions = this.explosions.filter((explosion) => !expiredSet.has(explosion));
   }
 
   /**
