@@ -112,6 +112,12 @@ export const GAME_CONFIG = {
   SOUND_EFFECT_VOLUME: 0.7,
   SOUND_POOL_SIZE: 5,
   AUDIO_START_MUTED: true,
+
+  // Runtime mode baseline
+  GAME_MODE: 'single-player',
+  NETWORK_MODE: 'offline',
+  ONLINE_ENABLED: false,
+  RNG_SEED: null,
   
   // Asset paths
   ASSETS_PATH: `${import.meta.env.BASE_URL}assets/`,
