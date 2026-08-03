@@ -1,9 +1,8 @@
 import * as PIXI from 'pixi.js';
-import { GAME_CONFIG } from './config/Constants.js';
 import { GameInitializer } from './core/GameInitializer.js';
 import { GameLoop } from './core/GameLoop.js';
 import { EntityManager } from './core/EntityManager.js';
-import { globalEventBus, GameEvents } from './engine/EventBus.js';
+import { GameEvents } from './engine/EventBus.js';
 
 /**
  * Game - Main game class
