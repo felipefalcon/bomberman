@@ -27,6 +27,7 @@ export class Game {
    * Start the game
    */
   async start() {
+    console.log('[game] start begin');
     // Install HUD font
     PIXI.BitmapFont.install({
       name: 'HUDFont',
@@ -44,7 +45,9 @@ export class Game {
 
     // Initialize game components
     this.initializer = new GameInitializer(this.app);
+    console.log('[game] initializing components');
     this.components = await this.initializer.initialize();
+    console.log('[game] components ready');
     
     // Initialize entity manager
     this.entityManager = new EntityManager();
@@ -56,6 +59,13 @@ export class Game {
     
     // Initialize game loop
     this.gameLoop = new GameLoop(this.components);
+    console.log('[game] starting loop');
+    this.components.managers.onlineStateBridge?.applySnapshot?.({
+      player: {
+        x: this.components.player.sprite.x,
+        y: this.components.player.sprite.y,
+      },
+    });
     this.gameLoop.start(this.app);
     
     // Setup additional event listeners
@@ -64,7 +74,7 @@ export class Game {
     // Load audio assets
     await this._loadAudioAssets();
     
-    console.log('Game: Started successfully');
+    console.log('[game] started successfully');
   }
 
   /**

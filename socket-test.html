@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teste Socket.IO Bomberman</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      .row { margin-bottom: 12px; }
+      input, button { padding: 8px; margin-right: 8px; }
+      #log { white-space: pre-wrap; background: #111; color: #0f0; padding: 12px; border-radius: 6px; min-height: 200px; }
+    </style>
+  </head>
+  <body>
+    <h2>Teste de salas Socket.IO</h2>
+
+    <div class="row">
+      <label>Servidor:</label>
+      <input id="serverUrl" value="http://localhost:3001" />
+    </div>
+
+    <div class="row">
+      <label>Sala:</label>
+      <input id="roomId" value="sala1" />
+    </div>
+
+    <div class="row">
+      <label>Jogador:</label>
+      <input id="playerId" value="player1" />
+    </div>
+
+    <div class="row">
+      <button onclick="connectSocket()">Conectar</button>
+      <button onclick="createRoom()">Criar sala</button>
+      <button onclick="joinRoom()">Entrar na sala</button>
+      <button onclick="leaveRoom()">Sair da sala</button>
+      <button onclick="disconnectSocket()">Desconectar</button>
+    </div>
+
+    <h3>Log</h3>
+    <div id="log"></div>
+
+    <script>
+      let socket = null;
+
+      function log(message) {
+        const target = document.getElementById('log');
+        target.textContent += message + '\n';
+        target.scrollTop = target.scrollHeight;
+      }
+
+      function connectSocket() {
+        const serverUrl = document.getElementById('serverUrl').value;
+        if (socket) {
+          socket.disconnect();
+        }
+
+        socket = io(serverUrl, { transports: ['websocket'] });
+
+        socket.on('connect', () => {
+          log(`Conectado: ${socket.id}`);
+        });
+
+        socket.on('connect_error', (err) => {
+          log(`Erro de conexão: ${err.message}`);
+        });
+
+        socket.on('room-state', (state) => {
+          log(`room-state: ${JSON.stringify(state)}`);
+        });
+
+        socket.on('room-error', (error) => {
+          log(`room-error: ${JSON.stringify(error)}`);
+        });
+      }
+
+      function createRoom() {
+        if (!socket || !socket.connected) {
+          log('Conecte primeiro.');
+          return;
+        }
+        const roomId = document.getElementById('roomId').value;
+        socket.emit('create-room', { roomId });
+        log(`Enviando create-room: ${roomId}`);
+      }
+
+      function joinRoom() {
+        if (!socket || !socket.connected) {
+          log('Conecte primeiro.');
+          return;
+        }
+        const roomId = document.getElementById('roomId').value;
+        const playerId = document.getElementById('playerId').value;
+        socket.emit('join-room', { roomId, playerId });
+        log(`Enviando join-room: ${roomId} / ${playerId}`);
+      }
+
+      function leaveRoom() {
+        if (!socket || !socket.connected) {
+          log('Conecte primeiro.');
+          return;
+        }
+        const roomId = document.getElementById('roomId').value;
+        socket.emit('leave-room', { roomId });
+        log(`Enviando leave-room: ${roomId}`);
+      }
+
+      function disconnectSocket() {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+          log('Desconectado.');
+        }
+      }
+    </script>
+  </body>
+</html>

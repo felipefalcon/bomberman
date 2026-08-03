@@ -46,6 +46,7 @@ export class InputManager {
   handleKeyDown(e) {
     const key = e.key.toLowerCase();
     this.keys[key] = true;
+    console.log('[input]', 'keydown', key, this.keys);
     
     this.eventBus.emit(GameEvents.INPUT_KEY_DOWN, { key, originalEvent: e });
   }

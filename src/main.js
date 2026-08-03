@@ -31,8 +31,10 @@ async function bootstrap() {
 
   // scale the stage so logical coordinates remain in 32x32 tiles
   app.stage.scale.set(GAME_ZOOM);
+  window.__PIXI_APP__ = app;
 
   const game = new Game(app);
+  window.__GAME__ = game;
   game.start();
 }
 

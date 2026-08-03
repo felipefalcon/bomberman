@@ -13,6 +13,7 @@ import { PowerupSystem } from '../systems/PowerupSystem.js';
 import { MonsterSystem } from '../systems/MonsterSystem.js';
 import { CollisionSystem } from '../systems/CollisionSystem.js';
 import { GameEvents, globalEventBus } from '../infrastructure/index.js';
+import { OnlineStateBridge } from '../infrastructure/network/OnlineStateBridge.js';
 import { loadPlayerSprites } from '../loaders/playerSprite.js';
 import { loadEnemySprites } from '../loaders/enemySprite.js';
 import { loadBombSprite } from '../loaders/bombLoader.js';
@@ -44,6 +45,7 @@ export class GameInitializer {
     this.inputManager = null;
     this.gameState = null;
     this.audioManager = null;
+    this.onlineStateBridge = null;
     
     // Systems
     this.bombSystem = null;
@@ -87,6 +89,7 @@ export class GameInitializer {
       this.hudManager.setItemIcons(this.itemFrames, this.itemMapping);
     }
     this._initializePlayer();
+    this._initializeOnlineBridge();
     
     return {
       gameContainer: this.gameContainer,
@@ -106,6 +109,7 @@ export class GameInitializer {
         gameState: this.gameState,
         audio: this.audioManager,
         hud: this.hudManager,
+        onlineStateBridge: this.onlineStateBridge,
       },
       destroyingBlocks: this.destroyingBlocks,
     };
@@ -272,6 +276,11 @@ export class GameInitializer {
 
     this.player = new Player(startX, startY, this.tileSize, this.playerFrames, this.playerMapping, this.gameState);
     this.gameContainer.addChild(this.player.sprite);
+  }
+
+  _initializeOnlineBridge() {
+    this.onlineStateBridge = new OnlineStateBridge(this.gameState, this.player);
+    this.onlineStateBridge.connect();
   }
 
   destroy() {

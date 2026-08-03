@@ -149,6 +149,10 @@ export class Player {
     const moveX = vx * this.speed * delta;
     const moveY = vy * this.speed * delta;
 
+    if (vx !== 0 || vy !== 0) {
+      console.log('[player]', 'update', { vx, vy, moveX, moveY, x: this.sprite.x, y: this.sprite.y });
+    }
+
     // decide animation based on input
     this._updateAnimation(vx, vy);
 
@@ -177,11 +181,15 @@ export class Player {
     // Axis-separated movement for smoother sliding along walls
     if (dx !== 0) {
       const nx = this.sprite.x + dx;
-      if (!this._collidesAt(nx, this.sprite.y, map, bombs, bombSystem)) this.sprite.x = nx;
+      if (!this._collidesAt(nx, this.sprite.y, map, bombs, bombSystem)) {
+        this.sprite.x = nx;
+      }
     }
     if (dy !== 0) {
       const ny = this.sprite.y + dy;
-      if (!this._collidesAt(this.sprite.x, ny, map, bombs, bombSystem)) this.sprite.y = ny;
+      if (!this._collidesAt(this.sprite.x, ny, map, bombs, bombSystem)) {
+        this.sprite.y = ny;
+      }
     }
   }
 
