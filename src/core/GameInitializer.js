@@ -12,7 +12,7 @@ import { ExplosionSystem } from '../systems/ExplosionSystem.js';
 import { PowerupSystem } from '../systems/PowerupSystem.js';
 import { MonsterSystem } from '../systems/MonsterSystem.js';
 import { CollisionSystem } from '../systems/CollisionSystem.js';
-import { globalEventBus } from '../engine/EventBus.js';
+import { globalEventBus } from '../infrastructure/index.js';
 import { loadPlayerSprites } from '../loaders/playerSprite.js';
 import { loadEnemySprites } from '../loaders/enemySprite.js';
 import { loadBombSprite } from '../loaders/bombLoader.js';

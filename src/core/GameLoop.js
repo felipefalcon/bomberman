@@ -1,7 +1,9 @@
-import { BombActionHandler } from './handlers/BombActionHandler.js';
-import { BombLifecycleHandler } from './handlers/BombLifecycleHandler.js';
-import { DestroyingBlockAnimator } from './handlers/DestroyingBlockAnimator.js';
-import { HudTimerSync } from './handlers/HudTimerSync.js';
+import {
+  BombActionHandler,
+  BombLifecycleHandler,
+  DestroyingBlockAnimator,
+  HudTimerSync,
+} from '../application/index.js';
 
 /**
  * GameLoop - Manages the main game update loop

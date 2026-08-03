@@ -3,7 +3,7 @@ import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { isSpriteOnTile, spriteToTile, tileCenter } from '../utils/tileUtils.js';
-import { BombFactory } from './bomb/BombFactory.js';
+import { BombFactory } from '../domain/bomb/BombFactory.js';
 
 /**
  * BombSystem - Manages bomb placement, timing, and explosion triggers
