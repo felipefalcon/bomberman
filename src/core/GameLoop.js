@@ -55,10 +55,14 @@ export class GameLoop {
     // Update game state (timer, etc.)
     this.components.managers.gameState.update(tickDelta);
 
+    const inputManager = this.components.managers.input;
+    const movementCommand = inputManager.getMovementCommand();
+    const bombCommand = this.bombActionHandler.buildCommand();
+
     // Update player
     if (this.components.player) {
       const bombs = this.components.systems.bomb.getBombs();
-      this.components.player.update(tickDelta, this.components.managers.input.keys, this.components.map, bombs, this.components.systems.bomb);
+      this.components.player.update(tickDelta, inputManager.keys, this.components.map, bombs, this.components.systems.bomb);
       this.bombActionHandler.processInput();
     }
     
@@ -81,5 +85,12 @@ export class GameLoop {
     
     // HUD timer is updated by GameState UI event emission.
     this.runtimeMetrics.observeFrame(tickDelta);
+
+    if (this.components.managers.gameState?.eventBus) {
+      this.components.managers.gameState.eventBus.emit('game:input_command', {
+        movement: movementCommand,
+        bomb: bombCommand,
+      });
+    }
   }
 }

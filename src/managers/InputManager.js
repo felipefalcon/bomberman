@@ -91,10 +91,11 @@ export class InputManager {
   }
 
   /**
-   * Get movement vector from input
-   * @returns {Object} {x, y} movement vector
+   * Build a normalized movement command from current input state.
+   * This keeps the local input flow compatible with a future networked command pipeline.
+   * @returns {Object} {x, y, action: 'move'}
    */
-  getMovementVector() {
+  getMovementCommand() {
     let x = 0;
     let y = 0;
     
@@ -110,7 +111,15 @@ export class InputManager {
       y *= inv;
     }
     
-    return { x, y };
+    return { type: 'move', x, y };
+  }
+
+  /**
+   * Get movement vector from input
+   * @returns {Object} {x, y} movement vector
+   */
+  getMovementVector() {
+    return this.getMovementCommand();
   }
 
   /**
