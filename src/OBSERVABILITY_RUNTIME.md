@@ -8,6 +8,16 @@ This document describes how runtime metrics are collected, published, and consum
 - Provide stable visibility into frame pacing and entity pressure.
 - Avoid coupling gameplay rules to diagnostics concerns.
 
+## Baseline runtime flags
+
+The current baseline remains single-player and offline for safety:
+
+- `gameMode`: `single-player`
+- `networkMode`: `offline`
+- `isOnline`: `false`
+
+These values are included in the runtime metrics payload under `mode` so manual tests can verify the baseline without changing gameplay.
+
 ## Current Architecture
 
 - Producer: `infrastructure/observability/RuntimeMetricsCollector`

@@ -1,5 +1,6 @@
 import { AnimatedSprite, Graphics } from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
+import { createSeededRandom } from '../utils/seededRandom.js';
 
 export const MONSTER_SPEED = GAME_CONFIG.MONSTER_SPEED;
 
@@ -19,6 +20,7 @@ export class Monster {
     
     this.textures = textures;
     this.mapping = mapping;
+    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
 
     if (this.textures && this.mapping) {
       // create an AnimatedSprite using the idle frame by default
@@ -185,7 +187,7 @@ export class Monster {
     }
     
     this.isTrapped = false;
-    const next = choices[Math.floor(Math.random() * choices.length)];
+    const next = choices[Math.floor(this.random() * choices.length)];
     this.target = next;
   }
 

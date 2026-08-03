@@ -3,6 +3,7 @@ import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { Monster } from '../entities/Monster.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { spriteToTile } from '../utils/tileUtils.js';
+import { createSeededRandom } from '../utils/seededRandom.js';
 
 /**
  * MonsterSystem - Manages monster spawning, AI, and updates
@@ -14,6 +15,7 @@ export class MonsterSystem extends BaseGameSystem {
     this.spawnCount = GAME_CONFIG.MONSTER_SPAWN_COUNT;
     this.enemyFrames = null;
     this.enemyMapping = null;
+    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
   }
 
   /**
@@ -72,9 +74,9 @@ export class MonsterSystem extends BaseGameSystem {
       }
     }
     
-    // Shuffle positions
+    // Shuffle positions with seeded RNG when available
     for (let i = positions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.random() * (i + 1));
       [positions[i], positions[j]] = [positions[j], positions[i]];
     }
     

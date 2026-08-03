@@ -3,6 +3,7 @@ import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { Powerup } from '../entities/Powerup.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { spriteToTile } from '../utils/tileUtils.js';
+import { createSeededRandom } from '../utils/seededRandom.js';
 
 /**
  * PowerupSystem - Manages powerup spawning, collection, and effects
@@ -14,6 +15,7 @@ export class PowerupSystem extends BaseGameSystem {
     this.spawnChance = GAME_CONFIG.POWERUP_SPAWN_CHANCE;
     this.itemFrames = null;
     this.itemMapping = null;
+    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
   }
 
   /**
@@ -33,7 +35,7 @@ export class PowerupSystem extends BaseGameSystem {
    */
   trySpawnPowerup(tx, ty) {
     // Spawn chance is configured in GAME_CONFIG.POWERUP_SPAWN_CHANCE.
-    if (Math.random() > this.spawnChance) return;
+    if (this.random() > this.spawnChance) return;
     if (!this.itemFrames || !this.itemMapping) return;
     
     // Weighted random selection based on rarity
@@ -81,7 +83,7 @@ export class PowerupSystem extends BaseGameSystem {
     }
     
     // Weighted random selection
-    let random = Math.random() * totalWeight;
+    let random = this.random() * totalWeight;
     for (const type of availableTypes) {
       random -= filteredWeights[type];
       if (random <= 0) {

@@ -1,4 +1,5 @@
 import { GameEvents } from '../../engine/EventBus.js';
+import { GAME_CONFIG } from '../../config/Constants.js';
 
 export class RuntimeMetricsCollector {
   constructor(components, eventBus, reportIntervalMs = 1000, sampleWindowSize = 120) {
@@ -32,6 +33,11 @@ export class RuntimeMetricsCollector {
     const metrics = {
       fps: Number(fps.toFixed(2)),
       frameTimeP95Ms: Number(frameTimeP95Ms.toFixed(2)),
+      mode: {
+        gameMode: GAME_CONFIG.GAME_MODE,
+        networkMode: GAME_CONFIG.NETWORK_MODE,
+        isOnline: GAME_CONFIG.ONLINE_ENABLED,
+      },
       entities: {
         bombs: this.components.systems.bomb.getBombs().length,
         monsters: this.components.systems.monster.getMonsters().length,

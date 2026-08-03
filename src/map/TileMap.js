@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { GAME_CONFIG, TILE_TYPES } from '../config/Constants.js';
+import { createSeededRandom } from '../utils/seededRandom.js';
 import { loadTilesetTiles } from '../loaders/tilesetLoader.js';
 import { loadBlockTexture } from '../loaders/blockLoader.js';
 import { loadPillarTexture } from '../loaders/pillarLoader.js';
@@ -18,6 +19,7 @@ export class TileMap {
     this.pillarTexture = null;
     this.debugMode = false;
     this.spriteMap = new Map(); // Track block/pillar sprites by tile position
+    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
 
     this._initPromise = this._init();
   }
@@ -60,7 +62,7 @@ export class TileMap {
 
         // leave open spaces near the start area
         const isStartSafe = (x === 1 && y === 1) || (x === 2 && y === 1) || (x === 1 && y === 2);
-        if (t === TILE_TYPES.FLOOR && !isStartSafe && Math.random() < GAME_CONFIG.MAP_DESTRUCTIBLE_CHANCE) {
+        if (t === TILE_TYPES.FLOOR && !isStartSafe && this.random() < GAME_CONFIG.MAP_DESTRUCTIBLE_CHANCE) {
           t = TILE_TYPES.DESTRUCTIBLE;
         }
 
