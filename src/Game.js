@@ -21,6 +21,7 @@ export class Game {
     
     // Game components (set by initializer)
     this.components = null;
+    this.unsubscribers = [];
   }
 
   /**
@@ -99,7 +100,7 @@ export class Game {
     const gameState = this.components.managers.gameState;
     
     // Listen for damage events and apply to actual player
-    gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
+    this.unsubscribers.push(gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
       if (data.target === 'player' && this.components.player) {
         this.components.player.takeDamage();
         this._refreshHUD();
@@ -107,31 +108,31 @@ export class Game {
           this._handlePlayerDeath();
         }
       }
-    });
+    }));
     
     // Listen for monster damage events
-    gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
+    this.unsubscribers.push(gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
       if (data.target === 'monster' && data.monster) {
         this.components.systems.monster.damageMonster(data.monster);
       }
-    });
+    }));
 
     // Ensure powerups destroyed by explosion are removed from PowerupSystem state too
-    gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
+    this.unsubscribers.push(gameState.eventBus.on(GameEvents.EXPLOSION_DAMAGE, (data) => {
       if (data.target === 'powerup' && data.powerup) {
         this.components.systems.powerup.removePowerup(data.powerup);
       }
-    });
+    }));
 
     // Monster touch damage uses a separate event and must also sync to player entity
-    gameState.eventBus.on(GameEvents.MONSTER_DAMAGE_PLAYER, () => {
+    this.unsubscribers.push(gameState.eventBus.on(GameEvents.MONSTER_DAMAGE_PLAYER, () => {
       if (!this.components.player) return;
       this.components.player.takeDamage();
       this._refreshHUD();
       if (this.components.player.lives <= 0) {
         this._handlePlayerDeath();
       }
-    });
+    }));
   }
 
   /**
@@ -175,13 +176,16 @@ export class Game {
    * Stop the game
    */
   stop() {
+    for (const unsubscribe of this.unsubscribers) {
+      unsubscribe();
+    }
+    this.unsubscribers = [];
+
     if (this.gameLoop) {
       this.gameLoop.stop();
     }
-    
-    if (this.components.managers.input) {
-      this.components.managers.input.unbind();
-    }
+
+    this.initializer?.destroy?.();
   }
 
   /**

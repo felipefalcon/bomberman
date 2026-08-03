@@ -3,6 +3,7 @@ import {
   BombLifecycleHandler,
   DestroyingBlockAnimator,
 } from '../application/index.js';
+import { RuntimeMetricsCollector } from '../infrastructure/index.js';
 
 /**
  * GameLoop - Manages the main game update loop
@@ -17,6 +18,7 @@ export class GameLoop {
     this.bombActionHandler = new BombActionHandler(this.components);
     this.bombLifecycleHandler = new BombLifecycleHandler(this.components);
     this.destroyingBlockAnimator = new DestroyingBlockAnimator(this.components);
+    this.runtimeMetrics = new RuntimeMetricsCollector(this.components, this.components.managers.gameState.eventBus);
   }
 
   /**
@@ -78,5 +80,6 @@ export class GameLoop {
     this.destroyingBlockAnimator.update(tickDelta);
     
     // HUD timer is updated by GameState UI event emission.
+    this.runtimeMetrics.observeFrame(tickDelta);
   }
 }

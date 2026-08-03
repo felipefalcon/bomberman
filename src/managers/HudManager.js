@@ -28,6 +28,7 @@ export class HudManager {
     this.itemMapping = null;
     this.lastRenderedLives = null;
     this.lastRenderedTimer = null;
+    this.unsubscribers = [];
     
     this.fontSize = GAME_CONFIG.HUD.FONT_SIZE;
     
@@ -251,9 +252,9 @@ export class HudManager {
    * Setup event listeners
    */
   setupEventListeners() {
-    this.eventBus.on(GameEvents.UI_UPDATE_LIVES, (data) => this.setLives(data.value));
-    this.eventBus.on(GameEvents.UI_UPDATE_TIMER, (data) => this.setTimer(data.value));
-    this.eventBus.on(GameEvents.UI_UPDATE_POWERUPS, (data) => this.updatePowerups(data.player));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.UI_UPDATE_LIVES, (data) => this.setLives(data.value)));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.UI_UPDATE_TIMER, (data) => this.setTimer(data.value)));
+    this.unsubscribers.push(this.eventBus.on(GameEvents.UI_UPDATE_POWERUPS, (data) => this.updatePowerups(data.player)));
   }
 
   /**
@@ -501,9 +502,10 @@ export class HudManager {
       this.sidebarContainer.parent.removeChild(this.sidebarContainer);
     }
     
-    this.eventBus.off(GameEvents.UI_UPDATE_LIVES);
-    this.eventBus.off(GameEvents.UI_UPDATE_TIMER);
-    this.eventBus.off(GameEvents.UI_UPDATE_POWERUPS);
+    for (const unsubscribe of this.unsubscribers) {
+      unsubscribe();
+    }
+    this.unsubscribers = [];
     
     this.topContainer = null;
     this.sidebarContainer = null;

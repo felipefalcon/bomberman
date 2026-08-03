@@ -12,7 +12,7 @@ import { ExplosionSystem } from '../systems/ExplosionSystem.js';
 import { PowerupSystem } from '../systems/PowerupSystem.js';
 import { MonsterSystem } from '../systems/MonsterSystem.js';
 import { CollisionSystem } from '../systems/CollisionSystem.js';
-import { globalEventBus } from '../infrastructure/index.js';
+import { GameEvents, globalEventBus } from '../infrastructure/index.js';
 import { loadPlayerSprites } from '../loaders/playerSprite.js';
 import { loadEnemySprites } from '../loaders/enemySprite.js';
 import { loadBombSprite } from '../loaders/bombLoader.js';
@@ -64,6 +64,7 @@ export class GameInitializer {
     
     // Block destruction animation state
     this.destroyingBlocks = [];
+    this.unsubscribers = [];
   }
 
   /**
@@ -186,9 +187,11 @@ export class GameInitializer {
    */
   _setupGameStateListeners() {
     // Route audio events emitted by systems to the audio manager.
-    this.gameState.eventBus.on(globalEventBus.constructor.name === 'EventBus' ? 'AUDIO_PLAY' : 'AUDIO_PLAY', (data) => {
-      this.audioManager.playSoundEffect(data.type);
-    });
+    this.unsubscribers.push(
+      this.gameState.eventBus.on(GameEvents.AUDIO_PLAY, (data) => {
+        this.audioManager.playSoundEffect(data.type);
+      })
+    );
   }
 
   /**
@@ -269,5 +272,33 @@ export class GameInitializer {
 
     this.player = new Player(startX, startY, this.tileSize, this.playerFrames, this.playerMapping, this.gameState);
     this.gameContainer.addChild(this.player.sprite);
+  }
+
+  destroy() {
+    for (const unsubscribe of this.unsubscribers) {
+      unsubscribe();
+    }
+    this.unsubscribers = [];
+
+    this.collisionSystem?.destroy?.();
+    this.monsterSystem?.destroy?.();
+    this.powerupSystem?.destroy?.();
+    this.explosionSystem?.destroy?.();
+    this.bombSystem?.destroy?.();
+
+    this.hudManager?.destroy?.();
+    this.inputManager?.destroy?.();
+    this.gameState?.destroy?.();
+    this.audioManager?.stop?.();
+
+    if (this.player?.sprite?.parent) {
+      this.player.sprite.parent.removeChild(this.player.sprite);
+    }
+
+    if (this.gameContainer?.parent) {
+      this.gameContainer.parent.removeChild(this.gameContainer);
+    }
+
+    this.destroyingBlocks = [];
   }
 }
