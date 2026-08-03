@@ -1,36 +1,19 @@
 import * as PIXI from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { BaseGameSystem } from './BaseGameSystem.js';
+import { isSpriteOnTile, spriteToTile, tileCenter } from '../utils/tileUtils.js';
 
 /**
  * BombSystem - Manages bomb placement, timing, and explosion triggers
  */
-export class BombSystem {
+export class BombSystem extends BaseGameSystem {
   constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
-    this.eventBus = eventBus;
-    this.map = map;
-    this.gameContainer = gameContainer;
+    super(eventBus, map, gameContainer);
     this.bombs = [];
-    this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.bombFuseTicks = GAME_CONFIG.BOMB_FUSE_TICKS;
     this.bombFrames = null;
     this.bombMapping = null;
-  }
-
-  /**
-   * Set the map for this system
-   * @param {Object} map - TileMap instance
-   */
-  setMap(map) {
-    this.map = map;
-  }
-
-  /**
-   * Set the game container for this system
-   * @param {PIXI.Container} container - Game container
-   */
-  setGameContainer(container) {
-    this.gameContainer = container;
   }
 
   /**
@@ -116,9 +99,7 @@ export class BombSystem {
       bomb.timer = Infinity; // Land mines don't explode on timer
       
       // Check if player is on the tile when placing the mine
-      const playerTx = Math.floor(player.sprite.x / this.tileSize);
-      const playerTy = Math.floor(player.sprite.y / this.tileSize);
-      if (playerTx === tx && playerTy === ty) {
+      if (isSpriteOnTile(player.sprite, tx, ty, this.tileSize)) {
         bomb.playerTileOnPlacement = true;
       }
     } else if (willBeFollower) {
@@ -161,9 +142,9 @@ export class BombSystem {
     let minDistance = Infinity;
 
     for (const enemy of enemies) {
-      const enemyTx = Math.floor(enemy.sprite.x / this.tileSize);
-      const enemyTy = Math.floor(enemy.sprite.y / this.tileSize);
-      const distance = Math.abs(enemyTx - tx) + Math.abs(enemyTy - ty);
+      const enemyTile = spriteToTile(enemy.sprite, this.tileSize);
+      if (!enemyTile) continue;
+      const distance = Math.abs(enemyTile.tx - tx) + Math.abs(enemyTile.ty - ty);
 
       // Only consider enemies within max distance
       if (distance <= maxDistance && distance < minDistance) {
@@ -225,9 +206,9 @@ export class BombSystem {
     }
 
     // Position at center of tile
-    const half = this.tileSize / 2;
-    sprite.x = tx * this.tileSize + half;
-    sprite.y = ty * this.tileSize + half;
+    const center = tileCenter(tx, ty, this.tileSize);
+    sprite.x = center.x;
+    sprite.y = center.y;
     sprite.roundPixels = true;
     return sprite;
   }
@@ -390,9 +371,9 @@ export class BombSystem {
       bomb.tx = bomb.nextTx;
       bomb.ty = bomb.nextTy;
 
-      const half = this.tileSize / 2;
-      bomb.sprite.x = bomb.tx * this.tileSize + half;
-      bomb.sprite.y = bomb.ty * this.tileSize + half;
+      const center = tileCenter(bomb.tx, bomb.ty, this.tileSize);
+      bomb.sprite.x = center.x;
+      bomb.sprite.y = center.y;
 
     }
 
@@ -573,8 +554,10 @@ export class BombSystem {
       }
 
       // Get target enemy position
-      const targetTx = Math.floor(bomb.targetEnemy.sprite.x / this.tileSize);
-      const targetTy = Math.floor(bomb.targetEnemy.sprite.y / this.tileSize);
+      const targetTile = spriteToTile(bomb.targetEnemy.sprite, this.tileSize);
+      if (!targetTile) continue;
+      const targetTx = targetTile.tx;
+      const targetTy = targetTile.ty;
 
       // Calculate direction to target
       const dx = targetTx - bomb.tx;
@@ -672,12 +655,12 @@ export class BombSystem {
       } else {
         // Check if player or enemy is on the land mine
         if (player) {
-          const playerTx = Math.floor(player.sprite.x / this.tileSize);
-          const playerTy = Math.floor(player.sprite.y / this.tileSize);
+          const playerTile = spriteToTile(player.sprite, this.tileSize);
+          if (!playerTile) continue;
           
           // If player was on tile when mine was placed, don't trigger until they leave
           if (bomb.playerTileOnPlacement) {
-            if (playerTx !== bomb.tx || playerTy !== bomb.ty) {
+            if (playerTile.tx !== bomb.tx || playerTile.ty !== bomb.ty) {
               // Player left the tile, now mine can be triggered normally
               bomb.playerTileOnPlacement = false;
             }
@@ -685,7 +668,7 @@ export class BombSystem {
             continue;
           }
           
-          if (playerTx === bomb.tx && playerTy === bomb.ty) {
+          if (playerTile.tx === bomb.tx && playerTile.ty === bomb.ty) {
             this.triggerLandMine(bomb);
             continue;
           }
@@ -693,9 +676,9 @@ export class BombSystem {
 
         // Check enemies
         for (const enemy of enemies) {
-          const enemyTx = Math.floor(enemy.sprite.x / this.tileSize);
-          const enemyTy = Math.floor(enemy.sprite.y / this.tileSize);
-          if (enemyTx === bomb.tx && enemyTy === bomb.ty) {
+          const enemyTile = spriteToTile(enemy.sprite, this.tileSize);
+          if (!enemyTile) continue;
+          if (enemyTile.tx === bomb.tx && enemyTile.ty === bomb.ty) {
             this.triggerLandMine(bomb);
             break;
           }
@@ -712,9 +695,7 @@ export class BombSystem {
    */
   isEntityOnBomb(entity, bomb) {
     if (!entity || !entity.sprite) return false;
-    const entityTx = Math.floor(entity.sprite.x / this.tileSize);
-    const entityTy = Math.floor(entity.sprite.y / this.tileSize);
-    return entityTx === bomb.tx && entityTy === bomb.ty;
+    return isSpriteOnTile(entity.sprite, bomb.tx, bomb.ty, this.tileSize);
   }
 
   /**
@@ -771,9 +752,9 @@ export class BombSystem {
     bomb.throwTiles = 0;
     bomb.throwPath = [];
 
-    const half = this.tileSize / 2;
-    bomb.sprite.x = bomb.tx * this.tileSize + half;
-    bomb.sprite.y = bomb.ty * this.tileSize + half;
+    const center = tileCenter(bomb.tx, bomb.ty, this.tileSize);
+    bomb.sprite.x = center.x;
+    bomb.sprite.y = center.y;
 
     bomb.sprite.scale.set(2);
 
@@ -828,9 +809,9 @@ export class BombSystem {
     bomb.nextTy = bomb.ty;
     bomb.canMove = false;
 
-    const half = this.tileSize / 2;
-    bomb.sprite.x = bomb.tx * this.tileSize + half;
-    bomb.sprite.y = bomb.ty * this.tileSize + half;
+    const center = tileCenter(bomb.tx, bomb.ty, this.tileSize);
+    bomb.sprite.x = center.x;
+    bomb.sprite.y = center.y;
   }
 
   /**
@@ -991,7 +972,6 @@ export class BombSystem {
    */
   destroy() {
     this.clear();
-    this.map = null;
-    this.gameContainer = null;
+    super.destroy();
   }
 }

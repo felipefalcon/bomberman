@@ -1,34 +1,17 @@
 import * as PIXI from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { BaseGameSystem } from './BaseGameSystem.js';
+import { spriteToTile } from '../utils/tileUtils.js';
 
 /**
  * ExplosionSystem - Manages explosions, damage, and visual effects
  */
-export class ExplosionSystem {
+export class ExplosionSystem extends BaseGameSystem {
   constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
-    this.eventBus = eventBus;
-    this.map = map;
-    this.gameContainer = gameContainer;
+    super(eventBus, map, gameContainer);
     this.explosions = [];
-    this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.explosionDuration = GAME_CONFIG.EXPLOSION_DURATION;
-  }
-
-  /**
-   * Set the map for this system
-   * @param {Object} map - TileMap instance
-   */
-  setMap(map) {
-    this.map = map;
-  }
-
-  /**
-   * Set the game container for this system
-   * @param {PIXI.Container} container - Game container
-   */
-  setGameContainer(container) {
-    this.gameContainer = container;
   }
 
   /**
@@ -196,9 +179,9 @@ export class ExplosionSystem {
    */
   isPlayerOnTile(tx, ty, player) {
     if (!player || !player.sprite) return false;
-    const playerTx = Math.floor(player.sprite.x / this.tileSize);
-    const playerTy = Math.floor(player.sprite.y / this.tileSize);
-    return playerTx === tx && playerTy === ty;
+    const playerTile = spriteToTile(player.sprite, this.tileSize);
+    if (!playerTile) return false;
+    return playerTile.tx === tx && playerTile.ty === ty;
   }
 
   /**
@@ -293,7 +276,6 @@ export class ExplosionSystem {
    */
   destroy() {
     this.clear();
-    this.map = null;
-    this.gameContainer = null;
+    super.destroy();
   }
 }

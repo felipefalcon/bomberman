@@ -1,36 +1,19 @@
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { Monster } from '../entities/Monster.js';
+import { BaseGameSystem } from './BaseGameSystem.js';
+import { spriteToTile } from '../utils/tileUtils.js';
 
 /**
  * MonsterSystem - Manages monster spawning, AI, and updates
  */
-export class MonsterSystem {
+export class MonsterSystem extends BaseGameSystem {
   constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
-    this.eventBus = eventBus;
-    this.map = map;
-    this.gameContainer = gameContainer;
+    super(eventBus, map, gameContainer);
     this.monsters = [];
-    this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.spawnCount = GAME_CONFIG.MONSTER_SPAWN_COUNT;
     this.enemyFrames = null;
     this.enemyMapping = null;
-  }
-
-  /**
-   * Set the map for this system
-   * @param {Object} map - TileMap instance
-   */
-  setMap(map) {
-    this.map = map;
-  }
-
-  /**
-   * Set the game container for this system
-   * @param {PIXI.Container} container - Game container
-   */
-  setGameContainer(container) {
-    this.gameContainer = container;
   }
 
   /**
@@ -130,9 +113,9 @@ export class MonsterSystem {
    */
   isMonsterOnPlayer(monster, player) {
     if (!player || !player.sprite) return false;
-    const playerTx = Math.floor(player.sprite.x / this.tileSize);
-    const playerTy = Math.floor(player.sprite.y / this.tileSize);
-    return monster.isOnTile(playerTx, playerTy);
+    const playerTile = spriteToTile(player.sprite, this.tileSize);
+    if (!playerTile) return false;
+    return monster.isOnTile(playerTile.tx, playerTile.ty);
   }
 
   /**
@@ -199,7 +182,6 @@ export class MonsterSystem {
    */
   destroy() {
     this.clear();
-    this.map = null;
-    this.gameContainer = null;
+    super.destroy();
   }
 }

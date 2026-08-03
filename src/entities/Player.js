@@ -1,6 +1,7 @@
 import { AnimatedSprite, Graphics } from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
 import { ComponentManager } from '../components/ComponentManager.js';
+import { getCornerTileKeys, getCorners, tileCenter, tileKey, toTile } from '../utils/tileUtils.js';
 
 export class Player {
   // textures: optional array of PIXI.Texture frames
@@ -158,18 +159,18 @@ export class Player {
     // Apply snapping when changing direction perpendicular to current movement
     if (dx !== 0 && dy === 0) {
       // Moving horizontally - snap Y to tile center if close
-      const tileCenterY = (Math.floor(this.sprite.y / this.tileSize) * this.tileSize) + (this.tileSize / 2);
-      const distFromCenter = Math.abs(this.sprite.y - tileCenterY);
+      const centeredTileY = tileCenter(0, toTile(this.sprite.y, this.tileSize), this.tileSize).y;
+      const distFromCenter = Math.abs(this.sprite.y - centeredTileY);
       if (distFromCenter < 8) {
-        this.sprite.y = tileCenterY;
+        this.sprite.y = centeredTileY;
       }
     }
     if (dy !== 0 && dx === 0) {
       // Moving vertically - snap X to tile center if close
-      const tileCenterX = (Math.floor(this.sprite.x / this.tileSize) * this.tileSize) + (this.tileSize / 2);
-      const distFromCenter = Math.abs(this.sprite.x - tileCenterX);
+      const centeredTileX = tileCenter(toTile(this.sprite.x, this.tileSize), 0, this.tileSize).x;
+      const distFromCenter = Math.abs(this.sprite.x - centeredTileX);
       if (distFromCenter < 8) {
-        this.sprite.x = tileCenterX;
+        this.sprite.x = centeredTileX;
       }
     }
 
@@ -186,24 +187,12 @@ export class Player {
 
   _collidesAt(cx, cy, map, bombs, bombSystem = null) {
     // check collision box corners using collisionHalf
-    const currentCorners = [
-      { x: this.sprite.x - this.collisionHalf, y: this.sprite.y - this.collisionHalf },
-      { x: this.sprite.x + this.collisionHalf - 1, y: this.sprite.y - this.collisionHalf },
-      { x: this.sprite.x - this.collisionHalf, y: this.sprite.y + this.collisionHalf - 1 },
-      { x: this.sprite.x + this.collisionHalf - 1, y: this.sprite.y + this.collisionHalf - 1 },
-    ];
-    const currentTiles = new Set(currentCorners.map((c) => `${Math.floor(c.x / this.tileSize)},${Math.floor(c.y / this.tileSize)}`));
-
-    const corners = [
-      { x: cx - this.collisionHalf, y: cy - this.collisionHalf },
-      { x: cx + this.collisionHalf - 1, y: cy - this.collisionHalf },
-      { x: cx - this.collisionHalf, y: cy + this.collisionHalf - 1 },
-      { x: cx + this.collisionHalf - 1, y: cy + this.collisionHalf - 1 },
-    ];
+    const currentTiles = getCornerTileKeys(this.sprite.x, this.sprite.y, this.collisionHalf, this.tileSize);
+    const corners = getCorners(cx, cy, this.collisionHalf);
 
     for (const c of corners) {
-      const tx = Math.floor(c.x / this.tileSize);
-      const ty = Math.floor(c.y / this.tileSize);
+      const tx = toTile(c.x, this.tileSize);
+      const ty = toTile(c.y, this.tileSize);
 
       if (this.hasCrossBlock && map.isDestructible(tx, ty)) {
         continue; // Allow movement through cross blocks
@@ -221,7 +210,7 @@ export class Player {
           continue;
         }
         
-        if (currentTiles.has(`${tx},${ty}`)) {
+        if (currentTiles.has(tileKey(tx, ty))) {
           continue;
         }
         

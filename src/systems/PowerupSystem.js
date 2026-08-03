@@ -1,27 +1,19 @@
 import { GAME_CONFIG, POWERUP_TYPES } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from '../engine/EventBus.js';
 import { Powerup } from '../entities/Powerup.js';
+import { BaseGameSystem } from './BaseGameSystem.js';
+import { spriteToTile } from '../utils/tileUtils.js';
 
 /**
  * PowerupSystem - Manages powerup spawning, collection, and effects
  */
-export class PowerupSystem {
+export class PowerupSystem extends BaseGameSystem {
   constructor(eventBus = globalEventBus, gameContainer = null) {
-    this.eventBus = eventBus;
-    this.gameContainer = gameContainer;
+    super(eventBus, null, gameContainer);
     this.powerups = [];
-    this.tileSize = GAME_CONFIG.TILE_SIZE;
     this.spawnChance = GAME_CONFIG.POWERUP_SPAWN_CHANCE;
     this.itemFrames = null;
     this.itemMapping = null;
-  }
-
-  /**
-   * Set the game container for this system
-   * @param {PIXI.Container} container - Game container
-   */
-  setGameContainer(container) {
-    this.gameContainer = container;
   }
 
   /**
@@ -141,9 +133,9 @@ export class PowerupSystem {
    */
   isPlayerOnPowerup(player, powerup) {
     if (!player || !player.sprite) return false;
-    const playerTx = Math.floor(player.sprite.x / this.tileSize);
-    const playerTy = Math.floor(player.sprite.y / this.tileSize);
-    return powerup.isOnTile(playerTx, playerTy);
+    const playerTile = spriteToTile(player.sprite, this.tileSize);
+    if (!playerTile) return false;
+    return powerup.isOnTile(playerTile.tx, playerTile.ty);
   }
 
   /**
@@ -283,6 +275,6 @@ export class PowerupSystem {
    */
   destroy() {
     this.clear();
-    this.gameContainer = null;
+    super.destroy();
   }
 }
