@@ -31,9 +31,9 @@ This project now uses an incremental layered architecture. The structure is desi
 
 ## Compatibility Strategy
 
-Existing paths remain valid through re-export shims in old locations:
+The temporary migration shims were removed after the layered structure stabilized.
 
-- `systems/bomb/BombFactory` re-exports from `domain/bomb/BombFactory`
-- `systems/explosion/ExplosionRenderer` re-exports from `presentation/renderers/ExplosionRenderer`
+- Use direct imports from `domain/` and `presentation/` modules.
+- Prefer `application/` handlers over legacy core paths.
 
-This allows step-by-step migration with minimal risk.
+This keeps ownership boundaries explicit and reduces indirection.
