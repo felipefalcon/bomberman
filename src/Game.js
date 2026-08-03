@@ -60,11 +60,24 @@ export class Game {
     // Initialize game loop
     this.gameLoop = new GameLoop(this.components);
     console.log('[game] starting loop');
+
+    const params = new URLSearchParams(window.location.search);
+    const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true';
+    const roomId = params.get('room') || 'room';
+    const playerId = params.get('player') || undefined;
+
+    if (onlineEnabled && this.components.managers.onlineStateBridge) {
+      this.components.managers.onlineStateBridge.enable(roomId, playerId);
+    }
+
     this.components.managers.onlineStateBridge?.applySnapshot?.({
-      player: {
-        x: this.components.player.sprite.x,
-        y: this.components.player.sprite.y,
-      },
+      players: [
+        {
+          playerId: this.components.managers.onlineStateBridge?.playerId || 'local',
+          x: this.components.player.sprite.x,
+          y: this.components.player.sprite.y,
+        },
+      ],
     });
     this.gameLoop.start(this.app);
     

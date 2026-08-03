@@ -96,11 +96,20 @@ export class GameLoop {
         const snapshot = onlineBridge?.getSnapshot?.();
         const player = this.components.player;
 
-        const shouldApplyRemoteSnapshot = Boolean(snapshot?.player && onlineBridge?.enabled && onlineBridge?.connected);
+        const shouldApplyRemoteSnapshot = Boolean(onlineBridge?.enabled && onlineBridge?.connected && onlineBridge?.hasRemoteSnapshot && snapshot?.players);
 
         if (shouldApplyRemoteSnapshot) {
-          player.sprite.x = snapshot.player.x;
-          player.sprite.y = snapshot.player.y;
+          const remotePlayer = snapshot.players.find((entry) => entry.playerId === onlineBridge.playerId);
+          if (remotePlayer) {
+            player.sprite.x = remotePlayer.x;
+            player.sprite.y = remotePlayer.y;
+          }
+          onlineBridge.sendInput({
+            type: 'move',
+            x: movementCommand.x,
+            y: movementCommand.y,
+            bomb: bombCommand,
+          });
         } else {
           player.update(tickDelta, inputManager.keys, this.components.map, bombs, this.components.systems.bomb);
         }
