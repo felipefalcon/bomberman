@@ -6,9 +6,19 @@ export class BombActionHandler {
   }
 
   processInput() {
-    if (this.components.managers.input.isKeyPressed('z')) {
+    const input = this.components.managers.input;
+    if (input.isKeyPressed('z')) {
       this.handleBombAction();
     }
+  }
+
+  buildCommand() {
+    const input = this.components.managers.input;
+    if (!input.isKeyPressed('z')) {
+      return null;
+    }
+
+    return { type: 'bomb', timestamp: Date.now() };
   }
 
   handleBombAction() {
