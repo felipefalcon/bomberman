@@ -43,6 +43,5 @@ export async function loadPlayerSprites(url = `${import.meta.env.BASE_URL}assets
   mapping.walkUp = hasUpRow ? upFrames : [];
   mapping.idleUp = hasUpRow ? [upFrames[2]] : [];
 
-  console.log('playerSprite: loaded spritesheet', { width: img.width, height: img.height, cols, rows, frames: frames.length });
   return { frames, cols, rows, mapping };
 }

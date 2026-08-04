@@ -17,7 +17,6 @@ export async function loadPillarTexture(url = `${import.meta.env.BASE_URL}assets
       texture.source.scaleMode = 'nearest';
     }
 
-    console.log('pillarLoader: loaded pillar texture', { width: texture.width, height: texture.height });
     return texture;
   } catch (error) {
     console.error('Error loading pillar texture:', error);

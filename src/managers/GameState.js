@@ -17,6 +17,8 @@ export class GameState {
     
     // Time
     this.timeRemaining = GAME_CONFIG.TIME_REMAINING;
+    this.onlineCountdownSeconds = null;
+    this.isPreGameCountdownActive = false;
     
     // Player state
     this.playerState = {
@@ -94,6 +96,8 @@ export class GameState {
    */
   update(delta) {
     if (!this.isRunning || this.isPaused || this.isGameOver) return;
+
+    if (this.isPreGameCountdownActive) return;
     
     // Update timer
     if (this.timeRemaining > 0) {
@@ -109,6 +113,30 @@ export class GameState {
         this.handleTimeUp();
       }
     }
+  }
+
+  setTimeRemaining(value, options = {}) {
+    const normalized = Number.isFinite(value) ? Math.max(0, Number(value)) : GAME_CONFIG.TIME_REMAINING;
+    this.timeRemaining = normalized;
+    this.lastUiSecond = Math.ceil(this.timeRemaining) - 1;
+    if (options.emit !== false) {
+      this.eventBus.emit(GameEvents.UI_UPDATE_TIMER, { value: this.timeRemaining, isCountdown: !!options.isCountdown });
+    }
+  }
+
+  setOnlineCountdown(seconds) {
+    const countdown = Math.max(0, Math.floor(Number(seconds) || 0));
+    this.onlineCountdownSeconds = countdown;
+    this.isPreGameCountdownActive = countdown > 0;
+    this.isPaused = countdown > 0;
+    this.setTimeRemaining(countdown, { emit: true, isCountdown: true });
+  }
+
+  clearOnlineCountdown() {
+    this.onlineCountdownSeconds = null;
+    this.isPreGameCountdownActive = false;
+    this.isPaused = false;
+    this.setTimeRemaining(GAME_CONFIG.TIME_REMAINING, { emit: true, isCountdown: false });
   }
 
   /**

@@ -15,7 +15,7 @@ export class PowerupSystem extends BaseGameSystem {
     this.spawnChance = GAME_CONFIG.POWERUP_SPAWN_CHANCE;
     this.itemFrames = null;
     this.itemMapping = null;
-    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
+    this.random = createSeededRandom(window.__ROOM_SEED__ ?? GAME_CONFIG.RNG_SEED);
   }
 
   /**
@@ -129,6 +129,45 @@ export class PowerupSystem extends BaseGameSystem {
     this.powerups = this.powerups.filter((powerup) => !removed.has(powerup));
   }
 
+  syncFromSnapshot(powerups = []) {
+    if (!Array.isArray(powerups)) return;
+
+    const existingById = new Map(
+      this.powerups.map((powerup) => [powerup.serverId || `${powerup.tx}:${powerup.ty}:${powerup.type}`, powerup])
+    );
+    const nextIds = new Set();
+
+    for (const entry of powerups) {
+      const serverId = entry.id || `${entry.tx}:${entry.ty}:${entry.type}`;
+      nextIds.add(serverId);
+
+      let powerup = existingById.get(serverId);
+      if (!powerup) {
+        const frameIndex = this.itemMapping?.[entry.type];
+        const texture = Number.isFinite(frameIndex) ? this.itemFrames?.[frameIndex] : null;
+        if (!texture) continue;
+
+        powerup = new Powerup(entry.tx, entry.ty, this.tileSize, entry.type, texture);
+        this.powerups.push(powerup);
+        this.gameContainer?.addChild(powerup.sprite);
+      }
+
+      powerup.serverId = serverId;
+      powerup.tx = entry.tx;
+      powerup.ty = entry.ty;
+      powerup.type = entry.type;
+      powerup.immuneTicks = Number.isFinite(entry.immuneTicks) ? entry.immuneTicks : 0;
+      powerup.update(0);
+    }
+
+    for (const powerup of this.powerups.slice()) {
+      const id = powerup.serverId || `${powerup.tx}:${powerup.ty}:${powerup.type}`;
+      if (!nextIds.has(id)) {
+        this.removePowerup(powerup);
+      }
+    }
+  }
+
   /**
    * Check if player is on a powerup
    * @param {Object} player - Player entity
@@ -148,8 +187,6 @@ export class PowerupSystem extends BaseGameSystem {
    * @param {string} type - Powerup type
    */
   applyPowerup(player, type) {
-    console.log(`Player collected: ${type}`);
-    
     // Use component manager to apply powerup
     if (player.componentManager) {
       player.componentManager.addComponent(type, player, player.gameState);

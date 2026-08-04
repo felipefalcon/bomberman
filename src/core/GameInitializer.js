@@ -13,6 +13,7 @@ import { PowerupSystem } from '../systems/PowerupSystem.js';
 import { MonsterSystem } from '../systems/MonsterSystem.js';
 import { CollisionSystem } from '../systems/CollisionSystem.js';
 import { GameEvents, globalEventBus } from '../infrastructure/index.js';
+import { OnlineStateBridge } from '../infrastructure/network/OnlineStateBridge.js';
 import { loadPlayerSprites } from '../loaders/playerSprite.js';
 import { loadEnemySprites } from '../loaders/enemySprite.js';
 import { loadBombSprite } from '../loaders/bombLoader.js';
@@ -44,6 +45,7 @@ export class GameInitializer {
     this.inputManager = null;
     this.gameState = null;
     this.audioManager = null;
+    this.onlineStateBridge = null;
     
     // Systems
     this.bombSystem = null;
@@ -87,6 +89,7 @@ export class GameInitializer {
       this.hudManager.setItemIcons(this.itemFrames, this.itemMapping);
     }
     this._initializePlayer();
+    this._initializeOnlineBridge();
     
     return {
       gameContainer: this.gameContainer,
@@ -106,6 +109,7 @@ export class GameInitializer {
         gameState: this.gameState,
         audio: this.audioManager,
         hud: this.hudManager,
+        onlineStateBridge: this.onlineStateBridge,
       },
       destroyingBlocks: this.destroyingBlocks,
     };
@@ -125,7 +129,7 @@ export class GameInitializer {
    * Initialize the map
    */
   _initializeMap() {
-    this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows);
+    this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows, window.__ROOM_SEED__ ?? GAME_CONFIG.RNG_SEED);
     this.gameContainer.addChild(this.map.container);
   }
 
@@ -203,7 +207,6 @@ export class GameInitializer {
       .then(({ frames, mapping }) => {
         this.playerFrames = frames;
         this.playerMapping = mapping;
-        console.log('GameInitializer: Player spritesheet loaded');
       })
       .catch((err) => {
         console.warn('Could not load player spritesheet, using placeholder. Error:', err);
@@ -217,14 +220,21 @@ export class GameInitializer {
         const { frames, mapping } = await loadEnemySprites();
         this.enemyFrames = frames;
         this.enemyMapping = mapping;
-        console.log('GameInitializer: Enemy spritesheet loaded');
         this.monsterSystem.setAssets(frames, mapping);
-        this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        if (window.__ONLINE_ENABLED__) {
+          this.monsterSystem.clear();
+        } else {
+          this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        }
       } catch (err) {
         console.warn('Could not load enemy spritesheet, using placeholder. Error:', err);
         this.enemyFrames = null;
         this.enemyMapping = null;
-        this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        if (window.__ONLINE_ENABLED__) {
+          this.monsterSystem.clear();
+        } else {
+          this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        }
       }
     });
 
@@ -233,7 +243,6 @@ export class GameInitializer {
       .then(({ frames, mapping }) => {
         this.bombFrames = frames;
         this.bombMapping = mapping;
-        console.log('GameInitializer: Bomb sprite loaded');
         this.bombSystem.setAssets(frames, mapping);
       })
       .catch((err) => {
@@ -247,7 +256,6 @@ export class GameInitializer {
       .then(({ frames, mapping }) => {
         this.itemFrames = frames;
         this.itemMapping = mapping;
-        console.log('GameInitializer: Item sprites loaded');
         this.powerupSystem.setAssets(frames, mapping);
         // Update HUD with item icons
         if (this.hudManager) {
@@ -272,6 +280,10 @@ export class GameInitializer {
 
     this.player = new Player(startX, startY, this.tileSize, this.playerFrames, this.playerMapping, this.gameState);
     this.gameContainer.addChild(this.player.sprite);
+  }
+
+  _initializeOnlineBridge() {
+    this.onlineStateBridge = new OnlineStateBridge(this.gameState, this.player);
   }
 
   destroy() {

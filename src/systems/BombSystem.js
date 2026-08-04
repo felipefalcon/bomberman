@@ -198,6 +198,80 @@ export class BombSystem extends BaseGameSystem {
 
   }
 
+  syncFromSnapshot(bombs = []) {
+    if (!Array.isArray(bombs)) return;
+
+    const existingById = new Map(
+      this.bombs.map((bomb) => [bomb.serverId || `${bomb.tx}:${bomb.ty}:${bomb.timer}`, bomb])
+    );
+    const nextIds = new Set();
+
+    for (const entry of bombs) {
+      const serverId = entry.id || `${entry.tx}:${entry.ty}:${entry.timer}`;
+      nextIds.add(serverId);
+
+      let bomb = existingById.get(serverId);
+      if (!bomb) {
+        bomb = {
+          tx: entry.tx,
+          ty: entry.ty,
+          timer: entry.timer,
+          sprite: this.createBombSprite(entry.tx, entry.ty, !!entry.isFollower, !!entry.isLandMine),
+          isSliding: false,
+          isThrowing: false,
+          isFollower: false,
+          isLandMine: false,
+          isTriggered: false,
+          triggerTimer: 0,
+          soundPlayed: false,
+        };
+        this.bombs.push(bomb);
+        this.gameContainer?.addChild(bomb.sprite);
+      }
+
+      bomb.serverId = serverId;
+      bomb.tx = entry.tx;
+      bomb.ty = entry.ty;
+      bomb.timer = Number.isFinite(entry.timer) ? entry.timer : bomb.timer;
+      bomb.isFollower = !!entry.isFollower;
+      bomb.isLandMine = !!entry.isLandMine;
+      bomb.isSliding = !!entry.isSliding;
+      bomb.isThrowing = !!entry.isThrowing;
+      bomb.isTriggered = !!entry.isTriggered;
+      bomb.triggerTimer = Number.isFinite(entry.triggerTimer) ? entry.triggerTimer : bomb.triggerTimer;
+
+      // Recreate sprite when bomb type changes to keep visuals aligned.
+      const shouldBeAnimated = bomb.isFollower || (!bomb.isLandMine && this.bombFrames && this.bombMapping);
+      const isAnimated = bomb.sprite instanceof PIXI.AnimatedSprite;
+      const shouldBeStaticLandMine = bomb.isLandMine;
+      const isStaticLandMine = bomb.sprite instanceof PIXI.Sprite && !isAnimated;
+      if ((shouldBeStaticLandMine && !isStaticLandMine) || (!shouldBeStaticLandMine && !isAnimated && shouldBeAnimated)) {
+        this.gameContainer?.removeChild(bomb.sprite);
+        bomb.sprite = this.createBombSprite(entry.tx, entry.ty, bomb.isFollower, bomb.isLandMine);
+        this.gameContainer?.addChild(bomb.sprite);
+      }
+
+      const center = tileCenter(entry.tx, entry.ty, this.tileSize);
+      bomb.sprite.x = Number.isFinite(entry.x) ? entry.x : center.x;
+      bomb.sprite.y = Number.isFinite(entry.y) ? entry.y : center.y;
+      if (bomb.isLandMine && bomb.isTriggered) {
+        const phase = Math.floor((bomb.triggerTimer / 10) % 2);
+        bomb.sprite.alpha = phase === 0 ? 0.35 : 1;
+      } else {
+        bomb.sprite.alpha = 1;
+      }
+      bomb.sprite.visible = entry.isVisible !== false;
+    }
+
+    for (const bomb of this.bombs.slice()) {
+      const id = bomb.serverId || `${bomb.tx}:${bomb.ty}:${bomb.timer}`;
+      if (!nextIds.has(id)) {
+        this.gameContainer?.removeChild(bomb.sprite);
+        this.bombs = this.bombs.filter((entry) => entry !== bomb);
+      }
+    }
+  }
+
   updateSliding(delta) {
 
     this.calculateTargets();
@@ -770,14 +844,12 @@ export class BombSystem extends BaseGameSystem {
    * @param {Function} explodeCallback - Callback for explosion logic
    */
   explodeBomb(bomb, explodeCallback) {
-    console.log('BombSystem: Exploding bomb at', bomb.tx, bomb.ty);
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.gameContainer.removeChild(bomb.sprite);
 
     this.eventBus.emit(GameEvents.BOMB_EXPLODE, { tx: bomb.tx, ty: bomb.ty });
 
     if (explodeCallback) {
-      console.log('BombSystem: Calling explodeCallback');
       explodeCallback(bomb);
     }
   }
@@ -821,7 +893,6 @@ export class BombSystem extends BaseGameSystem {
 
     // Check if there's another bomb at the target position
     if (this.bombs.some((b) => b !== bomb && b.tx === nextTx && b.ty === nextTy)) return false;
-    console.log('BombSystem: No bomb at target position');
 
     // Start sliding
     bomb.isSliding = true;

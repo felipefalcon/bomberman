@@ -39,6 +39,5 @@ export async function loadEnemySprites(url = `${import.meta.env.BASE_URL}assets/
   mapping.walkLeft = rightFrames;
   mapping.idleLeft = [rightFrames[2]];
 
-  console.log('enemySprite: loaded enemy spritesheet', { width: img.width, height: img.height, cols, rows, frames: frames.length });
   return { frames, mapping };
 }

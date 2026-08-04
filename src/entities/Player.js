@@ -39,6 +39,7 @@ export class Player {
     if (this.sprite.anchor && typeof this.sprite.anchor.set === 'function') {
       this.sprite.anchor.set(0.5, 0.5);
     }
+    this.sprite.roundPixels = true;
     this.sprite.x = x;
     this.sprite.y = y;
 
@@ -47,6 +48,8 @@ export class Player {
     this.blinkTimer = 0;
     this.isBlinking = false;
     this.blinkDuration = GAME_CONFIG.PLAYER_BLINK_DURATION;
+    this.playerId = null;
+    this._applyPlayerTint();
   }
 
   // Getters for player state from GameState
@@ -104,6 +107,48 @@ export class Player {
     return (this.componentManager.hasComponent('land_mine') || this.gameState?.playerState?.hasLandMine) ?? false;
   }
 
+  setPlayerIdentity(playerId) {
+    this.playerId = playerId;
+    this._applyPlayerTint();
+  }
+
+  _applyPlayerTint() {
+    const tint = this._getTintForPlayerId(this.playerId);
+    if (this.sprite && typeof this.sprite === 'object' && 'tint' in this.sprite) {
+      this.sprite.tint = tint;
+    }
+  }
+
+  _getTintForPlayerId(playerId) {
+    const normalized = String(playerId || '').trim().toLowerCase();
+    const number = this._resolvePlayerNumber(normalized);
+
+    switch (number) {
+      case 2:
+        return 0xff6666;
+      case 3:
+        return 0x66ff66;
+      case 4:
+        return 0xffd166;
+      case 1:
+      default:
+        return null;
+    }
+  }
+
+  _resolvePlayerNumber(playerId) {
+    if (!playerId) return 1;
+    if (playerId.startsWith('player-')) {
+      const parsed = Number(playerId.split('-').pop());
+      return Number.isFinite(parsed) ? parsed : 1;
+    }
+    if (playerId === 'p1' || playerId === 'player1' || playerId === '1') return 1;
+    if (playerId === 'p2' || playerId === 'player2' || playerId === '2') return 2;
+    if (playerId === 'p3' || playerId === 'player3' || playerId === '3') return 3;
+    if (playerId === 'p4' || playerId === 'player4' || playerId === '4') return 4;
+    return 1;
+  }
+
   takeDamage() {
     if (this.lives <= 0 || this.isBlinking) return false;
     // Update GameState instead of local state
@@ -119,7 +164,7 @@ export class Player {
     this.blinkTimer = 0;
   }
 
-  update(delta, keys, map, bombs = [], bombSystem = null) {
+  update(delta, keys, map, bombs = [], bombSystem = null, skipLocalPositionIntegration = false) {
     // Handle blink effect when taking damage
     if (this.isBlinking) {
       this.blinkTimer += delta;
@@ -152,7 +197,28 @@ export class Player {
     // decide animation based on input
     this._updateAnimation(vx, vy);
 
-    this._tryMove(moveX, moveY, map, bombs, bombSystem);
+    if (!skipLocalPositionIntegration) {
+      this._tryMove(moveX, moveY, map, bombs, bombSystem);
+    }
+
+    if (vx === 0 && vy === 0 && !window.__ONLINE_ENABLED__) {
+      this._stabilizeIdlePose();
+    }
+  }
+
+  _stabilizeIdlePose() {
+    // When idle, keep sprite on crisp pixel coordinates to avoid visual drift.
+    this.sprite.x = Math.round(this.sprite.x);
+    this.sprite.y = Math.round(this.sprite.y);
+
+    // If already almost centered in a tile, snap fully to the tile center.
+    const centeredTile = tileCenter(toTile(this.sprite.x, this.tileSize), toTile(this.sprite.y, this.tileSize), this.tileSize);
+    if (Math.abs(this.sprite.x - centeredTile.x) < 1.1) {
+      this.sprite.x = centeredTile.x;
+    }
+    if (Math.abs(this.sprite.y - centeredTile.y) < 1.1) {
+      this.sprite.y = centeredTile.y;
+    }
   }
 
   _tryMove(dx, dy, map, bombs, bombSystem = null) {
@@ -177,11 +243,15 @@ export class Player {
     // Axis-separated movement for smoother sliding along walls
     if (dx !== 0) {
       const nx = this.sprite.x + dx;
-      if (!this._collidesAt(nx, this.sprite.y, map, bombs, bombSystem)) this.sprite.x = nx;
+      if (!this._collidesAt(nx, this.sprite.y, map, bombs, bombSystem)) {
+        this.sprite.x = nx;
+      }
     }
     if (dy !== 0) {
       const ny = this.sprite.y + dy;
-      if (!this._collidesAt(this.sprite.x, ny, map, bombs, bombSystem)) this.sprite.y = ny;
+      if (!this._collidesAt(this.sprite.x, ny, map, bombs, bombSystem)) {
+        this.sprite.y = ny;
+      }
     }
   }
 
