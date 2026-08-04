@@ -39,6 +39,7 @@ export class Player {
     if (this.sprite.anchor && typeof this.sprite.anchor.set === 'function') {
       this.sprite.anchor.set(0.5, 0.5);
     }
+    this.sprite.roundPixels = true;
     this.sprite.x = x;
     this.sprite.y = y;
 

@@ -24,6 +24,8 @@ export class GameLoop {
     this.destroyingBlockAnimator = new DestroyingBlockAnimator(this.components);
     this.runtimeMetrics = new RuntimeMetricsCollector(this.components, this.components.managers.gameState.eventBus);
     this.components.remotePlayers = this.components.remotePlayers instanceof Map ? this.components.remotePlayers : new Map();
+    this.lastAppliedLocalSnapshotTick = null;
+    this.localAuthorityTarget = null;
   }
 
   /**
@@ -110,6 +112,10 @@ export class GameLoop {
         }
 
         player.update(tickDelta, inputManager.keys, this.components.map, bombs, this.components.systems.bomb);
+
+        if (window.__ONLINE_ENABLED__) {
+          this._applyLocalReconciliation(tickDelta);
+        }
 
         if (onlineBridge?.enabled && onlineBridge?.connected && onlineBridge?.hasRemoteSnapshot && snapshot?.players) {
           this._renderRemotePlayers(snapshot.players);
@@ -235,8 +241,17 @@ export class GameLoop {
       const pixelY = Number.isFinite(entry?.y) ? entry.y : Number.isFinite(entry?.ty) ? entry.ty * tileSize + tileSize / 2 : tileSize * 1.5;
       this._updateRemotePlayerAnimation(remoteEntry, entry, pixelX, pixelY);
       if (remoteSprite && typeof remoteSprite.position?.set === 'function') {
+        if (!Number.isFinite(remoteEntry.renderX) || !Number.isFinite(remoteEntry.renderY)) {
+          remoteEntry.renderX = pixelX;
+          remoteEntry.renderY = pixelY;
+        }
+
+        const smoothing = entry?.moving ? 0.4 : 0.25;
+        remoteEntry.renderX += (pixelX - remoteEntry.renderX) * smoothing;
+        remoteEntry.renderY += (pixelY - remoteEntry.renderY) * smoothing;
+
         // remoteSprite is inside gameContainer, so positions must be local to it.
-        remoteSprite.position.set(Math.round(pixelX), Math.round(pixelY));
+        remoteSprite.position.set(remoteEntry.renderX, remoteEntry.renderY);
       }
 
       if (remoteEntry && typeof remoteEntry === 'object') {
@@ -253,12 +268,12 @@ export class GameLoop {
     this.components.systems.bomb?.syncFromSnapshot?.(snapshot.bombs || []);
     this.components.systems.explosion?.syncFromSnapshot?.(snapshot.explosions || []);
     this.components.systems.powerup?.syncFromSnapshot?.(snapshot.powerups || []);
-    this._syncLocalPlayerStateFromSnapshot(snapshot.players || []);
+    this._syncLocalPlayerStateFromSnapshot(snapshot.players || [], snapshot.tick);
     this.components.systems.monster?.syncFromSnapshot?.(snapshot.monsters || []);
     this.components.systems.powerup?.getPowerups?.().forEach((powerup) => powerup.update(tickDelta));
   }
 
-  _syncLocalPlayerStateFromSnapshot(players = []) {
+  _syncLocalPlayerStateFromSnapshot(players = [], snapshotTick = null) {
     if (!this.components.player?.gameState?.playerState) return;
 
     const onlineBridge = this.components.managers.onlineStateBridge;
@@ -267,6 +282,45 @@ export class GameLoop {
       ? players.find((entry) => this._normalizePlayerId(entry?.playerId) === localId)
       : null;
     if (!localEntry) return;
+
+    const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
+    const hasAuthoritativeX = Number.isFinite(localEntry.x);
+    const hasAuthoritativeY = Number.isFinite(localEntry.y);
+    const pixelX = hasAuthoritativeX
+      ? localEntry.x
+      : Number.isFinite(localEntry.tx)
+        ? localEntry.tx * tileSize + tileSize / 2
+        : null;
+    const pixelY = hasAuthoritativeY
+      ? localEntry.y
+      : Number.isFinite(localEntry.ty)
+        ? localEntry.ty * tileSize + tileSize / 2
+        : null;
+
+    const hasNewServerTick = Number.isFinite(snapshotTick)
+      ? snapshotTick !== this.lastAppliedLocalSnapshotTick
+      : true;
+
+    if (hasNewServerTick && Number.isFinite(pixelX) && Number.isFinite(pixelY) && this.components.player?.sprite) {
+      const localX = this.components.player.sprite.x;
+      const localY = this.components.player.sprite.y;
+      const errX = pixelX - localX;
+      const errY = pixelY - localY;
+      const errorDistance = Math.hypot(errX, errY);
+
+      this.localAuthorityTarget = {
+        x: pixelX,
+        y: pixelY,
+      };
+
+      if (errorDistance >= 18) {
+        this.components.player.sprite.position.set(pixelX, pixelY);
+      }
+
+      if (Number.isFinite(snapshotTick)) {
+        this.lastAppliedLocalSnapshotTick = snapshotTick;
+      }
+    }
 
     const state = this.components.player.gameState.playerState;
     state.maxBombs = Number.isFinite(localEntry.maxBombs) ? localEntry.maxBombs : state.maxBombs;
@@ -286,6 +340,24 @@ export class GameLoop {
     this.components.player.speed = this.components.player.baseSpeed * speedMultiplier;
     this.components.managers.hud?.setLives?.(state.lives);
     this.components.managers.hud?.updatePowerups?.(this.components.player);
+  }
+
+  _applyLocalReconciliation(tickDelta = 1) {
+    if (!this.localAuthorityTarget || !this.components.player?.sprite) return;
+
+    const localSprite = this.components.player.sprite;
+    const errX = this.localAuthorityTarget.x - localSprite.x;
+    const errY = this.localAuthorityTarget.y - localSprite.y;
+    const errorDistance = Math.hypot(errX, errY);
+
+    if (errorDistance < 0.35) return;
+
+    const baseSmoothing = 0.12;
+    const deltaScale = Math.max(0.5, Math.min(2, Number(tickDelta) || 1));
+    const smoothing = Math.min(0.45, baseSmoothing * deltaScale);
+
+    localSprite.x += errX * smoothing;
+    localSprite.y += errY * smoothing;
   }
 
   _createRemotePlayerEntry() {
@@ -314,6 +386,8 @@ export class GameLoop {
         sprite,
         lastX: null,
         lastY: null,
+        renderX: null,
+        renderY: null,
         facing: 'down',
         animationKey: 'idleDown',
       };
@@ -333,7 +407,15 @@ export class GameLoop {
     avatar.visible = true;
     avatar.zIndex = 1000;
     avatar.roundPixels = true;
-    return { sprite: avatar, lastX: null, lastY: null, facing: 'down', animationKey: 'fallback' };
+    return {
+      sprite: avatar,
+      lastX: null,
+      lastY: null,
+      renderX: null,
+      renderY: null,
+      facing: 'down',
+      animationKey: 'fallback',
+    };
   }
 
   _updateRemotePlayerAnimation(remoteEntry, snapshotEntry, pixelX, pixelY) {

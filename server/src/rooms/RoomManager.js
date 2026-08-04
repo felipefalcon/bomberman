@@ -8,7 +8,7 @@ export class RoomManager {
     this.mapRows = 11;
     this.playerSpeed = 2.6;
     this.playerCollisionHalf = Math.floor(26 / 2);
-    this.simulationStepMs = 50;
+    this.simulationStepMs = 33;
     this.destructibleChance = 0.7;
     this.bombSlideSpeed = 4;
     this.bombThrowSpeed = 4;
@@ -220,6 +220,7 @@ export class RoomManager {
 
     this.io.to(roomId).emit('snapshot', {
       roomId,
+      tick: Number.isFinite(room?.tick) ? room.tick : 0,
       players,
       monsters: [],
       bombs: room.bombs.map((bomb) => ({
