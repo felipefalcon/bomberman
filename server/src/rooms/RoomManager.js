@@ -788,6 +788,14 @@ export class RoomManager {
     }
 
     const tiles = this.getExplosionTiles(room, bomb);
+    const explodedTileKeys = new Set(tiles.map((tile) => `${tile.tx},${tile.ty}`));
+
+    // Match single-player behavior: active explosions destroy non-immune powerups.
+    room.powerups = room.powerups.filter((powerup) => {
+      if (Number(powerup.immuneTicks || 0) > 0) return true;
+      return !explodedTileKeys.has(`${powerup.tx},${powerup.ty}`);
+    });
+
     for (const tile of tiles) {
       this.upsertExplosion(room, tile.tx, tile.ty, tile.isCenter);
 
