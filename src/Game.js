@@ -3,6 +3,7 @@ import { GameInitializer } from './core/GameInitializer.js';
 import { GameLoop } from './core/GameLoop.js';
 import { EntityManager } from './core/EntityManager.js';
 import { GameEvents } from './engine/EventBus.js';
+import { GAME_CONFIG } from './config/Constants.js';
 
 /**
  * Game - Main game class
@@ -43,6 +44,16 @@ export class Game {
       },
     });
 
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get('room') || 'room';
+    const seed = this._buildSeed(roomId);
+    const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true';
+    const playerId = params.get('player') || undefined;
+
+    GAME_CONFIG.RNG_SEED = seed;
+    window.__ROOM_SEED__ = seed;
+    window.__ONLINE_ENABLED__ = onlineEnabled;
+
     // Initialize game components
     this.initializer = new GameInitializer(this.app);
     console.log('[game] initializing components');
@@ -61,13 +72,9 @@ export class Game {
     this.gameLoop = new GameLoop(this.components);
     console.log('[game] starting loop');
 
-    const params = new URLSearchParams(window.location.search);
-    const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true';
-    const roomId = params.get('room') || 'room';
-    const playerId = params.get('player') || undefined;
-
     if (onlineEnabled && this.components.managers.onlineStateBridge) {
       this.components.managers.onlineStateBridge.enable(roomId, playerId);
+      this.components.managers.onlineStateBridge.playerId = playerId || this.components.managers.onlineStateBridge.playerId;
     }
 
     this.components.managers.onlineStateBridge?.applySnapshot?.({
@@ -88,6 +95,15 @@ export class Game {
     await this._loadAudioAssets();
     
     console.log('[game] started successfully');
+  }
+
+  _buildSeed(roomId = 'room') {
+    const normalized = String(roomId || 'room').trim().toLowerCase();
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i += 1) {
+      hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+    }
+    return hash;
   }
 
   /**

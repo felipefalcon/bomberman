@@ -88,7 +88,7 @@ export const GAME_CONFIG = {
   POWERUP_BOB_AMOUNT: 3, // pixels
 
   // Map generation
-  MAP_DESTRUCTIBLE_CHANCE: 0.47,
+  MAP_DESTRUCTIBLE_CHANCE: 0.7,
   
   // Explosion settings
   EXPLOSION_DURATION: 20, // ticks

@@ -6,7 +6,7 @@ import { loadBlockTexture } from '../loaders/blockLoader.js';
 import { loadPillarTexture } from '../loaders/pillarLoader.js';
 
 export class TileMap {
-  constructor(app, tileSize = GAME_CONFIG.TILE_SIZE, cols = GAME_CONFIG.MAP_COLS, rows = GAME_CONFIG.MAP_ROWS) {
+  constructor(app, tileSize = GAME_CONFIG.TILE_SIZE, cols = GAME_CONFIG.MAP_COLS, rows = GAME_CONFIG.MAP_ROWS, seed = GAME_CONFIG.RNG_SEED) {
     this.app = app;
     this.tileSize = tileSize;
     this.cols = cols;
@@ -19,7 +19,7 @@ export class TileMap {
     this.pillarTexture = null;
     this.debugMode = false;
     this.spriteMap = new Map(); // Track block/pillar sprites by tile position
-    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
+    this.random = createSeededRandom(seed);
 
     this._initPromise = this._init();
   }
@@ -55,14 +55,20 @@ export class TileMap {
     for (let y = 0; y < this.rows; y++) {
       this.tiles[y] = [];
       for (let x = 0; x < this.cols; x++) {
-        // simple rules: border walls + pillars on even coords
         let t = TILE_TYPES.FLOOR;
-        if (x === 0 || y === 0 || x === this.cols - 1 || y === this.rows - 1) t = TILE_TYPES.WALL;
-        if (x % 2 === 0 && y % 2 === 0) t = TILE_TYPES.WALL;
+        const isBorder = x === 0 || y === 0 || x === this.cols - 1 || y === this.rows - 1;
+        const isStartSafe = (x === 1 && y === 1) || (x === 2 && y === 1) || (x === 1 && y === 2)
+          || (x === this.cols - 2 && y === this.rows - 2)
+          || (x === this.cols - 3 && y === this.rows - 2)
+          || (x === this.cols - 2 && y === this.rows - 3);
+        const isClassicPillar = !isBorder && !isStartSafe && x % 2 === 0 && y % 2 === 0;
+        const isClassicCrate = !isBorder && !isStartSafe && x % 2 === 1 && y % 2 === 1;
 
-        // leave open spaces near the start area
-        const isStartSafe = (x === 1 && y === 1) || (x === 2 && y === 1) || (x === 1 && y === 2);
-        if (t === TILE_TYPES.FLOOR && !isStartSafe && this.random() < GAME_CONFIG.MAP_DESTRUCTIBLE_CHANCE) {
+        if (isBorder) {
+          t = TILE_TYPES.WALL;
+        } else if (isClassicPillar) {
+          t = TILE_TYPES.WALL;
+        } else if (isClassicCrate && this.random() < GAME_CONFIG.MAP_DESTRUCTIBLE_CHANCE) {
           t = TILE_TYPES.DESTRUCTIBLE;
         }
 

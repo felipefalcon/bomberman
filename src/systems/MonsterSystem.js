@@ -15,7 +15,7 @@ export class MonsterSystem extends BaseGameSystem {
     this.spawnCount = GAME_CONFIG.MONSTER_SPAWN_COUNT;
     this.enemyFrames = null;
     this.enemyMapping = null;
-    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
+    this.random = createSeededRandom(window.__ROOM_SEED__ ?? GAME_CONFIG.RNG_SEED);
   }
 
   /**
@@ -37,13 +37,62 @@ export class MonsterSystem extends BaseGameSystem {
     
     for (const { tx, ty } of spawnTiles) {
       const monster = new Monster(tx, ty, this.tileSize, this.enemyFrames, this.enemyMapping);
+      monster.serverControlled = false;
       this.monsters.push(monster);
-      this.gameContainer.addChild(monster.sprite);
+      this.gameContainer?.addChild(monster.sprite);
       
       this.eventBus.emit(GameEvents.MONSTER_SPAWN, { tx, ty, monster });
     }
     
     console.log(`MonsterSystem: Spawned ${this.monsters.length} monsters`);
+  }
+
+  syncFromSnapshot(monsters = []) {
+    if (!Array.isArray(monsters)) return;
+
+    const existingById = new Map(this.monsters.map((monster) => [monster.serverId || `${monster.tx}:${monster.ty}`, monster]));
+    const nextIds = new Set();
+
+    for (const entry of monsters) {
+      const serverId = entry.id || `${entry.tx}:${entry.ty}`;
+      nextIds.add(serverId);
+
+      let monster = existingById.get(serverId);
+      if (!monster) {
+        monster = new Monster(entry.tx, entry.ty, this.tileSize, this.enemyFrames, this.enemyMapping);
+        monster.serverId = serverId;
+        monster.serverControlled = true;
+        this.monsters.push(monster);
+        this.gameContainer?.addChild(monster.sprite);
+        this.eventBus.emit(GameEvents.MONSTER_SPAWN, { tx: entry.tx, ty: entry.ty, monster });
+      }
+
+      const previousTx = Number.isFinite(monster.tx) ? monster.tx : entry.tx;
+      const previousTy = Number.isFinite(monster.ty) ? monster.ty : entry.ty;
+      const deltaTx = entry.tx - previousTx;
+      const deltaTy = entry.ty - previousTy;
+
+      monster.serverControlled = true;
+      monster.serverId = serverId;
+      monster.serverState = { tx: entry.tx, ty: entry.ty };
+      const half = this.tileSize / 2;
+      monster.tx = entry.tx;
+      monster.ty = entry.ty;
+      monster.sprite.x = entry.tx * this.tileSize + half;
+      monster.sprite.y = entry.ty * this.tileSize + half;
+
+      if (typeof monster._updateAnimation === 'function') {
+        const direction = this._toDirection(deltaTx, deltaTy);
+        monster._updateAnimation(direction);
+      }
+    }
+
+    for (const monster of this.monsters.slice()) {
+      const monsterId = monster.serverId || `${monster.tx}:${monster.ty}`;
+      if (!nextIds.has(monsterId)) {
+        this.removeMonster(monster);
+      }
+    }
   }
 
   /**
@@ -59,17 +108,18 @@ export class MonsterSystem extends BaseGameSystem {
     
     for (let ty = 1; ty < map.rows - 1; ty++) {
       for (let tx = 1; tx < map.cols - 1; tx++) {
-        // Skip start area
-        const isStartArea = (tx === 1 && ty === 1) || (tx === 2 && ty === 1) || (tx === 1 && ty === 2);
+        const isStartArea = (tx === 1 && ty === 1) || (tx === 2 && ty === 1) || (tx === 1 && ty === 2)
+          || (tx === map.cols - 2 && ty === map.rows - 2)
+          || (tx === map.cols - 3 && ty === map.rows - 2)
+          || (tx === map.cols - 2 && ty === map.rows - 3);
         if (isStartArea) continue;
-        
-        // Skip blocked tiles
+
         if (map.isBlocked(tx, ty)) continue;
-        
-        // Skip tiles too close to start
+
         const distanceFromStart = Math.abs(tx - 1) + Math.abs(ty - 1);
-        if (distanceFromStart < GAME_CONFIG.MONSTER_START_DISTANCE) continue;
-        
+        const distanceFromSecondStart = Math.abs(tx - (map.cols - 2)) + Math.abs(ty - (map.rows - 2));
+        if (distanceFromStart < GAME_CONFIG.MONSTER_START_DISTANCE && distanceFromSecondStart < GAME_CONFIG.MONSTER_START_DISTANCE) continue;
+
         positions.push({ tx, ty });
       }
     }
@@ -90,8 +140,20 @@ export class MonsterSystem extends BaseGameSystem {
    * @param {Array} bombs - Array of bomb objects
    */
   update(delta, player, bombs) {
+    if (window.__ONLINE_ENABLED__) {
+      return;
+    }
+
     for (const monster of this.monsters.slice()) {
-      monster.update(delta, this.map, bombs);
+      if (monster.serverControlled && monster.serverState) {
+        const half = this.tileSize / 2;
+        monster.tx = monster.serverState.tx;
+        monster.ty = monster.serverState.ty;
+        monster.sprite.x = monster.serverState.tx * this.tileSize + half;
+        monster.sprite.y = monster.serverState.ty * this.tileSize + half;
+      } else {
+        monster.update(delta, this.map, bombs);
+      }
       
       // Check collision with player
       if (player && this.isMonsterOnPlayer(monster, player)) {
@@ -177,6 +239,16 @@ export class MonsterSystem extends BaseGameSystem {
       }
     }
     this.monsters = [];
+  }
+
+  _toDirection(deltaTx, deltaTy) {
+    if (Math.abs(deltaTx) > Math.abs(deltaTy)) {
+      return { dx: Math.sign(deltaTx), dy: 0 };
+    }
+    if (Math.abs(deltaTy) > 0) {
+      return { dx: 0, dy: Math.sign(deltaTy) };
+    }
+    return null;
   }
 
   /**

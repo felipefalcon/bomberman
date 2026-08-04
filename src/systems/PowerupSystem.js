@@ -15,7 +15,7 @@ export class PowerupSystem extends BaseGameSystem {
     this.spawnChance = GAME_CONFIG.POWERUP_SPAWN_CHANCE;
     this.itemFrames = null;
     this.itemMapping = null;
-    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
+    this.random = createSeededRandom(window.__ROOM_SEED__ ?? GAME_CONFIG.RNG_SEED);
   }
 
   /**

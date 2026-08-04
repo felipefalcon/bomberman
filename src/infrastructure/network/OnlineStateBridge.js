@@ -16,7 +16,7 @@ export class OnlineStateBridge {
   }
 
   connect(roomId = 'room', playerId = null) {
-    if (this.socket?.connected) return;
+    if (this.socket) return;
 
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
@@ -24,12 +24,20 @@ export class OnlineStateBridge {
 
     this.socket = io('http://127.0.0.1:3001', {
       transports: ['websocket'],
-      reconnection: false,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 2000,
+      timeout: 2000,
     });
 
     this.socket.on('connect', () => {
       this.connected = true;
       this.socket.emit('join-room', { roomId: this.roomId, playerId: this.playerId });
+    });
+
+    this.socket.on('connect_error', () => {
+      this.connected = false;
     });
 
     this.socket.on('room-state', (roomState) => {
@@ -43,10 +51,6 @@ export class OnlineStateBridge {
     });
 
     this.socket.on('disconnect', () => {
-      this.connected = false;
-    });
-
-    this.socket.on('connect_error', () => {
       this.connected = false;
     });
   }

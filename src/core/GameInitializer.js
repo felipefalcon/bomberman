@@ -129,7 +129,7 @@ export class GameInitializer {
    * Initialize the map
    */
   _initializeMap() {
-    this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows);
+    this.map = new TileMap(this.app, this.tileSize, this.mapCols, this.mapRows, window.__ROOM_SEED__ ?? GAME_CONFIG.RNG_SEED);
     this.gameContainer.addChild(this.map.container);
   }
 
@@ -223,12 +223,20 @@ export class GameInitializer {
         this.enemyMapping = mapping;
         console.log('GameInitializer: Enemy spritesheet loaded');
         this.monsterSystem.setAssets(frames, mapping);
-        this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        if (window.__ONLINE_ENABLED__) {
+          this.monsterSystem.clear();
+        } else {
+          this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        }
       } catch (err) {
         console.warn('Could not load enemy spritesheet, using placeholder. Error:', err);
         this.enemyFrames = null;
         this.enemyMapping = null;
-        this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        if (window.__ONLINE_ENABLED__) {
+          this.monsterSystem.clear();
+        } else {
+          this.monsterSystem.spawnMonsters(GAME_CONFIG.MONSTER_SPAWN_COUNT);
+        }
       }
     });
 
@@ -280,7 +288,6 @@ export class GameInitializer {
 
   _initializeOnlineBridge() {
     this.onlineStateBridge = new OnlineStateBridge(this.gameState, this.player);
-    this.onlineStateBridge.connect();
   }
 
   destroy() {

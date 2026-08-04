@@ -20,7 +20,7 @@ export class Monster {
     
     this.textures = textures;
     this.mapping = mapping;
-    this.random = createSeededRandom(GAME_CONFIG.RNG_SEED);
+    this.random = createSeededRandom(window.__ROOM_SEED__ ?? GAME_CONFIG.RNG_SEED);
 
     if (this.textures && this.mapping) {
       // create an AnimatedSprite using the idle frame by default
