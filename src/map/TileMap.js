@@ -195,14 +195,46 @@ export class TileMap {
     return blockSprite || null; // Return the sprite so caller can apply effects
   }
 
+  addDestructibleTile(tx, ty) {
+    if (!this._isValidTileCoord(tx, ty)) return false;
+    if (this.tiles[ty][tx] === TILE_TYPES.WALL) return false;
+    if (this.tiles[ty][tx] === TILE_TYPES.DESTRUCTIBLE) return false;
+
+    this.tiles[ty][tx] = TILE_TYPES.DESTRUCTIBLE;
+
+    const spriteKey = `${tx},${ty}`;
+    if (!this.blockTexture) return true;
+
+    const existingSprite = this.spriteMap.get(spriteKey);
+    if (existingSprite && existingSprite.parent) {
+      existingSprite.parent.removeChild(existingSprite);
+    }
+
+    const sprite = new PIXI.Sprite(this.blockTexture);
+    sprite.anchor.set(0, 0);
+    sprite.position.set(tx * this.tileSize, ty * this.tileSize);
+    sprite.scale.set(2, 2);
+    sprite.roundPixels = true;
+    this.container.addChild(sprite);
+    this.spriteMap.set(spriteKey, sprite);
+    return true;
+  }
+
   syncDestructibleTiles(activeDestructibleTiles = []) {
     const active = new Set(Array.isArray(activeDestructibleTiles) ? activeDestructibleTiles : []);
 
     for (let ty = 0; ty < this.rows; ty += 1) {
       for (let tx = 0; tx < this.cols; tx += 1) {
-        if (!this.isDestructible(tx, ty)) continue;
         const key = `${tx},${ty}`;
-        if (!active.has(key)) {
+        const shouldBeDestructible = active.has(key);
+        const isDestructible = this.isDestructible(tx, ty);
+
+        if (shouldBeDestructible && !isDestructible) {
+          this.addDestructibleTile(tx, ty);
+          continue;
+        }
+
+        if (!shouldBeDestructible && isDestructible) {
           this.destroyTile(tx, ty);
         }
       }

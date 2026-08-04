@@ -43,6 +43,9 @@ export class RoomManager {
       socket.on('create-room', ({ roomId }) => {
         const safeRoomId = String(roomId || 'room').trim();
         const room = this.getOrCreateRoom(safeRoomId);
+        if (room.status === 'finished') {
+          this.resetRoomForNextMatch(safeRoomId, room);
+        }
         if (!room.hostSocketId) {
           room.hostSocketId = socket.id;
         }
@@ -54,7 +57,7 @@ export class RoomManager {
       socket.on('join-room', ({ roomId, playerId }) => {
         const safeRoomId = String(roomId || 'room').trim();
         const room = this.getOrCreateRoom(safeRoomId);
-        if (room.players.size === 0 && room.status === 'finished') {
+        if (room.status === 'finished') {
           this.resetRoomForNextMatch(safeRoomId, room);
         }
         const safePlayerId = this.normalizePlayerId(playerId, room.players.size);
@@ -385,19 +388,61 @@ export class RoomManager {
   }
 
   resetRoomForNextMatch(roomId, room) {
+    room.matchNonce = this.buildNextMatchNonce(room.matchNonce);
     room.status = 'waiting';
     room.tick = 0;
     room.lastTickAt = Date.now();
     room.countdownStartedAt = null;
     room.countdownEndsAt = null;
     room.winnerPlayerId = null;
-    room.destructibleTiles = this.buildDestructibleTiles(roomId);
+    room.destructibleTiles = this.buildDestructibleTiles(roomId, room.matchNonce);
     room.bombs = [];
     room.explosions = [];
     room.powerups = [];
     room.nextBombId = 1;
     room.nextExplosionId = 1;
     room.nextPowerupId = 1;
+    this.resetPlayersForNextMatch(room);
+  }
+
+  resetPlayersForNextMatch(room) {
+    const players = Array.from(room.players.values());
+    players.forEach((player, index) => {
+      const safePlayerId = this.normalizePlayerId(player.playerId, index);
+      const spawn = this.getSpawnPosition(safePlayerId, index);
+
+      player.playerId = safePlayerId;
+      player.x = spawn.x;
+      player.y = spawn.y;
+      player.tx = Math.floor(spawn.x / this.tileSize);
+      player.ty = Math.floor(spawn.y / this.tileSize);
+      player.input = {};
+      player.lives = 3;
+      player.maxBombs = 1;
+      player.activeBombs = 0;
+      player.explosionRange = 1;
+      player.speedPowerups = 0;
+      player.canPierceBlocks = false;
+      player.hasKickBomb = false;
+      player.hasThrowBomb = false;
+      player.hasCrossBlock = false;
+      player.hasCrossBomb = false;
+      player.hasFollowerBomb = false;
+      player.hasLandMine = false;
+      player.lastBombCommandTs = 0;
+      player.lastFacing = 'down';
+      player.lastAcceptedInputTick = 0;
+      player.lastInputSeq = 0;
+      player.inputCooldownTicks = 0;
+      player.damageBlinkTicks = 0;
+    });
+  }
+
+  buildNextMatchNonce(previousNonce = 0) {
+    const current = Number.isFinite(Number(previousNonce)) ? Number(previousNonce) : 0;
+    const timePart = Date.now() & 0x7fffffff;
+    const randomPart = Math.floor(Math.random() * 0x7fffffff);
+    return (current + timePart + randomPart + 1) >>> 0;
   }
 
   getRoomSeed(roomId) {
@@ -458,6 +503,7 @@ export class RoomManager {
 
   getOrCreateRoom(roomId) {
     if (!this.rooms.has(roomId)) {
+      const matchNonce = this.buildNextMatchNonce(0);
       this.rooms.set(roomId, {
         id: roomId,
         players: new Map(),
@@ -465,7 +511,8 @@ export class RoomManager {
         tick: 0,
         lastTickAt: Date.now(),
         winnerPlayerId: null,
-        destructibleTiles: this.buildDestructibleTiles(roomId),
+        matchNonce,
+        destructibleTiles: this.buildDestructibleTiles(roomId, matchNonce),
         bombs: [],
         explosions: [],
         powerups: [],
@@ -1424,19 +1471,40 @@ export class RoomManager {
     return this.playerSpeed * Math.pow(1.2, stacks);
   }
 
-  buildDestructibleTiles(roomId) {
+  buildDestructibleTiles(roomId, matchNonce = 0) {
     const tiles = new Set();
-    const randomValue = this.getRoomRandomValue(roomId);
 
     for (let ty = 1; ty < this.mapRows - 1; ty += 1) {
       for (let tx = 1; tx < this.mapCols - 1; tx += 1) {
-        const isStartSafe = (tx === 1 && ty === 1) || (tx === 2 && ty === 1) || (tx === 1 && ty === 2)
-          || (tx === this.mapCols - 2 && ty === this.mapRows - 2)
-          || (tx === this.mapCols - 3 && ty === this.mapRows - 2)
-          || (tx === this.mapCols - 2 && ty === this.mapRows - 3);
-        const isClassicCrate = !isStartSafe && tx % 2 === 1 && ty % 2 === 1;
+        if (this.isSpawnSafeTile(tx, ty)) {
+          continue;
+        }
 
-        if (isClassicCrate && randomValue < this.destructibleChance) {
+        // Preserve indestructible pillar grid from classic Bomberman.
+        if (tx % 2 === 0 && ty % 2 === 0) {
+          continue;
+        }
+
+        // Regional noise creates dense/sparse pockets; local noise breaks visual uniformity.
+        const regionX = Math.floor(tx / 3);
+        const regionY = Math.floor(ty / 3);
+        const regionNoise = this.getTileRandomValue(roomId, regionX, regionY, 'region', matchNonce);
+        const localNoise = this.getTileRandomValue(roomId, tx, ty, 'local', matchNonce);
+        const roll = this.getTileRandomValue(roomId, tx, ty, 'roll', matchNonce);
+
+        let chance = this.destructibleChance * (0.52 + regionNoise * 0.68);
+
+        // Keep a subtle classic Bomberman feel without hard odd/odd lock.
+        if (tx % 2 === 1 && ty % 2 === 1) {
+          chance += 0.06;
+        } else {
+          chance -= 0.04;
+        }
+
+        chance += (localNoise - 0.5) * 0.12;
+        chance = Math.max(0.28, Math.min(0.82, chance));
+
+        if (roll < chance) {
           tiles.add(`${tx},${ty}`);
         }
       }
@@ -1445,9 +1513,23 @@ export class RoomManager {
     return tiles;
   }
 
-  getRoomRandomValue(roomId) {
-    // Mirrors current client seededRandom behavior (same value for each call for a room seed).
-    const seedHash = String(this.getRoomSeed(roomId))
+  isSpawnSafeTile(tx, ty) {
+    const zones = [
+      [1, 1],
+      [this.mapCols - 2, this.mapRows - 2],
+      [this.mapCols - 2, 1],
+      [1, this.mapRows - 2],
+    ];
+
+    return zones.some(([sx, sy]) => {
+      const dist = Math.abs(tx - sx) + Math.abs(ty - sy);
+      return dist <= 1;
+    });
+  }
+
+  getTileRandomValue(roomId, tx, ty, channel = 'default', matchNonce = 0) {
+    const seedInput = `${this.getRoomSeed(roomId)}:${matchNonce}:${tx},${ty}:${channel}`;
+    const seedHash = String(seedInput)
       .split('')
       .reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) >>> 0, 0);
     const state = (seedHash * 1664525 + 1013904223) >>> 0;
