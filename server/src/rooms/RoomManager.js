@@ -41,7 +41,11 @@ export class RoomManager {
       socket.on('create-room', ({ roomId }) => {
         const safeRoomId = String(roomId || 'room').trim();
         const room = this.getOrCreateRoom(safeRoomId);
+        if (!room.hostSocketId) {
+          room.hostSocketId = socket.id;
+        }
         socket.join(safeRoomId);
+        this.handleRoomCountdown(safeRoomId, room);
         this.broadcastRoomState(safeRoomId);
       });
 
@@ -60,7 +64,7 @@ export class RoomManager {
           existingPlayer.playerId = safePlayerId;
           existingPlayer.input = {};
           socket.join(safeRoomId);
-          room.status = 'playing';
+          this.handleRoomCountdown(safeRoomId, room);
           this.broadcastRoomState(safeRoomId);
           return;
         }
@@ -95,8 +99,11 @@ export class RoomManager {
           lastBombCommandTs: 0,
           lastFacing: 'down',
         });
+        if (!room.hostSocketId) {
+          room.hostSocketId = socket.id;
+        }
         socket.join(safeRoomId);
-        room.status = 'playing';
+        this.handleRoomCountdown(safeRoomId, room);
         this.broadcastRoomState(safeRoomId);
       });
 
@@ -106,7 +113,15 @@ export class RoomManager {
         if (!room) return;
 
         room.players.delete(socket.id);
+        if (room.hostSocketId === socket.id) {
+          room.hostSocketId = Array.from(room.players.keys())[0] || null;
+        }
         socket.leave(safeRoomId);
+        if (room.players.size < 2) {
+          this.setRoomWaiting(room);
+        } else if (room.status !== 'playing') {
+          this.handleRoomCountdown(safeRoomId, room);
+        }
         this.broadcastRoomState(safeRoomId);
       });
 
@@ -132,6 +147,14 @@ export class RoomManager {
       socket.on('disconnect', () => {
         for (const [roomId, room] of this.rooms.entries()) {
           if (room.players.delete(socket.id)) {
+            if (room.hostSocketId === socket.id) {
+              room.hostSocketId = Array.from(room.players.keys())[0] || null;
+            }
+            if (room.players.size < 2) {
+              this.setRoomWaiting(room);
+            } else if (room.status !== 'playing') {
+              this.handleRoomCountdown(roomId, room);
+            }
             this.broadcastRoomState(roomId);
           }
         }
@@ -143,6 +166,21 @@ export class RoomManager {
     this.tickInterval = setInterval(() => {
       const now = Date.now();
       for (const [roomId, room] of this.rooms.entries()) {
+        if (room.status === 'countdown') {
+          if (room.countdownEndsAt && now >= room.countdownEndsAt) {
+            room.status = 'playing';
+            room.countdownStartedAt = null;
+            room.countdownEndsAt = null;
+            room.tick = 0;
+            room.lastTickAt = now;
+            this.broadcastRoomState(roomId);
+            this.emitSnapshot(roomId, room);
+          } else {
+            this.broadcastRoomState(roomId);
+            this.emitSnapshot(roomId, room);
+          }
+        }
+
         if (room.status !== 'playing') continue;
 
         room.tick = (room.tick || 0) + 1;
@@ -267,12 +305,50 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return;
 
-    this.io.to(roomId).emit('room-state', {
+    this.io.to(roomId).emit('room-state', this.buildRoomStatePayload(roomId, room));
+  }
+
+  buildRoomStatePayload(roomId, room) {
+    const countdownSeconds = room.status === 'countdown' && Number.isFinite(room.countdownEndsAt)
+      ? Math.max(0, Math.ceil((room.countdownEndsAt - Date.now()) / 1000))
+      : 0;
+
+    return {
       roomId,
       players: Array.from(room.players.values()),
       status: room.status,
       seed: this.getRoomSeed(roomId),
-    });
+      playerCount: room.players.size,
+      minPlayers: 2,
+      maxPlayers: 4,
+      canStart: room.players.size >= 2,
+      countdownSeconds,
+      hostSocketId: room.hostSocketId || null,
+    };
+  }
+
+  handleRoomCountdown(roomId, room) {
+    if (room.status === 'playing') return;
+
+    if (room.players.size < 2) {
+      this.setRoomWaiting(room);
+      return;
+    }
+
+    if (room.status !== 'countdown') {
+      room.status = 'countdown';
+      room.countdownStartedAt = Date.now();
+      room.countdownEndsAt = room.countdownStartedAt + 30000;
+    }
+
+    this.broadcastRoomState(roomId);
+    this.emitSnapshot(roomId, room);
+  }
+
+  setRoomWaiting(room) {
+    room.status = 'waiting';
+    room.countdownStartedAt = null;
+    room.countdownEndsAt = null;
   }
 
   getRoomSeed(roomId) {

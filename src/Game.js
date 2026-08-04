@@ -75,6 +75,19 @@ export class Game {
         this.gameLoop?._renderRemotePlayers?.(snapshot.players || []);
         this.gameLoop?._syncOnlineWorld?.(snapshot, 1);
       };
+
+      onlineBridge.onRoomState = (roomState) => {
+        if (!roomState || !window.__ONLINE_ENABLED__) return;
+        const gameState = this.components?.managers?.gameState;
+        if (gameState?.setOnlineCountdown) {
+          const seconds = Number(roomState?.countdownSeconds || 0);
+          if (roomState?.status === 'countdown') {
+            gameState.setOnlineCountdown(seconds);
+          } else if (roomState?.status === 'playing' || roomState?.status === 'waiting') {
+            gameState.clearOnlineCountdown();
+          }
+        }
+      };
     }
 
     if (onlineEnabled && onlineBridge) {

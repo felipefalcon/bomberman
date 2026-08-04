@@ -13,6 +13,7 @@ export class OnlineStateBridge {
     this.playerId = null;
     this.roomState = null;
     this.hasRemoteSnapshot = false;
+    this.onRoomState = null;
   }
 
   connect(roomId = 'room', playerId = null) {
@@ -42,6 +43,7 @@ export class OnlineStateBridge {
 
     this.socket.on('room-state', (roomState) => {
       this.roomState = roomState;
+      this.onRoomState?.(roomState);
     });
 
     this.socket.on('snapshot', (snapshot) => {

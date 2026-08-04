@@ -303,9 +303,23 @@ export class HudManager {
   /**
    * Set timer display
    */
-  setTimer(timeRemaining) {
+  setTimer(dataOrValue) {
     if (!this.timerText) return;
-    const t = Math.max(0, Math.ceil(timeRemaining));
+
+    const isCountdown = dataOrValue?.isCountdown === true;
+    const timeRemaining = Number.isFinite(dataOrValue?.value)
+      ? dataOrValue.value
+      : Number(dataOrValue);
+
+    if (isCountdown) {
+      const nextTimer = String(Math.max(0, Math.floor(Number(timeRemaining) || 0)));
+      if (nextTimer === this.lastRenderedTimer) return;
+      this.lastRenderedTimer = nextTimer;
+      this.timerText.text = nextTimer;
+      return;
+    }
+
+    const t = Math.max(0, Math.ceil(Number(timeRemaining) || 0));
     const mins = Math.floor(t / 60);
     const secs = t % 60;
     const nextTimer = `${mins}:${secs.toString().padStart(2, '0')}`;

@@ -92,15 +92,31 @@ export class GameLoop {
       this.components.managers.gameState.update(tickDelta);
 
       const inputManager = this.components.managers.input;
+      const gameState = this.components.managers.gameState;
       const movementCommand = inputManager.getMovementCommand();
       const bombCommand = this.bombActionHandler.buildCommand();
+      const onlineBridge = this.components.managers.onlineStateBridge;
+      const snapshot = onlineBridge?.getSnapshot?.();
+
+      if (gameState?.isPreGameCountdownActive) {
+        if (window.__ONLINE_ENABLED__ && snapshot) {
+          const hasNewSnapshot = this._hasNewOnlineSnapshot(snapshot);
+          if (hasNewSnapshot) {
+            this._syncOnlineWorld(snapshot, tickDelta);
+            if (snapshot?.players) {
+              this._renderRemotePlayers(snapshot.players);
+            }
+          }
+        }
+        this.components.managers.input?.update?.();
+        this.runtimeMetrics.observeFrame(tickDelta);
+        return;
+      }
 
       // Update player
       if (this.components.player) {
         const bombs = this.components.systems.bomb.getBombs();
         const movementCollisionBombs = window.__ONLINE_ENABLED__ ? [] : bombs;
-        const onlineBridge = this.components.managers.onlineStateBridge;
-        const snapshot = onlineBridge?.getSnapshot?.();
         const player = this.components.player;
 
         if (onlineBridge?.enabled && onlineBridge?.connected && onlineBridge?.playerId) {
