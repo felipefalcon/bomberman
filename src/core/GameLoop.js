@@ -264,6 +264,7 @@ export class GameLoop {
       }
 
       const remoteSprite = remoteEntry?.sprite || remoteEntry;
+      this._applyPlayerTint(remoteSprite, entry?.playerId);
 
       const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
       const pixelX = Number.isFinite(entry?.x) ? entry.x : Number.isFinite(entry?.tx) ? entry.tx * tileSize + tileSize / 2 : tileSize * 1.5;
@@ -511,6 +512,28 @@ export class GameLoop {
     sprite.scale.x = facing === 'left' ? -scale : scale;
     sprite.scale.y = scale;
     remoteEntry.facing = facing;
+  }
+
+  _applyPlayerTint(sprite, playerId) {
+    if (!sprite || typeof sprite !== 'object' || !('tint' in sprite)) return;
+
+    const normalized = String(playerId || '').trim().toLowerCase();
+    let tint = null;
+
+    if (normalized.startsWith('player-')) {
+      const number = Number(normalized.split('-').pop());
+      if (number === 2) tint = 0xff6666;
+      else if (number === 3) tint = 0x66ff66;
+      else if (number === 4) tint = 0xffd166;
+    } else if (normalized === 'p2' || normalized === 'player2' || normalized === '2') {
+      tint = 0xff6666;
+    } else if (normalized === 'p3' || normalized === 'player3' || normalized === '3') {
+      tint = 0x66ff66;
+    } else if (normalized === 'p4' || normalized === 'player4' || normalized === '4') {
+      tint = 0xffd166;
+    }
+
+    sprite.tint = tint;
   }
 
   _toPingPongFrames(frames) {

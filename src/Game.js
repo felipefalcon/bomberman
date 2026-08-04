@@ -95,6 +95,8 @@ export class Game {
       onlineBridge.playerId = playerId || onlineBridge.playerId;
     }
 
+    this.components.player?.setPlayerIdentity?.(onlineBridge?.playerId || playerId || 'player-1');
+
     onlineBridge?.applySnapshot?.({
       players: [
         {

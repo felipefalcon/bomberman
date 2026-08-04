@@ -48,6 +48,8 @@ export class Player {
     this.blinkTimer = 0;
     this.isBlinking = false;
     this.blinkDuration = GAME_CONFIG.PLAYER_BLINK_DURATION;
+    this.playerId = null;
+    this._applyPlayerTint();
   }
 
   // Getters for player state from GameState
@@ -103,6 +105,48 @@ export class Player {
 
   get hasLandMine() {
     return (this.componentManager.hasComponent('land_mine') || this.gameState?.playerState?.hasLandMine) ?? false;
+  }
+
+  setPlayerIdentity(playerId) {
+    this.playerId = playerId;
+    this._applyPlayerTint();
+  }
+
+  _applyPlayerTint() {
+    const tint = this._getTintForPlayerId(this.playerId);
+    if (this.sprite && typeof this.sprite === 'object' && 'tint' in this.sprite) {
+      this.sprite.tint = tint;
+    }
+  }
+
+  _getTintForPlayerId(playerId) {
+    const normalized = String(playerId || '').trim().toLowerCase();
+    const number = this._resolvePlayerNumber(normalized);
+
+    switch (number) {
+      case 2:
+        return 0xff6666;
+      case 3:
+        return 0x66ff66;
+      case 4:
+        return 0xffd166;
+      case 1:
+      default:
+        return null;
+    }
+  }
+
+  _resolvePlayerNumber(playerId) {
+    if (!playerId) return 1;
+    if (playerId.startsWith('player-')) {
+      const parsed = Number(playerId.split('-').pop());
+      return Number.isFinite(parsed) ? parsed : 1;
+    }
+    if (playerId === 'p1' || playerId === 'player1' || playerId === '1') return 1;
+    if (playerId === 'p2' || playerId === 'player2' || playerId === '2') return 2;
+    if (playerId === 'p3' || playerId === 'player3' || playerId === '3') return 3;
+    if (playerId === 'p4' || playerId === 'player4' || playerId === '4') return 4;
+    return 1;
   }
 
   takeDamage() {
