@@ -235,6 +235,7 @@ export class RoomManager {
         timer: bomb.timer,
         x: bomb.x,
         y: bomb.y,
+        isVisible: bomb.isVisible !== false,
         isFollower: !!bomb.isFollower,
         isLandMine: !!bomb.isLandMine,
         isSliding: !!bomb.isSliding,
@@ -421,6 +422,7 @@ export class RoomManager {
   isBombBlocking(room, tx, ty, player = null, movementDir = null) {
     const bomb = room.bombs.find((entry) => entry.tx === tx && entry.ty === ty);
     if (!bomb) return false;
+    if (bomb.isThrowing) return false;
     if (!player) return true;
     if (player.hasCrossBomb) return false;
     if (bomb.passThroughPlayerIds?.has(player.id)) return false;
@@ -504,13 +506,45 @@ export class RoomManager {
 
     player.lastBombCommandTs = bombCommandTs;
     if (player.hasThrowBomb) {
-      const bombAtPlayer = room.bombs.find((bomb) => this.isPlayerOverlappingTile(player, bomb.tx, bomb.ty));
-      if (bombAtPlayer && this.throwBomb(room, bombAtPlayer, player.lastFacing || 'down')) {
+      const throwableBomb = this.findThrowableBomb(room, player, player.lastFacing || 'down');
+      if (throwableBomb && this.throwBomb(room, throwableBomb, player.lastFacing || 'down')) {
         return true;
       }
     }
 
     return this.placeBomb(room, player, player.tx, player.ty);
+  }
+
+  findThrowableBomb(room, player, facing = 'down') {
+    if (!room || !player) return null;
+
+    // Priority 1: bomb currently overlapping the player hitbox.
+    const overlapBomb = room.bombs.find((bomb) =>
+      !bomb.isSliding &&
+      !bomb.isThrowing &&
+      this.isPlayerOverlappingTile(player, bomb.tx, bomb.ty)
+    );
+    if (overlapBomb) return overlapBomb;
+
+    // Priority 2: bomb exactly on player's current tile coordinates.
+    const sameTileBomb = room.bombs.find((bomb) =>
+      !bomb.isSliding &&
+      !bomb.isThrowing &&
+      bomb.tx === player.tx &&
+      bomb.ty === player.ty
+    );
+    if (sameTileBomb) return sameTileBomb;
+
+    // Priority 3: bomb on the tile right in front of player facing direction.
+    const dir = this.facingToDirection(facing);
+    const frontTx = player.tx + dir.dx;
+    const frontTy = player.ty + dir.dy;
+    return room.bombs.find((bomb) =>
+      !bomb.isSliding &&
+      !bomb.isThrowing &&
+      bomb.tx === frontTx &&
+      bomb.ty === frontTy
+    ) || null;
   }
 
   placeBomb(room, player, tx, ty) {
@@ -634,11 +668,35 @@ export class RoomManager {
     const dir = this.facingToDirection(facing);
     if (Math.abs(dir.dx) + Math.abs(dir.dy) !== 1) return false;
 
+    let nextTx = bomb.tx + (dir.dx * this.bombThrowDistance);
+    let nextTy = bomb.ty + (dir.dy * this.bombThrowDistance);
+
+    // Match single-player behavior: allow temporary out-of-bounds tiles before wrapping.
+    if (nextTx < -2) {
+      nextTx = this.mapCols - 2;
+    } else if (nextTx >= this.mapCols + 2) {
+      nextTx = 2;
+    }
+
+    if (nextTy < -2) {
+      nextTy = this.mapRows - 2;
+    } else if (nextTy >= this.mapRows + 2) {
+      nextTy = 2;
+    }
+
     bomb.isThrowing = true;
     bomb.throwDx = dir.dx;
     bomb.throwDy = dir.dy;
     bomb.throwProgress = 0;
-    bomb.throwRemainingTiles = this.bombThrowDistance;
+    bomb.throwAbsolutePosition = 0;
+    bomb.throwStartTx = bomb.tx;
+    bomb.throwStartTy = bomb.ty;
+    bomb.throwPath = [{ tx: nextTx, ty: nextTy }];
+    bomb.throwTiles = 1;
+    bomb.throwTargetTx = nextTx;
+    bomb.throwTargetTy = nextTy;
+    bomb.throwRemainingTiles = 1;
+    bomb.isVisible = true;
     bomb.isSliding = false;
     return true;
   }
@@ -701,55 +759,129 @@ export class RoomManager {
       if (!bomb.isThrowing) continue;
 
       if (!Number.isFinite(bomb.throwProgress)) bomb.throwProgress = 0;
+      if (!Number.isFinite(bomb.throwAbsolutePosition)) bomb.throwAbsolutePosition = 0;
       if (!Number.isFinite(bomb.throwDx)) bomb.throwDx = 0;
       if (!Number.isFinite(bomb.throwDy)) bomb.throwDy = 0;
+      if (!Number.isFinite(bomb.throwStartTx)) bomb.throwStartTx = bomb.tx;
+      if (!Number.isFinite(bomb.throwStartTy)) bomb.throwStartTy = bomb.ty;
+      if (!Number.isFinite(bomb.throwTargetTx)) bomb.throwTargetTx = bomb.tx;
+      if (!Number.isFinite(bomb.throwTargetTy)) bomb.throwTargetTy = bomb.ty;
+      if (!Array.isArray(bomb.throwPath) || bomb.throwPath.length === 0) {
+        bomb.throwPath = [{ tx: bomb.throwTargetTx, ty: bomb.throwTargetTy }];
+      }
+      if (!Number.isFinite(bomb.throwTiles) || bomb.throwTiles <= 0) {
+        bomb.throwTiles = bomb.throwPath.length;
+      }
+
       if (bomb.throwDx === 0 && bomb.throwDy === 0) {
         bomb.isThrowing = false;
         bomb.throwProgress = 0;
+        bomb.throwAbsolutePosition = 0;
         this.setBombPixelFromTile(bomb);
         continue;
       }
 
-      bomb.throwProgress += this.bombThrowSpeed * deltaTicks;
-      while (bomb.throwProgress >= this.tileSize) {
-        bomb.throwProgress -= this.tileSize;
+      bomb.throwAbsolutePosition += (this.bombThrowSpeed * deltaTicks) / this.tileSize;
 
-        let nextTx = bomb.tx + bomb.throwDx;
-        let nextTy = bomb.ty + bomb.throwDy;
-        if (nextTx < 0) nextTx = this.mapCols - 1;
-        if (nextTx >= this.mapCols) nextTx = 0;
-        if (nextTy < 0) nextTy = this.mapRows - 1;
-        if (nextTy >= this.mapRows) nextTy = 0;
+      if (bomb.throwAbsolutePosition >= bomb.throwTiles) {
+        this.stopThrowingBomb(room, bomb);
+        continue;
+      }
 
-        if (this.isTileBlocked(room, nextTx, nextTy) || room.bombs.some((entry) => entry !== bomb && entry.tx === nextTx && entry.ty === nextTy)) {
-          bomb.isThrowing = false;
-          bomb.throwDx = 0;
-          bomb.throwDy = 0;
-          bomb.throwProgress = 0;
-          bomb.throwRemainingTiles = 0;
-          break;
-        }
+      const currentSegment = Math.floor(bomb.throwAbsolutePosition);
+      const segmentProgress = bomb.throwAbsolutePosition - currentSegment;
 
-        bomb.tx = nextTx;
-        bomb.ty = nextTy;
-        bomb.throwRemainingTiles -= 1;
+      if (currentSegment >= bomb.throwPath.length - 1 && segmentProgress > 0.8) {
+        const lastTile = bomb.throwPath[bomb.throwPath.length - 1];
+        const hasBombAtTarget = room.bombs.some((entry) => entry !== bomb && entry.tx === lastTile.tx && entry.ty === lastTile.ty);
 
-        if (bomb.throwRemainingTiles <= 0) {
-          bomb.isThrowing = false;
-          bomb.throwDx = 0;
-          bomb.throwDy = 0;
-          bomb.throwProgress = 0;
-          break;
+        if (this.isTileBlocked(room, lastTile.tx, lastTile.ty) || hasBombAtTarget) {
+          let nextTx = lastTile.tx + bomb.throwDx;
+          let nextTy = lastTile.ty + bomb.throwDy;
+
+          if (nextTx < -2) nextTx = this.mapCols - 1;
+          else if (nextTx >= this.mapCols + 2) nextTx = 0;
+
+          if (nextTy < -2) nextTy = this.mapRows - 1;
+          else if (nextTy >= this.mapRows + 2) nextTy = 0;
+
+          if (bomb.throwPath.length < this.mapCols + this.mapRows) {
+            bomb.throwPath.push({ tx: nextTx, ty: nextTy });
+            bomb.throwTiles = bomb.throwPath.length;
+            bomb.throwTargetTx = nextTx;
+            bomb.throwTargetTy = nextTy;
+          }
         }
       }
 
-      if (!bomb.isThrowing) {
-        this.setBombPixelFromTile(bomb);
+      let startTx;
+      let startTy;
+      if (currentSegment === 0) {
+        startTx = bomb.throwStartTx;
+        startTy = bomb.throwStartTy;
       } else {
-        bomb.x = (bomb.tx + (bomb.throwDx * bomb.throwProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
-        bomb.y = (bomb.ty + (bomb.throwDy * bomb.throwProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
+        startTx = bomb.throwPath[currentSegment - 1].tx;
+        startTy = bomb.throwPath[currentSegment - 1].ty;
+      }
+
+      const endTile = bomb.throwPath[currentSegment];
+      if (!endTile) {
+        this.stopThrowingBomb(room, bomb);
+        continue;
+      }
+
+      const half = this.tileSize / 2;
+      const startX = startTx * this.tileSize + half;
+      const startY = startTy * this.tileSize + half;
+      const endX = endTile.tx * this.tileSize + half;
+      const endY = endTile.ty * this.tileSize + half;
+      const arc = Math.sin(segmentProgress * Math.PI) * this.tileSize * 0.55;
+
+      const isWrappingX = (startTx < 0 || startTx >= this.mapCols) && (endTile.tx >= 0 && endTile.tx < this.mapCols);
+      const isWrappingY = (startTy < 0 || startTy >= this.mapRows) && (endTile.ty >= 0 && endTile.ty < this.mapRows);
+      bomb.isVisible = !(isWrappingX || isWrappingY);
+
+      bomb.x = startX + (endX - startX) * segmentProgress;
+      bomb.y = startY + (endY - startY) * segmentProgress - arc;
+    }
+  }
+
+  stopThrowingBomb(room, bomb) {
+    if (
+      room.bombs.some(
+        (entry) =>
+          entry !== bomb &&
+          entry.tx === bomb.throwTargetTx &&
+          entry.ty === bomb.throwTargetTy
+      )
+    ) {
+      for (let i = bomb.throwPath.length - 2; i >= 0; i -= 1) {
+        const tile = bomb.throwPath[i];
+        if (!this.isTileBlocked(room, tile.tx, tile.ty) &&
+          !room.bombs.some((entry) => entry !== bomb && entry.tx === tile.tx && entry.ty === tile.ty)) {
+          bomb.throwTargetTx = tile.tx;
+          bomb.throwTargetTy = tile.ty;
+          break;
+        }
       }
     }
+
+    bomb.isThrowing = false;
+    bomb.throwDx = 0;
+    bomb.throwDy = 0;
+    bomb.throwProgress = 0;
+    bomb.throwAbsolutePosition = 0;
+    bomb.tx = bomb.throwTargetTx;
+    bomb.ty = bomb.throwTargetTy;
+    bomb.throwStartTx = bomb.tx;
+    bomb.throwStartTy = bomb.ty;
+    bomb.throwTargetTx = bomb.tx;
+    bomb.throwTargetTy = bomb.ty;
+    bomb.throwTiles = 0;
+    bomb.throwPath = [];
+    bomb.throwRemainingTiles = 0;
+    bomb.isVisible = true;
+    this.setBombPixelFromTile(bomb);
   }
 
   updateFollowerBombs(room, deltaTicks) {

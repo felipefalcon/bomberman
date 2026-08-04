@@ -260,7 +260,7 @@ export class BombSystem extends BaseGameSystem {
       } else {
         bomb.sprite.alpha = 1;
       }
-      bomb.sprite.visible = true;
+      bomb.sprite.visible = entry.isVisible !== false;
     }
 
     for (const bomb of this.bombs.slice()) {
