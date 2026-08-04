@@ -17,6 +17,8 @@ export class RoomManager {
     this.landMineTriggerTicks = 140;
     this.bombFuseTicks = 180;
     this.explosionDuration = 20;
+    this.playerDamageBlinkDurationTicks = 120;
+    this.playerDamageBlinkIntervalTicks = 10;
     this.powerupSpawnChance = 0.8;
     this.powerupImmuneTicks = 10;
     this.powerupWeights = {
@@ -52,6 +54,9 @@ export class RoomManager {
       socket.on('join-room', ({ roomId, playerId }) => {
         const safeRoomId = String(roomId || 'room').trim();
         const room = this.getOrCreateRoom(safeRoomId);
+        if (room.players.size === 0 && room.status === 'finished') {
+          this.resetRoomForNextMatch(safeRoomId, room);
+        }
         const safePlayerId = this.normalizePlayerId(playerId, room.players.size);
 
         if (room.players.size >= 4) {
@@ -101,6 +106,7 @@ export class RoomManager {
           lastAcceptedInputTick: 0,
           lastInputSeq: 0,
           inputCooldownTicks: 0,
+          damageBlinkTicks: 0,
         });
         if (!room.hostSocketId) {
           room.hostSocketId = socket.id;
@@ -194,6 +200,13 @@ export class RoomManager {
         const deltaTicks = Math.max(0.25, Math.min(8, deltaMs / 16.6667));
 
         for (const player of room.players.values()) {
+          player.damageBlinkTicks = Math.max(0, Number(player.damageBlinkTicks || 0) - deltaTicks);
+
+          if (Number(player.lives || 0) <= 0) {
+            player.input = {};
+            continue;
+          }
+
           const inputTick = Number(player.input?.tick || room.tick || 0);
           if (Number.isFinite(inputTick) && inputTick <= player.lastAcceptedInputTick) {
             continue;
@@ -235,6 +248,7 @@ export class RoomManager {
         this.updateBombs(room, deltaTicks);
         this.updateExplosions(room, deltaTicks);
         this.updatePowerups(room, deltaTicks);
+        this.updateMatchEndState(room);
 
         const uniquePlayers = Array.from(room.players.values()).reduce((acc, player) => {
           if (!acc.some((entry) => entry.playerId === player.playerId)) {
@@ -245,6 +259,7 @@ export class RoomManager {
               x: Math.round(player.x),
               y: Math.round(player.y),
               playerId: this.normalizePlayerId(player.playerId, acc.length),
+              isBlinking: Number(player.damageBlinkTicks || 0) > 0,
               facing: player.lastFacing || 'down',
               moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
             });
@@ -267,6 +282,7 @@ export class RoomManager {
           x: Math.round(player.x),
           y: Math.round(player.y),
           playerId: this.normalizePlayerId(player.playerId, acc.length),
+          isBlinking: Number(player.damageBlinkTicks || 0) > 0,
           facing: player.lastFacing || 'down',
           moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
         });
@@ -310,6 +326,7 @@ export class RoomManager {
       })),
       destructibleTiles: Array.from(room.destructibleTiles.values()),
       status: room.status,
+      winnerPlayerId: room.winnerPlayerId || null,
       seed: this.getRoomSeed(roomId),
     });
   }
@@ -337,10 +354,12 @@ export class RoomManager {
       canStart: room.players.size >= 2,
       countdownSeconds,
       hostSocketId: room.hostSocketId || null,
+      winnerPlayerId: room.winnerPlayerId || null,
     };
   }
 
   handleRoomCountdown(roomId, room) {
+    if (room.status === 'finished') return;
     if (room.status === 'playing') return;
 
     if (room.players.size < 2) {
@@ -359,9 +378,26 @@ export class RoomManager {
   }
 
   setRoomWaiting(room) {
+    if (room.status === 'finished') return;
     room.status = 'waiting';
     room.countdownStartedAt = null;
     room.countdownEndsAt = null;
+  }
+
+  resetRoomForNextMatch(roomId, room) {
+    room.status = 'waiting';
+    room.tick = 0;
+    room.lastTickAt = Date.now();
+    room.countdownStartedAt = null;
+    room.countdownEndsAt = null;
+    room.winnerPlayerId = null;
+    room.destructibleTiles = this.buildDestructibleTiles(roomId);
+    room.bombs = [];
+    room.explosions = [];
+    room.powerups = [];
+    room.nextBombId = 1;
+    room.nextExplosionId = 1;
+    room.nextPowerupId = 1;
   }
 
   getRoomSeed(roomId) {
@@ -428,6 +464,7 @@ export class RoomManager {
         status: 'waiting',
         tick: 0,
         lastTickAt: Date.now(),
+        winnerPlayerId: null,
         destructibleTiles: this.buildDestructibleTiles(roomId),
         bombs: [],
         explosions: [],
@@ -1250,8 +1287,10 @@ export class RoomManager {
       for (const player of room.players.values()) {
         if (player.tx !== explosion.tx || player.ty !== explosion.ty) continue;
         if (explosion.damagedPlayers?.has(player.id)) continue;
+        if (Number(player.damageBlinkTicks || 0) > 0) continue;
 
         player.lives = Math.max(0, Number(player.lives || 0) - 1);
+        player.damageBlinkTicks = this.playerDamageBlinkDurationTicks;
         explosion.damagedPlayers?.add(player.id);
       }
     }
@@ -1261,6 +1300,23 @@ export class RoomManager {
     }
 
     room.explosions = room.explosions.filter((explosion) => explosion.timer > 0);
+  }
+
+  updateMatchEndState(room) {
+    if (!room || room.status !== 'playing') return;
+
+    const alivePlayers = Array.from(room.players.values()).filter((player) => Number(player.lives || 0) > 0);
+    if (alivePlayers.length > 1) return;
+
+    room.status = 'finished';
+    room.countdownStartedAt = null;
+    room.countdownEndsAt = null;
+    room.winnerPlayerId = alivePlayers[0]?.playerId || null;
+
+    for (const player of room.players.values()) {
+      player.input = {};
+      player.inputCooldownTicks = Math.max(Number(player.inputCooldownTicks || 0), 999999);
+    }
   }
 
   trySpawnPowerup(room, tx, ty) {

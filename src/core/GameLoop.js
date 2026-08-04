@@ -104,7 +104,7 @@ export class GameLoop {
           if (hasNewSnapshot) {
             this._syncOnlineWorld(snapshot, tickDelta);
             if (snapshot?.players) {
-              this._renderRemotePlayers(snapshot.players);
+              this._renderRemotePlayers(snapshot.players, snapshot.tick);
             }
           }
         }
@@ -147,11 +147,11 @@ export class GameLoop {
           if (hasNewSnapshot) {
             this._syncOnlineWorld(snapshot, tickDelta);
             if (snapshot?.players) {
-              this._renderRemotePlayers(snapshot.players);
+              this._renderRemotePlayers(snapshot.players, snapshot.tick);
             }
           }
         } else if (onlineBridge?.enabled && onlineBridge?.connected && onlineBridge?.hasRemoteSnapshot && snapshot?.players) {
-          this._renderRemotePlayers(snapshot.players);
+          this._renderRemotePlayers(snapshot.players, snapshot.tick);
         }
 
         onlineBridge?.sendInput?.({
@@ -224,7 +224,7 @@ export class GameLoop {
     return raw;
   }
 
-  _renderRemotePlayers(players = []) {
+  _renderRemotePlayers(players = [], snapshotTick = null) {
     if (!this.components.gameContainer) return;
 
     const onlineBridge = this.components.managers.onlineStateBridge;
@@ -272,6 +272,7 @@ export class GameLoop {
       const renderX = Math.round(pixelX);
       const renderY = Math.round(pixelY);
       this._updateRemotePlayerAnimation(remoteEntry, entry, pixelX, pixelY);
+      this._applyRemoteDamageBlink(remoteEntry, entry, snapshotTick);
       if (remoteSprite && typeof remoteSprite.position?.set === 'function') {
         // In strict online mode, render remote players exactly at authoritative positions.
         remoteEntry.renderX = renderX;
@@ -361,6 +362,7 @@ export class GameLoop {
     }
 
     const state = this.components.player.gameState.playerState;
+    const previousLives = Number(state.lives || 0);
     state.maxBombs = Number.isFinite(localEntry.maxBombs) ? localEntry.maxBombs : state.maxBombs;
     state.activeBombs = Number.isFinite(localEntry.activeBombs) ? localEntry.activeBombs : state.activeBombs;
     state.explosionRange = Number.isFinite(localEntry.explosionRange) ? localEntry.explosionRange : state.explosionRange;
@@ -373,6 +375,13 @@ export class GameLoop {
     state.hasFollowerBomb = !!localEntry.hasFollowerBomb;
     state.hasLandMine = !!localEntry.hasLandMine;
     state.lives = Number.isFinite(localEntry.lives) ? localEntry.lives : state.lives;
+
+    // Online damage is authoritative on server; trigger local blink only when lives drop.
+    if (state.lives < previousLives) {
+      this.components.player.startBlink?.();
+    } else if (Number(localEntry.damageBlinkTicks || 0) > 0 && !this.components.player.isBlinking) {
+      this.components.player.startBlink?.();
+    }
 
     const speedMultiplier = Math.pow(1.2, Math.max(0, state.speedPowerups || 0));
     this.components.player.speed = this.components.player.baseSpeed * speedMultiplier;
@@ -512,6 +521,23 @@ export class GameLoop {
     sprite.scale.x = facing === 'left' ? -scale : scale;
     sprite.scale.y = scale;
     remoteEntry.facing = facing;
+  }
+
+  _applyRemoteDamageBlink(remoteEntry, snapshotEntry, snapshotTick = null) {
+    if (!remoteEntry || typeof remoteEntry !== 'object') return;
+
+    const sprite = remoteEntry.sprite || remoteEntry;
+    if (!sprite || typeof sprite !== 'object') return;
+
+    const blinkTicks = Number(snapshotEntry?.damageBlinkTicks || 0);
+    if (blinkTicks > 0) {
+      const tick = Number.isFinite(snapshotTick) ? snapshotTick : 0;
+      const phase = Math.floor((tick / GAME_CONFIG.PLAYER_BLINK_INTERVAL_TICKS) % 2);
+      sprite.alpha = phase === 0 ? 0.5 : 1;
+      return;
+    }
+
+    sprite.alpha = 0.95;
   }
 
   _applyPlayerTint(sprite, playerId) {
