@@ -98,6 +98,9 @@ export class RoomManager {
           hasLandMine: false,
           lastBombCommandTs: 0,
           lastFacing: 'down',
+          lastAcceptedInputTick: 0,
+          lastInputSeq: 0,
+          inputCooldownTicks: 0,
         });
         if (!room.hostSocketId) {
           room.hostSocketId = socket.id;
@@ -131,9 +134,11 @@ export class RoomManager {
         if (!room) return;
 
         const player = room.players.get(socket.id);
+        if (!room || room.status !== 'playing') return;
         if (!player) return;
 
-        player.input = input || {};
+        const normalizedInput = this.normalizeInput(input || {}, player);
+        player.input = normalizedInput;
 
         const bombTs = Number(player.input?.bomb?.timestamp || 0);
         if (Number.isFinite(bombTs) && bombTs > 0 && bombTs !== player.lastBombCommandTs) {
@@ -189,6 +194,11 @@ export class RoomManager {
         const deltaTicks = Math.max(0.25, Math.min(8, deltaMs / 16.6667));
 
         for (const player of room.players.values()) {
+          const inputTick = Number(player.input?.tick || room.tick || 0);
+          if (Number.isFinite(inputTick) && inputTick <= player.lastAcceptedInputTick) {
+            continue;
+          }
+
           let moveX = Number(player.input?.x || 0);
           let moveY = Number(player.input?.y || 0);
           const playerMoveSpeed = this.getPlayerMoveSpeed(player);
@@ -216,7 +226,10 @@ export class RoomManager {
           player.tx = Math.floor(player.x / this.tileSize);
           player.ty = Math.floor(player.y / this.tileSize);
           this.releaseBombPassThrough(room, player);
-          this.handleBombCommand(room, player);
+          if (this.shouldAcceptBombCommand(player)) {
+            this.handleBombCommand(room, player);
+          }
+          player.lastAcceptedInputTick = inputTick;
         }
 
         this.updateBombs(room, deltaTicks);
@@ -338,7 +351,7 @@ export class RoomManager {
     if (room.status !== 'countdown') {
       room.status = 'countdown';
       room.countdownStartedAt = Date.now();
-      room.countdownEndsAt = room.countdownStartedAt + 30000;
+      room.countdownEndsAt = room.countdownStartedAt + 15000;
     }
 
     this.broadcastRoomState(roomId);
@@ -573,6 +586,44 @@ export class RoomManager {
       playerMaxY > tileMinY &&
       playerMinY < tileMaxY
     );
+  }
+
+  normalizeInput(input = {}, player = null) {
+    const safeInput = input && typeof input === 'object' ? input : {};
+    const x = Number(safeInput.x || 0);
+    const y = Number(safeInput.y || 0);
+    const magnitude = Math.hypot(x, y);
+    const normalizedX = Number.isFinite(x) ? x : 0;
+    const normalizedY = Number.isFinite(y) ? y : 0;
+    let clampedX = normalizedX;
+    let clampedY = normalizedY;
+
+    if (magnitude > 1) {
+      clampedX /= magnitude;
+      clampedY /= magnitude;
+    }
+
+    const nextInput = {
+      ...safeInput,
+      x: clampedX,
+      y: clampedY,
+      tick: Number.isFinite(Number(safeInput.tick)) ? Number(safeInput.tick) : 0,
+      bomb: safeInput.bomb && typeof safeInput.bomb === 'object' ? safeInput.bomb : null,
+    };
+
+    if (player?.inputCooldownTicks > 0) {
+      player.inputCooldownTicks = Math.max(0, player.inputCooldownTicks - 1);
+      nextInput.x = 0;
+      nextInput.y = 0;
+    }
+
+    return nextInput;
+  }
+
+  shouldAcceptBombCommand(player) {
+    if (!player) return false;
+    if (Number(player.inputCooldownTicks || 0) > 0) return false;
+    return true;
   }
 
   handleBombCommand(room, player) {
