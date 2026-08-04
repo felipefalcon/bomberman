@@ -115,8 +115,8 @@ export class GameLoop {
           this._renderRemotePlayers(snapshot.players);
         }
 
-        if (!window.__ONLINE_ENABLED__ && snapshot?.monsters) {
-          this.components.systems.monster.syncFromSnapshot(snapshot.monsters);
+        if (window.__ONLINE_ENABLED__ && snapshot) {
+          this._syncOnlineWorld(snapshot, tickDelta);
         }
 
         onlineBridge?.sendInput?.({
@@ -126,21 +126,25 @@ export class GameLoop {
           bomb: bombCommand,
         });
 
-        this.bombActionHandler.processInput();
+        if (!window.__ONLINE_ENABLED__) {
+          this.bombActionHandler.processInput();
+        }
       }
       
       // Update input manager after processing input (for next frame)
       this.components.managers.input.update();
       
       // Update systems
-      this.components.systems.bomb.update(
-        tickDelta,
-        (bomb) => this.bombLifecycleHandler.onBombExplode(bomb),
-        this.components.systems.monster.getMonsters(),
-        this.components.player
-      );
-      this.components.systems.explosion.update(tickDelta, this.components.player, this.components.systems.monster.getMonsters(), this.components.systems.powerup.getPowerups());
-      this.components.systems.powerup.update(tickDelta, this.components.player);
+      if (!window.__ONLINE_ENABLED__) {
+        this.components.systems.bomb.update(
+          tickDelta,
+          (bomb) => this.bombLifecycleHandler.onBombExplode(bomb),
+          this.components.systems.monster.getMonsters(),
+          this.components.player
+        );
+        this.components.systems.explosion.update(tickDelta, this.components.player, this.components.systems.monster.getMonsters(), this.components.systems.powerup.getPowerups());
+        this.components.systems.powerup.update(tickDelta, this.components.player);
+      }
       this.components.systems.monster.update(tickDelta, this.components.player, this.components.systems.bomb.getBombs());
       
       // Block destruction animation
@@ -229,10 +233,10 @@ export class GameLoop {
       const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
       const pixelX = Number.isFinite(entry?.x) ? entry.x : Number.isFinite(entry?.tx) ? entry.tx * tileSize + tileSize / 2 : tileSize * 1.5;
       const pixelY = Number.isFinite(entry?.y) ? entry.y : Number.isFinite(entry?.ty) ? entry.ty * tileSize + tileSize / 2 : tileSize * 1.5;
-      this._updateRemotePlayerAnimation(remoteEntry, pixelX, pixelY);
+      this._updateRemotePlayerAnimation(remoteEntry, entry, pixelX, pixelY);
       if (remoteSprite && typeof remoteSprite.position?.set === 'function') {
         // remoteSprite is inside gameContainer, so positions must be local to it.
-        remoteSprite.position.set(pixelX, pixelY);
+        remoteSprite.position.set(Math.round(pixelX), Math.round(pixelY));
       }
 
       if (remoteEntry && typeof remoteEntry === 'object') {
@@ -242,6 +246,46 @@ export class GameLoop {
     }
 
     this.components.remotePlayers = remotePlayers;
+  }
+
+  _syncOnlineWorld(snapshot, tickDelta) {
+    this.components.map?.syncDestructibleTiles?.(snapshot.destructibleTiles || []);
+    this.components.systems.bomb?.syncFromSnapshot?.(snapshot.bombs || []);
+    this.components.systems.explosion?.syncFromSnapshot?.(snapshot.explosions || []);
+    this.components.systems.powerup?.syncFromSnapshot?.(snapshot.powerups || []);
+    this._syncLocalPlayerStateFromSnapshot(snapshot.players || []);
+    this.components.systems.monster?.syncFromSnapshot?.(snapshot.monsters || []);
+    this.components.systems.powerup?.getPowerups?.().forEach((powerup) => powerup.update(tickDelta));
+  }
+
+  _syncLocalPlayerStateFromSnapshot(players = []) {
+    if (!this.components.player?.gameState?.playerState) return;
+
+    const onlineBridge = this.components.managers.onlineStateBridge;
+    const localId = this._normalizePlayerId(onlineBridge?.playerId);
+    const localEntry = Array.isArray(players)
+      ? players.find((entry) => this._normalizePlayerId(entry?.playerId) === localId)
+      : null;
+    if (!localEntry) return;
+
+    const state = this.components.player.gameState.playerState;
+    state.maxBombs = Number.isFinite(localEntry.maxBombs) ? localEntry.maxBombs : state.maxBombs;
+    state.activeBombs = Number.isFinite(localEntry.activeBombs) ? localEntry.activeBombs : state.activeBombs;
+    state.explosionRange = Number.isFinite(localEntry.explosionRange) ? localEntry.explosionRange : state.explosionRange;
+    state.speedPowerups = Number.isFinite(localEntry.speedPowerups) ? localEntry.speedPowerups : state.speedPowerups;
+    state.canPierceBlocks = !!localEntry.canPierceBlocks;
+    state.hasKickBomb = !!localEntry.hasKickBomb;
+    state.hasThrowBomb = !!localEntry.hasThrowBomb;
+    state.hasCrossBlock = !!localEntry.hasCrossBlock;
+    state.hasCrossBomb = !!localEntry.hasCrossBomb;
+    state.hasFollowerBomb = !!localEntry.hasFollowerBomb;
+    state.hasLandMine = !!localEntry.hasLandMine;
+    state.lives = Number.isFinite(localEntry.lives) ? localEntry.lives : state.lives;
+
+    const speedMultiplier = Math.pow(1.2, Math.max(0, state.speedPowerups || 0));
+    this.components.player.speed = this.components.player.baseSpeed * speedMultiplier;
+    this.components.managers.hud?.setLives?.(state.lives);
+    this.components.managers.hud?.updatePowerups?.(this.components.player);
   }
 
   _createRemotePlayerEntry() {
@@ -265,6 +309,7 @@ export class GameLoop {
       sprite.alpha = 0.95;
       sprite.visible = true;
       sprite.zIndex = 1000;
+      sprite.roundPixels = true;
       return {
         sprite,
         lastX: null,
@@ -287,10 +332,11 @@ export class GameLoop {
     avatar.position.set(0, 0);
     avatar.visible = true;
     avatar.zIndex = 1000;
+    avatar.roundPixels = true;
     return { sprite: avatar, lastX: null, lastY: null, facing: 'down', animationKey: 'fallback' };
   }
 
-  _updateRemotePlayerAnimation(remoteEntry, pixelX, pixelY) {
+  _updateRemotePlayerAnimation(remoteEntry, snapshotEntry, pixelX, pixelY) {
     if (!remoteEntry || typeof remoteEntry !== 'object') return;
 
     const sprite = remoteEntry.sprite;
@@ -305,10 +351,15 @@ export class GameLoop {
     const lastY = Number.isFinite(remoteEntry.lastY) ? remoteEntry.lastY : pixelY;
     const dx = pixelX - lastX;
     const dy = pixelY - lastY;
-    const moving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
+    const inferredMoving = Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01;
+    const snapshotMoving = typeof snapshotEntry?.moving === 'boolean' ? snapshotEntry.moving : null;
+    const moving = snapshotMoving ?? inferredMoving;
 
     let facing = remoteEntry.facing || 'down';
-    if (moving) {
+    const snapshotFacing = String(snapshotEntry?.facing || '').trim().toLowerCase();
+    if (snapshotFacing === 'up' || snapshotFacing === 'down' || snapshotFacing === 'left' || snapshotFacing === 'right') {
+      facing = snapshotFacing;
+    } else if (moving) {
       if (Math.abs(dx) > Math.abs(dy)) {
         facing = dx > 0 ? 'right' : 'left';
       } else {

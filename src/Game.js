@@ -72,15 +72,24 @@ export class Game {
     this.gameLoop = new GameLoop(this.components);
     console.log('[game] starting loop');
 
-    if (onlineEnabled && this.components.managers.onlineStateBridge) {
-      this.components.managers.onlineStateBridge.enable(roomId, playerId);
-      this.components.managers.onlineStateBridge.playerId = playerId || this.components.managers.onlineStateBridge.playerId;
+    const onlineBridge = this.components.managers.onlineStateBridge;
+    if (onlineBridge) {
+      onlineBridge.onSnapshot = (snapshot) => {
+        if (!snapshot || !window.__ONLINE_ENABLED__) return;
+        this.gameLoop?._renderRemotePlayers?.(snapshot.players || []);
+        this.gameLoop?._syncOnlineWorld?.(snapshot, 1);
+      };
     }
 
-    this.components.managers.onlineStateBridge?.applySnapshot?.({
+    if (onlineEnabled && onlineBridge) {
+      onlineBridge.enable(roomId, playerId);
+      onlineBridge.playerId = playerId || onlineBridge.playerId;
+    }
+
+    onlineBridge?.applySnapshot?.({
       players: [
         {
-          playerId: this.components.managers.onlineStateBridge?.playerId || 'local',
+          playerId: onlineBridge?.playerId || 'local',
           x: this.components.player.sprite.x,
           y: this.components.player.sprite.y,
         },

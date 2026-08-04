@@ -6,6 +6,8 @@ export class BombActionHandler {
   }
 
   processInput() {
+    if (window.__ONLINE_ENABLED__) return;
+
     const input = this.components.managers.input;
     if (input.isKeyPressed('z')) {
       this.handleBombAction();

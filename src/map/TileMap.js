@@ -194,4 +194,18 @@ export class TileMap {
     this.tiles[ty][tx] = TILE_TYPES.FLOOR;
     return blockSprite || null; // Return the sprite so caller can apply effects
   }
+
+  syncDestructibleTiles(activeDestructibleTiles = []) {
+    const active = new Set(Array.isArray(activeDestructibleTiles) ? activeDestructibleTiles : []);
+
+    for (let ty = 0; ty < this.rows; ty += 1) {
+      for (let tx = 0; tx < this.cols; tx += 1) {
+        if (!this.isDestructible(tx, ty)) continue;
+        const key = `${tx},${ty}`;
+        if (!active.has(key)) {
+          this.destroyTile(tx, ty);
+        }
+      }
+    }
+  }
 }

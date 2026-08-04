@@ -141,6 +141,49 @@ export class ExplosionSystem extends BaseGameSystem {
     this.explosions = this.explosions.filter((explosion) => !expiredSet.has(explosion));
   }
 
+  syncFromSnapshot(explosions = []) {
+    if (!Array.isArray(explosions)) return;
+
+    const existingById = new Map(
+      this.explosions.map((explosion) => [explosion.serverId || `${explosion.tx}:${explosion.ty}`, explosion])
+    );
+    const nextIds = new Set();
+
+    for (const entry of explosions) {
+      const serverId = entry.id || `${entry.tx}:${entry.ty}:${entry.timer}`;
+      nextIds.add(serverId);
+
+      let explosion = existingById.get(serverId);
+      if (!explosion) {
+        explosion = {
+          tx: entry.tx,
+          ty: entry.ty,
+          timer: Number.isFinite(entry.timer) ? entry.timer : this.explosionDuration,
+          hasDamagedMonsters: true,
+          hasDamagedPlayer: true,
+          soundPlayedForPlayer: true,
+          sprite: this.renderer.createSprite(entry.tx, entry.ty, this.tileSize, !!entry.isCenter),
+        };
+        this.explosions.push(explosion);
+        this.gameContainer?.addChild(explosion.sprite);
+      }
+
+      explosion.serverId = serverId;
+      explosion.tx = entry.tx;
+      explosion.ty = entry.ty;
+      explosion.timer = Number.isFinite(entry.timer) ? entry.timer : explosion.timer;
+      this.renderer.updateSprite(explosion.sprite, this.tileSize);
+    }
+
+    for (const explosion of this.explosions.slice()) {
+      const id = explosion.serverId || `${explosion.tx}:${explosion.ty}:${explosion.timer}`;
+      if (!nextIds.has(id)) {
+        this.gameContainer?.removeChild(explosion.sprite);
+        this.explosions = this.explosions.filter((entry) => entry !== explosion);
+      }
+    }
+  }
+
   /**
    * Check if player is on a specific tile
    * @param {number} tx - Tile X position
