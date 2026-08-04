@@ -92,7 +92,6 @@ export class GameLoop {
       const inputManager = this.components.managers.input;
       const movementCommand = inputManager.getMovementCommand();
       const bombCommand = this.bombActionHandler.buildCommand();
-      console.log('[gameLoop] tick', { tickDelta, keys: inputManager.keys, player: !!this.components.player });
 
       // Update player
       if (this.components.player) {
@@ -246,9 +245,21 @@ export class GameLoop {
           remoteEntry.renderY = pixelY;
         }
 
-        const smoothing = entry?.moving ? 0.4 : 0.25;
-        remoteEntry.renderX += (pixelX - remoteEntry.renderX) * smoothing;
-        remoteEntry.renderY += (pixelY - remoteEntry.renderY) * smoothing;
+        const errX = pixelX - remoteEntry.renderX;
+        const errY = pixelY - remoteEntry.renderY;
+        const errorDistance = Math.hypot(errX, errY);
+
+        if (errorDistance > 24) {
+          remoteEntry.renderX = pixelX;
+          remoteEntry.renderY = pixelY;
+        } else if (errorDistance < 0.2) {
+          remoteEntry.renderX = pixelX;
+          remoteEntry.renderY = pixelY;
+        } else {
+          const smoothing = entry?.moving ? 0.55 : 0.35;
+          remoteEntry.renderX += errX * smoothing;
+          remoteEntry.renderY += errY * smoothing;
+        }
 
         // remoteSprite is inside gameContainer, so positions must be local to it.
         remoteSprite.position.set(remoteEntry.renderX, remoteEntry.renderY);
@@ -350,11 +361,15 @@ export class GameLoop {
     const errY = this.localAuthorityTarget.y - localSprite.y;
     const errorDistance = Math.hypot(errX, errY);
 
-    if (errorDistance < 0.35) return;
+    if (errorDistance < 0.2) {
+      localSprite.x = this.localAuthorityTarget.x;
+      localSprite.y = this.localAuthorityTarget.y;
+      return;
+    }
 
-    const baseSmoothing = 0.12;
+    const baseSmoothing = 0.2;
     const deltaScale = Math.max(0.5, Math.min(2, Number(tickDelta) || 1));
-    const smoothing = Math.min(0.45, baseSmoothing * deltaScale);
+    const smoothing = Math.min(0.65, baseSmoothing * deltaScale);
 
     localSprite.x += errX * smoothing;
     localSprite.y += errY * smoothing;

@@ -8,7 +8,7 @@ export class RoomManager {
     this.mapRows = 11;
     this.playerSpeed = 2.6;
     this.playerCollisionHalf = Math.floor(26 / 2);
-    this.simulationStepMs = 33;
+    this.simulationStepMs = 16;
     this.destructibleChance = 0.7;
     this.bombSlideSpeed = 4;
     this.bombThrowSpeed = 4;
@@ -198,7 +198,6 @@ export class RoomManager {
         }, []);
 
         this.emitSnapshot(roomId, room, uniquePlayers);
-        console.log('[server] snapshot', roomId, uniquePlayers.map((entry) => ({ playerId: entry.playerId, x: entry.x, y: entry.y, tx: entry.tx, ty: entry.ty })));
       }
     }, this.simulationStepMs);
   }

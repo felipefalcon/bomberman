@@ -150,10 +150,6 @@ export class Player {
     const moveX = vx * this.speed * delta;
     const moveY = vy * this.speed * delta;
 
-    if (vx !== 0 || vy !== 0) {
-      console.log('[player]', 'update', { vx, vy, moveX, moveY, x: this.sprite.x, y: this.sprite.y });
-    }
-
     // decide animation based on input
     this._updateAnimation(vx, vy);
 
