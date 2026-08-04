@@ -153,6 +153,7 @@ export class RoomManager {
         for (const player of room.players.values()) {
           let moveX = Number(player.input?.x || 0);
           let moveY = Number(player.input?.y || 0);
+          const playerMoveSpeed = this.getPlayerMoveSpeed(player);
 
           if (moveX !== 0 && moveY !== 0) {
             const inv = Math.SQRT1_2;
@@ -163,8 +164,8 @@ export class RoomManager {
           this.applyPlayerMovement(
             room,
             player,
-            moveX * this.playerSpeed * deltaTicks,
-            moveY * this.playerSpeed * deltaTicks,
+            moveX * playerMoveSpeed * deltaTicks,
+            moveY * playerMoveSpeed * deltaTicks,
           );
           this.alignPlayerToTileCenter(player, moveX, moveY);
 
@@ -503,7 +504,7 @@ export class RoomManager {
 
     player.lastBombCommandTs = bombCommandTs;
     if (player.hasThrowBomb) {
-      const bombAtPlayer = room.bombs.find((bomb) => bomb.tx === player.tx && bomb.ty === player.ty);
+      const bombAtPlayer = room.bombs.find((bomb) => this.isPlayerOverlappingTile(player, bomb.tx, bomb.ty));
       if (bombAtPlayer && this.throwBomb(room, bombAtPlayer, player.lastFacing || 'down')) {
         return true;
       }
@@ -539,6 +540,9 @@ export class RoomManager {
       throwRemainingTiles: 0,
       throwProgress: 0,
       isFollower: !!player.hasFollowerBomb,
+      followDx: 0,
+      followDy: 0,
+      followProgress: 0,
       isLandMine: !!player.hasLandMine,
       isTriggered: false,
       triggerTimer: this.landMineTriggerTicks,
@@ -656,6 +660,16 @@ export class RoomManager {
     for (const bomb of room.bombs) {
       if (!bomb.isSliding || bomb.isThrowing) continue;
 
+      if (!Number.isFinite(bomb.slideProgress)) bomb.slideProgress = 0;
+      if (!Number.isFinite(bomb.slideDx)) bomb.slideDx = 0;
+      if (!Number.isFinite(bomb.slideDy)) bomb.slideDy = 0;
+      if (bomb.slideDx === 0 && bomb.slideDy === 0) {
+        bomb.isSliding = false;
+        bomb.slideProgress = 0;
+        this.setBombPixelFromTile(bomb);
+        continue;
+      }
+
       bomb.slideProgress += this.bombSlideSpeed * deltaTicks;
       while (bomb.slideProgress >= this.tileSize) {
         bomb.slideProgress -= this.tileSize;
@@ -673,13 +687,28 @@ export class RoomManager {
         bomb.ty = nextTy;
       }
 
-      this.setBombPixelFromTile(bomb);
+      if (!bomb.isSliding) {
+        this.setBombPixelFromTile(bomb);
+      } else {
+        bomb.x = (bomb.tx + (bomb.slideDx * bomb.slideProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
+        bomb.y = (bomb.ty + (bomb.slideDy * bomb.slideProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
+      }
     }
   }
 
   updateThrownBombs(room, deltaTicks) {
     for (const bomb of room.bombs) {
       if (!bomb.isThrowing) continue;
+
+      if (!Number.isFinite(bomb.throwProgress)) bomb.throwProgress = 0;
+      if (!Number.isFinite(bomb.throwDx)) bomb.throwDx = 0;
+      if (!Number.isFinite(bomb.throwDy)) bomb.throwDy = 0;
+      if (bomb.throwDx === 0 && bomb.throwDy === 0) {
+        bomb.isThrowing = false;
+        bomb.throwProgress = 0;
+        this.setBombPixelFromTile(bomb);
+        continue;
+      }
 
       bomb.throwProgress += this.bombThrowSpeed * deltaTicks;
       while (bomb.throwProgress >= this.tileSize) {
@@ -714,7 +743,12 @@ export class RoomManager {
         }
       }
 
-      this.setBombPixelFromTile(bomb);
+      if (!bomb.isThrowing) {
+        this.setBombPixelFromTile(bomb);
+      } else {
+        bomb.x = (bomb.tx + (bomb.throwDx * bomb.throwProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
+        bomb.y = (bomb.ty + (bomb.throwDy * bomb.throwProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
+      }
     }
   }
 
@@ -723,46 +757,137 @@ export class RoomManager {
       if (!bomb.isFollower || bomb.isLandMine || bomb.isSliding || bomb.isThrowing) continue;
 
       const target = this.findNearestFollowerTarget(room, bomb);
-      if (!target) continue;
-
-      const dx = target.tx - bomb.tx;
-      const dy = target.ty - bomb.ty;
-      const candidates = [];
-      if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
-        candidates.push({ dx: Math.sign(dx), dy: 0 });
-      }
-      if (dy !== 0) {
-        candidates.push({ dx: 0, dy: Math.sign(dy) });
-      }
-      if (Math.abs(dx) < Math.abs(dy) && dx !== 0) {
-        candidates.push({ dx: Math.sign(dx), dy: 0 });
-      }
-
-      bomb.slideProgress = (bomb.slideProgress || 0) + this.bombFollowSpeed * deltaTicks;
-      if (bomb.slideProgress < this.tileSize) {
+      if (!target) {
+        bomb.followDx = 0;
+        bomb.followDy = 0;
+        bomb.followProgress = 0;
         this.setBombPixelFromTile(bomb);
         continue;
       }
-      bomb.slideProgress = 0;
 
-      for (const dir of candidates) {
-        const nextTx = bomb.tx + dir.dx;
-        const nextTy = bomb.ty + dir.dy;
-        if (this.isTileBlocked(room, nextTx, nextTy)) continue;
-        if (room.bombs.some((entry) => entry !== bomb && entry.tx === nextTx && entry.ty === nextTy)) continue;
-        bomb.tx = nextTx;
-        bomb.ty = nextTy;
-        break;
+      if (!Number.isFinite(bomb.followProgress)) bomb.followProgress = 0;
+      if (!Number.isFinite(bomb.followDx)) bomb.followDx = 0;
+      if (!Number.isFinite(bomb.followDy)) bomb.followDy = 0;
+
+      const distanceX = target.tx - bomb.tx;
+      const distanceY = target.ty - bomb.ty;
+      if (Math.abs(distanceX) <= 1 && Math.abs(distanceY) <= 1 && !(distanceX === 0 && distanceY === 0)) {
+        bomb.followDx = 0;
+        bomb.followDy = 0;
+        bomb.followProgress = 0;
+        this.setBombPixelFromTile(bomb);
+        continue;
       }
 
-      this.setBombPixelFromTile(bomb);
+      // Pick a direction immediately so follower movement starts on this frame,
+      // avoiding the initial "stuck" feel after placing the bomb.
+      if (bomb.followDx === 0 && bomb.followDy === 0) {
+        const startDir = this.pickFollowerDirection(room, bomb, target);
+        if (!startDir) {
+          bomb.followProgress = 0;
+          this.setBombPixelFromTile(bomb);
+          continue;
+        }
+        bomb.followDx = startDir.dx;
+        bomb.followDy = startDir.dy;
+      }
+
+      const speedDelta = this.bombFollowSpeed * deltaTicks;
+      bomb.followProgress += speedDelta;
+
+      while (bomb.followProgress >= this.tileSize) {
+        if (bomb.followDx === 0 && bomb.followDy === 0) {
+          const nextDir = this.pickFollowerDirection(room, bomb, target);
+          if (!nextDir) {
+            bomb.followProgress = 0;
+            break;
+          }
+          bomb.followDx = nextDir.dx;
+          bomb.followDy = nextDir.dy;
+        }
+
+        const nextTx = bomb.tx + bomb.followDx;
+        const nextTy = bomb.ty + bomb.followDy;
+
+        if (this.isTileBlocked(room, nextTx, nextTy) || room.bombs.some((entry) => entry !== bomb && entry.tx === nextTx && entry.ty === nextTy)) {
+          const reroute = this.pickFollowerDirection(room, bomb, target);
+          if (!reroute) {
+            bomb.followDx = 0;
+            bomb.followDy = 0;
+            bomb.followProgress = 0;
+            break;
+          }
+          bomb.followDx = reroute.dx;
+          bomb.followDy = reroute.dy;
+          continue;
+        }
+
+        bomb.tx = nextTx;
+        bomb.ty = nextTy;
+        bomb.followProgress -= this.tileSize;
+
+        const remainingX = target.tx - bomb.tx;
+        const remainingY = target.ty - bomb.ty;
+        if (Math.abs(remainingX) <= 1 && Math.abs(remainingY) <= 1 && !(remainingX === 0 && remainingY === 0)) {
+          bomb.followDx = 0;
+          bomb.followDy = 0;
+          bomb.followProgress = 0;
+          break;
+        }
+
+        const nextDir = this.pickFollowerDirection(room, bomb, target);
+        if (!nextDir) {
+          bomb.followDx = 0;
+          bomb.followDy = 0;
+          bomb.followProgress = 0;
+          break;
+        }
+        bomb.followDx = nextDir.dx;
+        bomb.followDy = nextDir.dy;
+      }
+
+      if (bomb.followDx === 0 && bomb.followDy === 0) {
+        this.setBombPixelFromTile(bomb);
+      } else {
+        bomb.x = (bomb.tx + (bomb.followDx * bomb.followProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
+        bomb.y = (bomb.ty + (bomb.followDy * bomb.followProgress) / this.tileSize) * this.tileSize + this.tileSize / 2;
+      }
     }
+  }
+
+  pickFollowerDirection(room, bomb, target) {
+    if (!target) return null;
+
+    const dx = target.tx - bomb.tx;
+    const dy = target.ty - bomb.ty;
+    const candidates = [];
+
+    if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+      candidates.push({ dx: Math.sign(dx), dy: 0 });
+    }
+    if (dy !== 0) {
+      candidates.push({ dx: 0, dy: Math.sign(dy) });
+    }
+    if (Math.abs(dx) < Math.abs(dy) && dx !== 0) {
+      candidates.push({ dx: Math.sign(dx), dy: 0 });
+    }
+
+    for (const dir of candidates) {
+      const nextTx = bomb.tx + dir.dx;
+      const nextTy = bomb.ty + dir.dy;
+      if (this.isTileBlocked(room, nextTx, nextTy)) continue;
+      if (room.bombs.some((entry) => entry !== bomb && entry.tx === nextTx && entry.ty === nextTy)) continue;
+      return dir;
+    }
+
+    return null;
   }
 
   findNearestFollowerTarget(room, bomb) {
     let best = null;
     let bestDist = Number.POSITIVE_INFINITY;
     for (const player of room.players.values()) {
+      if (player.id === bomb.ownerSocketId) continue;
       const dist = Math.abs(player.tx - bomb.tx) + Math.abs(player.ty - bomb.ty);
       if (dist > 0 && dist < bestDist) {
         bestDist = dist;
@@ -969,6 +1094,11 @@ export class RoomManager {
       default:
         break;
     }
+  }
+
+  getPlayerMoveSpeed(player) {
+    const stacks = Math.max(0, Number(player?.speedPowerups || 0));
+    return this.playerSpeed * Math.pow(1.2, stacks);
   }
 
   buildDestructibleTiles(roomId) {
