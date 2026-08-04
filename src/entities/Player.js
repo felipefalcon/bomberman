@@ -157,7 +157,7 @@ export class Player {
       this._tryMove(moveX, moveY, map, bombs, bombSystem);
     }
 
-    if (vx === 0 && vy === 0) {
+    if (vx === 0 && vy === 0 && !window.__ONLINE_ENABLED__) {
       this._stabilizeIdlePose();
     }
   }

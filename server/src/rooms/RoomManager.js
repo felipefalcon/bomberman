@@ -189,6 +189,8 @@ export class RoomManager {
             const inputY = Number(player.input?.y || 0);
             acc.push({
               ...player,
+              x: Math.round(player.x),
+              y: Math.round(player.y),
               playerId: this.normalizePlayerId(player.playerId, acc.length),
               facing: player.lastFacing || 'down',
               moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
@@ -209,6 +211,8 @@ export class RoomManager {
         const inputY = Number(player.input?.y || 0);
         acc.push({
           ...player,
+          x: Math.round(player.x),
+          y: Math.round(player.y),
           playerId: this.normalizePlayerId(player.playerId, acc.length),
           facing: player.lastFacing || 'down',
           moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,

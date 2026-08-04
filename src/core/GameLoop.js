@@ -252,12 +252,14 @@ export class GameLoop {
       const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
       const pixelX = Number.isFinite(entry?.x) ? entry.x : Number.isFinite(entry?.tx) ? entry.tx * tileSize + tileSize / 2 : tileSize * 1.5;
       const pixelY = Number.isFinite(entry?.y) ? entry.y : Number.isFinite(entry?.ty) ? entry.ty * tileSize + tileSize / 2 : tileSize * 1.5;
+      const renderX = Math.round(pixelX);
+      const renderY = Math.round(pixelY);
       this._updateRemotePlayerAnimation(remoteEntry, entry, pixelX, pixelY);
       if (remoteSprite && typeof remoteSprite.position?.set === 'function') {
         // In strict online mode, render remote players exactly at authoritative positions.
-        remoteEntry.renderX = pixelX;
-        remoteEntry.renderY = pixelY;
-        remoteSprite.position.set(pixelX, pixelY);
+        remoteEntry.renderX = renderX;
+        remoteEntry.renderY = renderY;
+        remoteSprite.position.set(renderX, renderY);
       }
 
       if (remoteEntry && typeof remoteEntry === 'object') {
@@ -328,8 +330,8 @@ export class GameLoop {
       const errorDistance = Math.hypot(errX, errY);
 
       this.localAuthorityTarget = {
-        x: pixelX,
-        y: pixelY,
+        x: Math.round(pixelX),
+        y: Math.round(pixelY),
       };
 
       if (errorDistance >= 10) {
@@ -368,6 +370,14 @@ export class GameLoop {
     const errX = this.localAuthorityTarget.x - localSprite.x;
     const errY = this.localAuthorityTarget.y - localSprite.y;
     const errorDistance = Math.hypot(errX, errY);
+    const movement = this.components.managers.input?.getMovementCommand?.() || { x: 0, y: 0 };
+    const isInputMoving = Math.abs(movement.x) > 0.001 || Math.abs(movement.y) > 0.001;
+
+    if (!isInputMoving) {
+      localSprite.x = this.localAuthorityTarget.x;
+      localSprite.y = this.localAuthorityTarget.y;
+      return;
+    }
 
     if (errorDistance < 0.15) {
       localSprite.x = this.localAuthorityTarget.x;
