@@ -17,9 +17,10 @@ export class HudManager {
     
     // Top HUD elements
     this.timerText = null;
-    this.livesText = null;
-    this.playerIconContainer = null;
+    this.playerSlotsContainer = null;
     this.clockIconContainer = null;
+    this.currentRoomPlayers = [];
+    this.playerSlotViews = [];
     
     // Sidebar HUD elements
     this.powerupSlots = {};
@@ -55,6 +56,7 @@ export class HudManager {
 
     const width = this.config.mapCols * this.config.tileSize;
     const height = this.config.tileSize;
+    const livesPanelWidth = hudTop.LIVES_PANEL_WIDTH;
 
     // Frame
     const frame = new PIXI.Graphics();
@@ -70,23 +72,13 @@ export class HudManager {
     const livesPanel = this.createHudPanel(
       hudTop.LIVES_PANEL_X,
       hudTop.LIVES_PANEL_Y,
-      hudTop.LIVES_PANEL_WIDTH,
+      livesPanelWidth,
       height - hudTop.PANEL_INNER_MARGIN
     );
     container.addChild(livesPanel);
 
-    this.playerIconContainer = new PIXI.Container();
-    this.playerIconContainer.addChild(this.createPlayerIcon());
-    livesPanel.addChild(this.playerIconContainer);
-
-    this.livesText = new PIXI.BitmapText({
-      text: hudTop.DEFAULT_LIVES_TEXT,
-      style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
-      roundPixels: true,
-    });
-    this.livesText.x = hudTop.LIVES_TEXT_X;
-    this.livesText.y = hudTop.LIVES_TEXT_Y;
-    livesPanel.addChild(this.livesText);
+    this.playerSlotsContainer = new PIXI.Container();
+    livesPanel.addChild(this.playerSlotsContainer);
 
     // Timer panel
     const timerPanel = this.createHudPanel(
@@ -293,11 +285,73 @@ export class HudManager {
    * Set lives display
    */
   setLives(value) {
-    if (!this.livesText) return;
-    const nextLives = `${value}`;
-    if (nextLives === this.lastRenderedLives) return;
-    this.lastRenderedLives = nextLives;
-    this.livesText.text = nextLives;
+    this.lastRenderedLives = `${value}`;
+    if (this.currentRoomPlayers.length === 0) {
+      this.renderSharedPlayers();
+    }
+  }
+
+  setRoomPlayers(players = []) {
+    this.currentRoomPlayers = Array.isArray(players) ? players.filter(Boolean) : [];
+    this.renderSharedPlayers();
+  }
+
+  renderSharedPlayers() {
+    if (!this.playerSlotsContainer) return;
+
+    this.playerSlotsContainer.removeChildren();
+    this.playerSlotViews = [];
+
+    const players = this.currentRoomPlayers.length > 0
+      ? this.currentRoomPlayers
+      : [{ playerId: 'player-1', lives: Number(this.lastRenderedLives || GAME_CONFIG.PLAYER_STARTING_LIVES) }];
+
+    players.forEach((player, index) => {
+      const slot = this.createPlayerSlot(player, index);
+      this.playerSlotsContainer.addChild(slot);
+      this.playerSlotViews.push(slot);
+    });
+  }
+
+  createPlayerSlot(player, index) {
+    const container = new PIXI.Container();
+    container.x = index * 64;
+    container.y = 0;
+
+    const icon = this.createPlayerIcon();
+    icon.x = 0;
+    icon.y = 1;
+    icon.scale.set(1.5);
+    container.addChild(icon);
+
+    const livesText = new PIXI.BitmapText({
+      text: `${Number.isFinite(Number(player?.lives)) ? Number(player.lives) : GAME_CONFIG.PLAYER_STARTING_LIVES}`,
+      style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
+      roundPixels: true,
+    });
+    livesText.x = 24;
+    livesText.y = 2;
+    container.addChild(livesText);
+
+    const playerLabel = new PIXI.BitmapText({
+      text: this._formatPlayerLabel(player?.playerId || player?.id || `player-${index + 1}`),
+      style: { fontFamily: 'HUDFont', fontSize: 7, fill: 0xdddddd },
+      roundPixels: true,
+    });
+    playerLabel.x = 24;
+    playerLabel.y = 16;
+    container.addChild(playerLabel);
+
+    return container;
+  }
+
+  _formatPlayerLabel(playerId) {
+    const raw = String(playerId || '').trim();
+    if (!raw) return 'P1';
+    if (raw.startsWith('player-')) {
+      return raw.replace('player-', 'P');
+    }
+    return raw;
   }
 
   /**

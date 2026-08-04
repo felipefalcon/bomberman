@@ -79,6 +79,7 @@ export class Game {
       onlineBridge.onRoomState = (roomState) => {
         if (!roomState || !window.__ONLINE_ENABLED__) return;
         const gameState = this.components?.managers?.gameState;
+        this.components?.managers?.hud?.setRoomPlayers?.(roomState.players || []);
         if (gameState?.setOnlineCountdown) {
           const seconds = Number(roomState?.countdownSeconds || 0);
           if (roomState?.status === 'countdown') {
