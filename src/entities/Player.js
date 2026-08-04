@@ -154,6 +154,25 @@ export class Player {
     this._updateAnimation(vx, vy);
 
     this._tryMove(moveX, moveY, map, bombs, bombSystem);
+
+    if (vx === 0 && vy === 0) {
+      this._stabilizeIdlePose();
+    }
+  }
+
+  _stabilizeIdlePose() {
+    // When idle, keep sprite on crisp pixel coordinates to avoid visual drift.
+    this.sprite.x = Math.round(this.sprite.x);
+    this.sprite.y = Math.round(this.sprite.y);
+
+    // If already almost centered in a tile, snap fully to the tile center.
+    const centeredTile = tileCenter(toTile(this.sprite.x, this.tileSize), toTile(this.sprite.y, this.tileSize), this.tileSize);
+    if (Math.abs(this.sprite.x - centeredTile.x) < 1.1) {
+      this.sprite.x = centeredTile.x;
+    }
+    if (Math.abs(this.sprite.y - centeredTile.y) < 1.1) {
+      this.sprite.y = centeredTile.y;
+    }
   }
 
   _tryMove(dx, dy, map, bombs, bombSystem = null) {

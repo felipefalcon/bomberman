@@ -248,21 +248,29 @@ export class GameLoop {
         const errX = pixelX - remoteEntry.renderX;
         const errY = pixelY - remoteEntry.renderY;
         const errorDistance = Math.hypot(errX, errY);
+        const isMoving = !!entry?.moving;
 
         if (errorDistance > 24) {
+          remoteEntry.renderX = pixelX;
+          remoteEntry.renderY = pixelY;
+        } else if (!isMoving && errorDistance < 1.2) {
           remoteEntry.renderX = pixelX;
           remoteEntry.renderY = pixelY;
         } else if (errorDistance < 0.2) {
           remoteEntry.renderX = pixelX;
           remoteEntry.renderY = pixelY;
         } else {
-          const smoothing = entry?.moving ? 0.55 : 0.35;
+          const smoothing = isMoving ? 0.55 : 0.45;
           remoteEntry.renderX += errX * smoothing;
           remoteEntry.renderY += errY * smoothing;
         }
 
         // remoteSprite is inside gameContainer, so positions must be local to it.
-        remoteSprite.position.set(remoteEntry.renderX, remoteEntry.renderY);
+        if (!isMoving) {
+          remoteSprite.position.set(Math.round(remoteEntry.renderX), Math.round(remoteEntry.renderY));
+        } else {
+          remoteSprite.position.set(remoteEntry.renderX, remoteEntry.renderY);
+        }
       }
 
       if (remoteEntry && typeof remoteEntry === 'object') {
