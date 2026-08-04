@@ -120,7 +120,7 @@ export class Player {
     this.blinkTimer = 0;
   }
 
-  update(delta, keys, map, bombs = [], bombSystem = null) {
+  update(delta, keys, map, bombs = [], bombSystem = null, skipLocalPositionIntegration = false) {
     // Handle blink effect when taking damage
     if (this.isBlinking) {
       this.blinkTimer += delta;
@@ -153,7 +153,9 @@ export class Player {
     // decide animation based on input
     this._updateAnimation(vx, vy);
 
-    this._tryMove(moveX, moveY, map, bombs, bombSystem);
+    if (!skipLocalPositionIntegration) {
+      this._tryMove(moveX, moveY, map, bombs, bombSystem);
+    }
 
     if (vx === 0 && vy === 0) {
       this._stabilizeIdlePose();

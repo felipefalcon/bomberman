@@ -17,8 +17,6 @@ export async function loadBombSprite() {
     const frameHeight = 16;
     const { frames, cols, rows } = sliceTextureGrid(canvas, frameWidth, frameHeight);
 
-    console.log(`Bomb sprite loaded: ${cols}x${rows} tilemap (${cols * rows} total frames)`);
-
     // Create ping-pong animation with first 3 frames: [0, 1, 2, 1]
     const bombFrames = [0, 1, 2];
     const pingPongFrames = bombFrames.concat(bombFrames.slice(1, -1).reverse()); // [0, 1, 2, 1]

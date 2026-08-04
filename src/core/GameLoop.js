@@ -26,6 +26,8 @@ export class GameLoop {
     this.components.remotePlayers = this.components.remotePlayers instanceof Map ? this.components.remotePlayers : new Map();
     this.lastAppliedLocalSnapshotTick = null;
     this.localAuthorityTarget = null;
+    this.lastProcessedSnapshotTick = null;
+    this.lastProcessedSnapshotRef = null;
   }
 
   /**
@@ -96,6 +98,7 @@ export class GameLoop {
       // Update player
       if (this.components.player) {
         const bombs = this.components.systems.bomb.getBombs();
+        const movementCollisionBombs = window.__ONLINE_ENABLED__ ? [] : bombs;
         const onlineBridge = this.components.managers.onlineStateBridge;
         const snapshot = onlineBridge?.getSnapshot?.();
         const player = this.components.player;
@@ -110,18 +113,29 @@ export class GameLoop {
           }
         }
 
-        player.update(tickDelta, inputManager.keys, this.components.map, bombs, this.components.systems.bomb);
+        player.update(
+          tickDelta,
+          inputManager.keys,
+          this.components.map,
+          movementCollisionBombs,
+          this.components.systems.bomb,
+          false,
+        );
 
         if (window.__ONLINE_ENABLED__) {
           this._applyLocalReconciliation(tickDelta);
         }
 
-        if (onlineBridge?.enabled && onlineBridge?.connected && onlineBridge?.hasRemoteSnapshot && snapshot?.players) {
-          this._renderRemotePlayers(snapshot.players);
-        }
-
         if (window.__ONLINE_ENABLED__ && snapshot) {
-          this._syncOnlineWorld(snapshot, tickDelta);
+          const hasNewSnapshot = this._hasNewOnlineSnapshot(snapshot);
+          if (hasNewSnapshot) {
+            this._syncOnlineWorld(snapshot, tickDelta);
+            if (snapshot?.players) {
+              this._renderRemotePlayers(snapshot.players);
+            }
+          }
+        } else if (onlineBridge?.enabled && onlineBridge?.connected && onlineBridge?.hasRemoteSnapshot && snapshot?.players) {
+          this._renderRemotePlayers(snapshot.players);
         }
 
         onlineBridge?.sendInput?.({
@@ -240,37 +254,10 @@ export class GameLoop {
       const pixelY = Number.isFinite(entry?.y) ? entry.y : Number.isFinite(entry?.ty) ? entry.ty * tileSize + tileSize / 2 : tileSize * 1.5;
       this._updateRemotePlayerAnimation(remoteEntry, entry, pixelX, pixelY);
       if (remoteSprite && typeof remoteSprite.position?.set === 'function') {
-        if (!Number.isFinite(remoteEntry.renderX) || !Number.isFinite(remoteEntry.renderY)) {
-          remoteEntry.renderX = pixelX;
-          remoteEntry.renderY = pixelY;
-        }
-
-        const errX = pixelX - remoteEntry.renderX;
-        const errY = pixelY - remoteEntry.renderY;
-        const errorDistance = Math.hypot(errX, errY);
-        const isMoving = !!entry?.moving;
-
-        if (errorDistance > 24) {
-          remoteEntry.renderX = pixelX;
-          remoteEntry.renderY = pixelY;
-        } else if (!isMoving && errorDistance < 1.2) {
-          remoteEntry.renderX = pixelX;
-          remoteEntry.renderY = pixelY;
-        } else if (errorDistance < 0.2) {
-          remoteEntry.renderX = pixelX;
-          remoteEntry.renderY = pixelY;
-        } else {
-          const smoothing = isMoving ? 0.55 : 0.45;
-          remoteEntry.renderX += errX * smoothing;
-          remoteEntry.renderY += errY * smoothing;
-        }
-
-        // remoteSprite is inside gameContainer, so positions must be local to it.
-        if (!isMoving) {
-          remoteSprite.position.set(Math.round(remoteEntry.renderX), Math.round(remoteEntry.renderY));
-        } else {
-          remoteSprite.position.set(remoteEntry.renderX, remoteEntry.renderY);
-        }
+        // In strict online mode, render remote players exactly at authoritative positions.
+        remoteEntry.renderX = pixelX;
+        remoteEntry.renderY = pixelY;
+        remoteSprite.position.set(pixelX, pixelY);
       }
 
       if (remoteEntry && typeof remoteEntry === 'object') {
@@ -290,6 +277,19 @@ export class GameLoop {
     this._syncLocalPlayerStateFromSnapshot(snapshot.players || [], snapshot.tick);
     this.components.systems.monster?.syncFromSnapshot?.(snapshot.monsters || []);
     this.components.systems.powerup?.getPowerups?.().forEach((powerup) => powerup.update(tickDelta));
+
+    if (Number.isFinite(snapshot?.tick)) {
+      this.lastProcessedSnapshotTick = snapshot.tick;
+    }
+    this.lastProcessedSnapshotRef = snapshot;
+  }
+
+  _hasNewOnlineSnapshot(snapshot) {
+    if (!snapshot) return false;
+    if (Number.isFinite(snapshot.tick)) {
+      return snapshot.tick !== this.lastProcessedSnapshotTick;
+    }
+    return snapshot !== this.lastProcessedSnapshotRef;
   }
 
   _syncLocalPlayerStateFromSnapshot(players = [], snapshotTick = null) {
@@ -332,7 +332,7 @@ export class GameLoop {
         y: pixelY,
       };
 
-      if (errorDistance >= 18) {
+      if (errorDistance >= 10) {
         this.components.player.sprite.position.set(pixelX, pixelY);
       }
 
@@ -369,18 +369,15 @@ export class GameLoop {
     const errY = this.localAuthorityTarget.y - localSprite.y;
     const errorDistance = Math.hypot(errX, errY);
 
-    if (errorDistance < 0.2) {
+    if (errorDistance < 0.15) {
       localSprite.x = this.localAuthorityTarget.x;
       localSprite.y = this.localAuthorityTarget.y;
       return;
     }
 
-    const baseSmoothing = 0.2;
-    const deltaScale = Math.max(0.5, Math.min(2, Number(tickDelta) || 1));
-    const smoothing = Math.min(0.65, baseSmoothing * deltaScale);
-
-    localSprite.x += errX * smoothing;
-    localSprite.y += errY * smoothing;
+    const correction = Math.min(0.7, Math.max(0.35, 0.45 * (Number(tickDelta) || 1)));
+    localSprite.x += errX * correction;
+    localSprite.y += errY * correction;
   }
 
   _createRemotePlayerEntry() {

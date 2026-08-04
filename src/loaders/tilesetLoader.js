@@ -31,27 +31,26 @@ export async function loadTilesetTiles(url = `${import.meta.env.BASE_URL}assets/
       }
     }
 
-  // Tileset layout (16x16):
-  // First row/col/last row/col = border walls
-  // Rest = ground, crates, and obstacles
-  const mapping = {
-    // Corner tiles (0, maxCol, maxRow, maxRow*cols)
-    cornerTopLeft: 0,
-    cornerTopRight: cols - 1,
-    cornerBottomLeft: (rows - 1) * cols,
-    cornerBottomRight: rows * cols - 1,
-    
-    // Border walls
-    wallTopRow: Array.from({ length: cols }, (_, i) => i),
-    wallBottomRow: Array.from({ length: cols }, (_, i) => (rows - 1) * cols + i),
-    wallLeftCol: Array.from({ length: rows }, (_, i) => i * cols),
-    wallRightCol: Array.from({ length: rows }, (_, i) => i * cols + (cols - 1)),
-    
-    // All frames for general use
-    all: Array.from({ length: frames.length }, (_, i) => i),
-  };
+    // Tileset layout (16x16):
+    // First row/col/last row/col = border walls
+    // Rest = ground, crates, and obstacles
+    const mapping = {
+      // Corner tiles (0, maxCol, maxRow, maxRow*cols)
+      cornerTopLeft: 0,
+      cornerTopRight: cols - 1,
+      cornerBottomLeft: (rows - 1) * cols,
+      cornerBottomRight: rows * cols - 1,
+      
+      // Border walls
+      wallTopRow: Array.from({ length: cols }, (_, i) => i),
+      wallBottomRow: Array.from({ length: cols }, (_, i) => (rows - 1) * cols + i),
+      wallLeftCol: Array.from({ length: rows }, (_, i) => i * cols),
+      wallRightCol: Array.from({ length: rows }, (_, i) => i * cols + (cols - 1)),
+      
+      // All frames for general use
+      all: Array.from({ length: frames.length }, (_, i) => i),
+    };
 
-    console.log('tilesetLoader: loaded tileset', { width: sheetTexture.width, height: sheetTexture.height, cols, rows, frames: frames.length });
     return { frames, cols, rows, mapping };
   } catch (error) {
     console.error('Error loading tileset:', error);

@@ -13,6 +13,4 @@ const roomManager = new RoomManager(io);
 
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
-  console.log(`Socket.IO server listening on port ${PORT}`);
-});
+httpServer.listen(PORT);

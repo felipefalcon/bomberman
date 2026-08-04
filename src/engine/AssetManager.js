@@ -38,7 +38,6 @@ export class AssetManager {
     try {
       await Promise.all(promises);
       this.eventBus.emit(GameEvents.ALL_ASSETS_LOADED, this.assets);
-      console.log('AssetManager: All assets loaded successfully');
     } catch (error) {
       console.error('AssetManager: Error loading assets:', error);
       this.eventBus.emit(GameEvents.ASSET_ERROR, { error });
@@ -58,7 +57,6 @@ export class AssetManager {
       const { frames, mapping } = await loadPlayerSprites(url, GAME_CONFIG.TILE_SIZE);
       this.assets.player = { frames, mapping, loaded: true };
       this.eventBus.emit(GameEvents.ASSET_LOADED, { type: 'player', data: { frames, mapping } });
-      console.log('AssetManager: Player sprites loaded');
     } catch (error) {
       console.warn('AssetManager: Could not load player sprites, using placeholder:', error);
       this.assets.player = { frames: null, mapping: null, loaded: true };
@@ -78,7 +76,6 @@ export class AssetManager {
       const { frames, mapping } = await loadEnemySprites(url, GAME_CONFIG.TILE_SIZE);
       this.assets.enemy = { frames, mapping, loaded: true };
       this.eventBus.emit(GameEvents.ASSET_LOADED, { type: 'enemy', data: { frames, mapping } });
-      console.log('AssetManager: Enemy sprites loaded');
     } catch (error) {
       console.warn('AssetManager: Could not load enemy sprites, using placeholder:', error);
       this.assets.enemy = { frames: null, mapping: null, loaded: true };
@@ -97,7 +94,6 @@ export class AssetManager {
       const { frames, mapping } = await loadBombSprite();
       this.assets.bomb = { frames, mapping, loaded: true };
       this.eventBus.emit(GameEvents.ASSET_LOADED, { type: 'bomb', data: { frames, mapping } });
-      console.log('AssetManager: Bomb sprite loaded');
     } catch (error) {
       console.warn('AssetManager: Could not load bomb sprite, using placeholder:', error);
       this.assets.bomb = { frames: null, mapping: null, loaded: true };
@@ -116,7 +112,6 @@ export class AssetManager {
       const { frames, mapping } = await loadItemSprites();
       this.assets.items = { frames, mapping, loaded: true };
       this.eventBus.emit(GameEvents.ASSET_LOADED, { type: 'items', data: { frames, mapping } });
-      console.log('AssetManager: Item sprites loaded');
     } catch (error) {
       console.warn('AssetManager: Could not load item sprites, using placeholder:', error);
       this.assets.items = { frames: null, mapping: null, loaded: true };

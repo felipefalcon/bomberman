@@ -22,8 +22,6 @@ export class InputManager {
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
     this.bound = true;
-    
-    console.log('InputManager: Bound to keyboard events');
   }
 
   /**
@@ -35,8 +33,6 @@ export class InputManager {
     window.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('keyup', this._onKeyUp);
     this.bound = false;
-    
-    console.log('InputManager: Unbound from keyboard events');
   }
 
   /**
@@ -46,7 +42,6 @@ export class InputManager {
   handleKeyDown(e) {
     const key = e.key.toLowerCase();
     this.keys[key] = true;
-    console.log('[input]', 'keydown', key, this.keys);
     
     this.eventBus.emit(GameEvents.INPUT_KEY_DOWN, { key, originalEvent: e });
   }

@@ -17,7 +17,6 @@ export async function loadBlockTexture(url = `${import.meta.env.BASE_URL}assets/
       texture.source.scaleMode = 'nearest';
     }
 
-    console.log('blockLoader: loaded block texture', { width: texture.width, height: texture.height });
     return texture;
   } catch (error) {
     console.error('Error loading block texture:', error);

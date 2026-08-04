@@ -44,7 +44,6 @@ export class MonsterSystem extends BaseGameSystem {
       this.eventBus.emit(GameEvents.MONSTER_SPAWN, { tx, ty, monster });
     }
     
-    console.log(`MonsterSystem: Spawned ${this.monsters.length} monsters`);
   }
 
   syncFromSnapshot(monsters = []) {

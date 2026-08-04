@@ -187,8 +187,6 @@ export class PowerupSystem extends BaseGameSystem {
    * @param {string} type - Powerup type
    */
   applyPowerup(player, type) {
-    console.log(`Player collected: ${type}`);
-    
     // Use component manager to apply powerup
     if (player.componentManager) {
       player.componentManager.addComponent(type, player, player.gameState);

@@ -28,7 +28,6 @@ export class Game {
    * Start the game
    */
   async start() {
-    console.log('[game] start begin');
     // Install HUD font
     PIXI.BitmapFont.install({
       name: 'HUDFont',
@@ -56,9 +55,7 @@ export class Game {
 
     // Initialize game components
     this.initializer = new GameInitializer(this.app);
-    console.log('[game] initializing components');
     this.components = await this.initializer.initialize();
-    console.log('[game] components ready');
     
     // Initialize entity manager
     this.entityManager = new EntityManager();
@@ -70,7 +67,6 @@ export class Game {
     
     // Initialize game loop
     this.gameLoop = new GameLoop(this.components);
-    console.log('[game] starting loop');
 
     const onlineBridge = this.components.managers.onlineStateBridge;
     if (onlineBridge) {
@@ -103,7 +99,6 @@ export class Game {
     // Load audio assets
     await this._loadAudioAssets();
     
-    console.log('[game] started successfully');
   }
 
   _buildSeed(roomId = 'room') {
@@ -122,19 +117,15 @@ export class Game {
     const audioManager = this.components.managers.audio;
     
     const musicPromise = audioManager.loadMusic(`${import.meta.env.BASE_URL}assets/18 Where it All Began.mp3`)
-      .then(() => console.log('Game: Background music loaded'))
       .catch((err) => console.warn('Could not load background music. Error:', err));
 
     const explosionSoundPromise = audioManager.loadSoundEffect('explosion', `${import.meta.env.BASE_URL}assets/SB5 Sound Effects (12).wav`)
-      .then(() => console.log('Game: Explosion sound loaded'))
       .catch((err) => console.warn('Could not load explosion sound. Error:', err));
 
     const damageSoundPromise = audioManager.loadSoundEffect('damage', `${import.meta.env.BASE_URL}assets/SB5 Sound Effects (100).wav`)
-      .then(() => console.log('Game: Damage sound loaded'))
       .catch((err) => console.warn('Could not load damage sound. Error:', err));
 
     const gameOverSoundPromise = audioManager.loadSoundEffect('gameOver', `${import.meta.env.BASE_URL}assets/10 Bad Luck.mp3`)
-      .then(() => console.log('Game: Game Over sound loaded'))
       .catch((err) => console.warn('Could not load game over sound. Error:', err));
 
     await Promise.all([musicPromise, explosionSoundPromise, damageSoundPromise, gameOverSoundPromise]);

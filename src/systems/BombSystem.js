@@ -844,14 +844,12 @@ export class BombSystem extends BaseGameSystem {
    * @param {Function} explodeCallback - Callback for explosion logic
    */
   explodeBomb(bomb, explodeCallback) {
-    console.log('BombSystem: Exploding bomb at', bomb.tx, bomb.ty);
     this.bombs = this.bombs.filter((b) => b !== bomb);
     this.gameContainer.removeChild(bomb.sprite);
 
     this.eventBus.emit(GameEvents.BOMB_EXPLODE, { tx: bomb.tx, ty: bomb.ty });
 
     if (explodeCallback) {
-      console.log('BombSystem: Calling explodeCallback');
       explodeCallback(bomb);
     }
   }
@@ -895,7 +893,6 @@ export class BombSystem extends BaseGameSystem {
 
     // Check if there's another bomb at the target position
     if (this.bombs.some((b) => b !== bomb && b.tx === nextTx && b.ty === nextTy)) return false;
-    console.log('BombSystem: No bomb at target position');
 
     // Start sliding
     bomb.isSliding = true;

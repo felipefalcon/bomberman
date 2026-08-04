@@ -207,7 +207,6 @@ export class GameInitializer {
       .then(({ frames, mapping }) => {
         this.playerFrames = frames;
         this.playerMapping = mapping;
-        console.log('GameInitializer: Player spritesheet loaded');
       })
       .catch((err) => {
         console.warn('Could not load player spritesheet, using placeholder. Error:', err);
@@ -221,7 +220,6 @@ export class GameInitializer {
         const { frames, mapping } = await loadEnemySprites();
         this.enemyFrames = frames;
         this.enemyMapping = mapping;
-        console.log('GameInitializer: Enemy spritesheet loaded');
         this.monsterSystem.setAssets(frames, mapping);
         if (window.__ONLINE_ENABLED__) {
           this.monsterSystem.clear();
@@ -245,7 +243,6 @@ export class GameInitializer {
       .then(({ frames, mapping }) => {
         this.bombFrames = frames;
         this.bombMapping = mapping;
-        console.log('GameInitializer: Bomb sprite loaded');
         this.bombSystem.setAssets(frames, mapping);
       })
       .catch((err) => {
@@ -259,7 +256,6 @@ export class GameInitializer {
       .then(({ frames, mapping }) => {
         this.itemFrames = frames;
         this.itemMapping = mapping;
-        console.log('GameInitializer: Item sprites loaded');
         this.powerupSystem.setAssets(frames, mapping);
         // Update HUD with item icons
         if (this.hudManager) {

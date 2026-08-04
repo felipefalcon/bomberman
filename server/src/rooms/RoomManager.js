@@ -438,10 +438,30 @@ export class RoomManager {
   releaseBombPassThrough(room, player) {
     for (const bomb of room.bombs) {
       if (!bomb.passThroughPlayerIds?.has(player.id)) continue;
-      if (bomb.tx !== player.tx || bomb.ty !== player.ty) {
+      if (!this.isPlayerOverlappingTile(player, bomb.tx, bomb.ty)) {
         bomb.passThroughPlayerIds.delete(player.id);
       }
     }
+  }
+
+  isPlayerOverlappingTile(player, tx, ty) {
+    const half = this.playerCollisionHalf;
+    const playerMinX = player.x - half;
+    const playerMaxX = player.x + half;
+    const playerMinY = player.y - half;
+    const playerMaxY = player.y + half;
+
+    const tileMinX = tx * this.tileSize;
+    const tileMaxX = tileMinX + this.tileSize;
+    const tileMinY = ty * this.tileSize;
+    const tileMaxY = tileMinY + this.tileSize;
+
+    return (
+      playerMaxX > tileMinX &&
+      playerMinX < tileMaxX &&
+      playerMaxY > tileMinY &&
+      playerMinY < tileMaxY
+    );
   }
 
   handleBombCommand(room, player) {
