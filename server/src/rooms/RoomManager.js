@@ -166,6 +166,7 @@ export class RoomManager {
             moveX * this.playerSpeed * deltaTicks,
             moveY * this.playerSpeed * deltaTicks,
           );
+          this.alignPlayerToTileCenter(player, moveX, moveY);
 
           if (Math.abs(moveX) > Math.abs(moveY) && Math.abs(moveX) > 0) {
             player.lastFacing = moveX > 0 ? 'right' : 'left';
@@ -173,8 +174,8 @@ export class RoomManager {
             player.lastFacing = moveY > 0 ? 'down' : 'up';
           }
 
-          player.tx = Math.floor(player.x / 32);
-          player.ty = Math.floor(player.y / 32);
+          player.tx = Math.floor(player.x / this.tileSize);
+          player.ty = Math.floor(player.y / this.tileSize);
           this.releaseBombPassThrough(room, player);
           this.handleBombCommand(room, player);
         }
@@ -361,6 +362,33 @@ export class RoomManager {
       const nextY = player.y + dy;
       if (!this.collidesAt(room, player.x, nextY, player, { dx: 0, dy: Math.sign(dy) })) {
         player.y = nextY;
+      }
+    }
+  }
+
+  alignPlayerToTileCenter(player, moveX, moveY) {
+    const centerX = Math.floor(player.x / this.tileSize) * this.tileSize + this.tileSize / 2;
+    const centerY = Math.floor(player.y / this.tileSize) * this.tileSize + this.tileSize / 2;
+
+    // Keep lane alignment while moving in a cardinal axis.
+    if (moveX !== 0 && moveY === 0) {
+      if (Math.abs(player.y - centerY) < 8) {
+        player.y = centerY;
+      }
+    }
+    if (moveY !== 0 && moveX === 0) {
+      if (Math.abs(player.x - centerX) < 8) {
+        player.x = centerX;
+      }
+    }
+
+    // When idle, settle to tile center if already very close.
+    if (moveX === 0 && moveY === 0) {
+      if (Math.abs(player.x - centerX) < 1.1) {
+        player.x = centerX;
+      }
+      if (Math.abs(player.y - centerY) < 1.1) {
+        player.y = centerY;
       }
     }
   }
