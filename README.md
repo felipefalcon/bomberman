@@ -59,6 +59,10 @@ npm run dev
 Frontend Vite padrao:
 
 - `http://localhost:5173`
+- Em producao (GitHub Pages), a URL sera algo como:
+	- `https://SEU_USUARIO.github.io/bomberman/`
+- Backend em producao (exemplo Render):
+	- `https://SEU_BACKEND.onrender.com`
 
 ## Como entrar com mais de 1 jogador (2 a 4 jogadores)
 
@@ -75,6 +79,10 @@ Exemplo (mesma sala `sala1`):
 - Jogador 3: `http://localhost:5173/?online=1&room=sala1&player=player-3`
 - Jogador 4: `http://localhost:5173/?online=1&room=sala1&player=player-4`
 
+Exemplo em producao (GitHub Pages):
+
+- Jogador 1: `https://SEU_USUARIO.github.io/bomberman/?online=1&room=sala1&player=player-1`
+
 Observacoes:
 
 - O servidor normaliza IDs como `p1`, `player1` e `1` para `player-1`.
@@ -90,6 +98,28 @@ Existe uma pagina auxiliar para testar create/join/leave manualmente:
 Arquivo:
 
 - `socket-test.html`
+
+## Variaveis de ambiente para deploy
+
+### Frontend (Vite)
+
+Defina `VITE_SOCKET_URL` com a URL publica do backend Socket.IO.
+
+Exemplo (`.env.production` na raiz):
+
+```bash
+VITE_SOCKET_URL=https://SEU_BACKEND.onrender.com
+```
+
+### Backend (Node.js + Socket.IO)
+
+Defina `FRONTEND_ORIGIN` com a origem do frontend para CORS.
+Aceita 1 origem ou varias separadas por virgula.
+
+Exemplos:
+
+- `FRONTEND_ORIGIN=https://SEU_USUARIO.github.io`
+- `FRONTEND_ORIGIN=https://SEU_USUARIO.github.io,https://SEU_DOMINIO.com`
 
 ## Arquitetura e observabilidade
 

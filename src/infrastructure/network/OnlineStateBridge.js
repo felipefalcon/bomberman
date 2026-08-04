@@ -23,7 +23,9 @@ export class OnlineStateBridge {
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
 
-    this.socket = io('http://127.0.0.1:3001', {
+    const socketUrl = (import.meta.env.VITE_SOCKET_URL || 'http://127.0.0.1:3001').trim();
+
+    this.socket = io(socketUrl, {
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
