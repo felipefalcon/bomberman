@@ -22,8 +22,11 @@ export class OnlineStateBridge {
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
+    const isLocalServer = false; // Set to true if you want to connect to a local server for testing
 
-    const socketUrl = (import.meta.env.VITE_SOCKET_URL || 'https://bomberman-k61t.onrender.com').trim();
+    const socketUrl = isLocalServer
+      ? 'http://localhost:3000'
+      : (import.meta.env.VITE_SOCKET_URL || 'https://bomberman-k61t.onrender.com').trim();
 
     this.socket = io(socketUrl, {
       transports: ['websocket'],

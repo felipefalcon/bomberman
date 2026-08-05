@@ -373,7 +373,7 @@ export class RoomManager {
     if (room.status !== 'countdown') {
       room.status = 'countdown';
       room.countdownStartedAt = Date.now();
-      room.countdownEndsAt = room.countdownStartedAt + 15000;
+      room.countdownEndsAt = room.countdownStartedAt + 5000;
     }
 
     this.broadcastRoomState(roomId);
