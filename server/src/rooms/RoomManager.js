@@ -2,7 +2,7 @@ export class RoomManager {
   constructor(io) {
     this.io = io;
     this.rooms = new Map();
-    this.tickInterval = null;
+    this.tickTimeout = null;
     this.tileSize = 32;
     this.mapCols = 17;
     this.mapRows = 11;
@@ -21,6 +21,7 @@ export class RoomManager {
     this.playerDamageBlinkIntervalTicks = 10;
     this.powerupSpawnChance = 0.8;
     this.powerupImmuneTicks = 10;
+    this.SQRT1_2 = Math.SQRT1_2;
     this.powerupWeights = {
       range: 25,
       pierce: 15,
@@ -177,8 +178,12 @@ export class RoomManager {
   }
 
   startSimulationLoop() {
-    this.tickInterval = setInterval(() => {
-      const now = Date.now();
+    const loop = () => {
+      const start = Date.now();
+      const now = start;
+      const roomsNeedingSnapshot = new Set();
+      const roomsNeedingBroadcast = new Set();
+
       for (const [roomId, room] of this.rooms.entries()) {
         if (room.status === 'countdown') {
           if (room.countdownEndsAt && now >= room.countdownEndsAt) {
@@ -187,11 +192,11 @@ export class RoomManager {
             room.countdownEndsAt = null;
             room.tick = 0;
             room.lastTickAt = now;
-            this.broadcastRoomState(roomId);
-            this.emitSnapshot(roomId, room);
+            roomsNeedingBroadcast.add(roomId);
+            roomsNeedingSnapshot.add(roomId);
           } else {
-            this.broadcastRoomState(roomId);
-            this.emitSnapshot(roomId, room);
+            roomsNeedingBroadcast.add(roomId);
+            roomsNeedingSnapshot.add(roomId);
           }
         }
 
@@ -203,14 +208,17 @@ export class RoomManager {
         const deltaTicks = Math.max(0.25, Math.min(8, deltaMs / 16.6667));
 
         for (const player of room.players.values()) {
-          player.damageBlinkTicks = Math.max(0, Number(player.damageBlinkTicks || 0) - deltaTicks);
+          const lives = Number(player.lives || 0);
+          const damageBlinkTicks = Number(player.damageBlinkTicks || 0);
+          const inputTick = Number(player.input?.tick || room.tick || 0);
 
-          if (Number(player.lives || 0) <= 0) {
+          player.damageBlinkTicks = Math.max(0, damageBlinkTicks - deltaTicks);
+
+          if (lives <= 0) {
             player.input = {};
             continue;
           }
 
-          const inputTick = Number(player.input?.tick || room.tick || 0);
           if (Number.isFinite(inputTick) && inputTick <= player.lastAcceptedInputTick) {
             continue;
           }
@@ -220,7 +228,7 @@ export class RoomManager {
           const playerMoveSpeed = this.getPlayerMoveSpeed(player);
 
           if (moveX !== 0 && moveY !== 0) {
-            const inv = Math.SQRT1_2;
+            const inv = this.SQRT1_2;
             moveX *= inv;
             moveY *= inv;
           }
@@ -253,26 +261,46 @@ export class RoomManager {
         this.updatePowerups(room, deltaTicks);
         this.updateMatchEndState(room);
 
-        const uniquePlayers = Array.from(room.players.values()).reduce((acc, player) => {
-          if (!acc.some((entry) => entry.playerId === player.playerId)) {
-            const inputX = Number(player.input?.x || 0);
-            const inputY = Number(player.input?.y || 0);
-            acc.push({
-              ...player,
-              x: Math.round(player.x),
-              y: Math.round(player.y),
-              playerId: this.normalizePlayerId(player.playerId, acc.length),
-              isBlinking: Number(player.damageBlinkTicks || 0) > 0,
-              facing: player.lastFacing || 'down',
-              moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
-            });
-          }
-          return acc;
-        }, []);
-
-        this.emitSnapshot(roomId, room, uniquePlayers);
+        roomsNeedingSnapshot.add(roomId);
       }
-    }, this.simulationStepMs);
+
+      // Emitir broadcasts em batch
+      for (const roomId of roomsNeedingBroadcast) {
+        this.broadcastRoomState(roomId);
+      }
+
+      // Emitir snapshots em batch
+      for (const roomId of roomsNeedingSnapshot) {
+        const room = this.rooms.get(roomId);
+        if (room) {
+          const uniquePlayers = [];
+          const seenPlayerIds = new Set();
+          for (const player of room.players.values()) {
+            if (!seenPlayerIds.has(player.playerId)) {
+              seenPlayerIds.add(player.playerId);
+              const inputX = Number(player.input?.x || 0);
+              const inputY = Number(player.input?.y || 0);
+              uniquePlayers.push({
+                ...player,
+                x: Math.round(player.x),
+                y: Math.round(player.y),
+                playerId: this.normalizePlayerId(player.playerId, uniquePlayers.length),
+                isBlinking: Number(player.damageBlinkTicks || 0) > 0,
+                facing: player.lastFacing || 'down',
+                moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
+              });
+            }
+          }
+          this.emitSnapshot(roomId, room, uniquePlayers);
+        }
+      }
+
+      const elapsed = Date.now() - start;
+      const delay = Math.max(0, this.simulationStepMs - elapsed);
+      this.tickTimeout = setTimeout(loop, delay);
+    };
+
+    this.tickTimeout = setTimeout(loop, this.simulationStepMs);
   }
 
   emitSnapshot(roomId, room, uniquePlayers = null) {
@@ -1338,12 +1366,20 @@ export class RoomManager {
   }
 
   updateExplosions(room, deltaTicks) {
+    // Criar mapa de tiles com explosões para lookup O(1)
+    const explosionTiles = new Map();
     for (const explosion of room.explosions) {
-      for (const player of room.players.values()) {
-        if (player.tx !== explosion.tx || player.ty !== explosion.ty) continue;
-        if (explosion.damagedPlayers?.has(player.id)) continue;
-        if (Number(player.damageBlinkTicks || 0) > 0) continue;
+      const key = `${explosion.tx},${explosion.ty}`;
+      if (!explosionTiles.has(key)) {
+        explosionTiles.set(key, explosion);
+      }
+    }
 
+    // Verificar cada player uma vez
+    for (const player of room.players.values()) {
+      const key = `${player.tx},${player.ty}`;
+      const explosion = explosionTiles.get(key);
+      if (explosion && !explosion.damagedPlayers?.has(player.id) && Number(player.damageBlinkTicks || 0) <= 0) {
         player.lives = Math.max(0, Number(player.lives || 0) - 1);
         player.damageBlinkTicks = this.playerDamageBlinkDurationTicks;
         explosion.damagedPlayers?.add(player.id);
@@ -1403,17 +1439,26 @@ export class RoomManager {
   }
 
   updatePowerups(room, deltaTicks) {
+    // Atualizar immune ticks
     for (const powerup of room.powerups) {
       powerup.immuneTicks = Math.max(0, powerup.immuneTicks - deltaTicks);
     }
 
+    // Criar mapa de powerups por tile para lookup O(1)
+    const powerupTiles = new Map();
+    for (const powerup of room.powerups) {
+      if (powerup.immuneTicks <= 0) {
+        const key = `${powerup.tx},${powerup.ty}`;
+        powerupTiles.set(key, powerup);
+      }
+    }
+
+    // Coletar powerups
     const collectedIds = new Set();
     for (const player of room.players.values()) {
-      for (const powerup of room.powerups) {
-        if (collectedIds.has(powerup.id)) continue;
-        if (powerup.tx !== player.tx || powerup.ty !== player.ty) continue;
-        if (powerup.immuneTicks > 0) continue;
-
+      const key = `${player.tx},${player.ty}`;
+      const powerup = powerupTiles.get(key);
+      if (powerup && !collectedIds.has(powerup.id)) {
         this.applyPowerup(player, powerup.type);
         collectedIds.add(powerup.id);
       }
