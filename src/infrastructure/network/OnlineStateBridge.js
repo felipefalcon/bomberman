@@ -14,6 +14,8 @@ export class OnlineStateBridge {
     this.roomState = null;
     this.hasRemoteSnapshot = false;
     this.onRoomState = null;
+    this.clientInputTick = 0;
+    this.clientInputSeq = 0;
   }
 
   connect(roomId = 'room', playerId = null) {
@@ -22,7 +24,7 @@ export class OnlineStateBridge {
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
-    const isLocalServer = false; // Set to true if you want to connect to a local server for testing
+    const isLocalServer = true; // Set to true if you want to connect to a local server for testing
 
     const socketUrl = isLocalServer
       ? 'http://localhost:3001'
@@ -89,9 +91,16 @@ export class OnlineStateBridge {
 
   sendInput(input = {}) {
     if (!this.socket?.connected || !this.roomId) return;
+    this.clientInputTick += 1;
+    this.clientInputSeq += 1;
     this.socket.emit('player-input', {
       roomId: this.roomId,
-      input,
+      input: {
+        ...(input || {}),
+        tick: this.clientInputTick,
+        seq: this.clientInputSeq,
+        sentAt: Date.now(),
+      },
     });
   }
 
