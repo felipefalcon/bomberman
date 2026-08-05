@@ -22,7 +22,7 @@ export class OnlineStateBridge {
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
-    const isLocalServer = true; // Set to true if you want to connect to a local server for testing
+    const isLocalServer = false; // Set to true if you want to connect to a local server for testing
 
     const socketUrl = isLocalServer
       ? 'http://localhost:3001'

@@ -138,10 +138,6 @@ export class GameLoop {
           false,
         );
 
-        if (window.__ONLINE_ENABLED__) {
-          this._applyLocalReconciliation(tickDelta);
-        }
-
         if (window.__ONLINE_ENABLED__ && snapshot) {
           const hasNewSnapshot = this._hasNewOnlineSnapshot(snapshot);
           if (hasNewSnapshot) {
@@ -152,6 +148,10 @@ export class GameLoop {
           }
         } else if (onlineBridge?.enabled && onlineBridge?.connected && onlineBridge?.hasRemoteSnapshot && snapshot?.players) {
           this._renderRemotePlayers(snapshot.players, snapshot.tick);
+        }
+
+        if (window.__ONLINE_ENABLED__) {
+          this._applyLocalReconciliation(tickDelta);
         }
 
         onlineBridge?.sendInput?.({
@@ -313,108 +313,182 @@ export class GameLoop {
   }
 
   _syncLocalPlayerStateFromSnapshot(players = [], snapshotTick = null) {
-    if (!this.components.player?.gameState?.playerState) return;
+  if (!this.components.player?.gameState?.playerState) return;
 
-    const onlineBridge = this.components.managers.onlineStateBridge;
-    const localId = this._normalizePlayerId(onlineBridge?.playerId);
-    const localEntry = Array.isArray(players)
-      ? players.find((entry) => this._normalizePlayerId(entry?.playerId) === localId)
+  const onlineBridge = this.components.managers.onlineStateBridge;
+  const localId = this._normalizePlayerId(onlineBridge?.playerId);
+
+  const localEntry = Array.isArray(players)
+    ? players.find(
+        (entry) =>
+          this._normalizePlayerId(entry?.playerId) === localId
+      )
+    : null;
+
+  if (!localEntry) return;
+
+  const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
+
+  const hasAuthoritativeX = Number.isFinite(localEntry.x);
+  const hasAuthoritativeY = Number.isFinite(localEntry.y);
+
+  const pixelX = hasAuthoritativeX
+    ? localEntry.x
+    : Number.isFinite(localEntry.tx)
+      ? localEntry.tx * tileSize + tileSize / 2
       : null;
-    if (!localEntry) return;
 
-    const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
-    const hasAuthoritativeX = Number.isFinite(localEntry.x);
-    const hasAuthoritativeY = Number.isFinite(localEntry.y);
-    const pixelX = hasAuthoritativeX
-      ? localEntry.x
-      : Number.isFinite(localEntry.tx)
-        ? localEntry.tx * tileSize + tileSize / 2
-        : null;
-    const pixelY = hasAuthoritativeY
-      ? localEntry.y
-      : Number.isFinite(localEntry.ty)
-        ? localEntry.ty * tileSize + tileSize / 2
-        : null;
+  const pixelY = hasAuthoritativeY
+    ? localEntry.y
+    : Number.isFinite(localEntry.ty)
+      ? localEntry.ty * tileSize + tileSize / 2
+      : null;
 
-    const hasNewServerTick = Number.isFinite(snapshotTick)
-      ? snapshotTick !== this.lastAppliedLocalSnapshotTick
-      : true;
+  const hasNewServerTick = Number.isFinite(snapshotTick)
+    ? snapshotTick !== this.lastAppliedLocalSnapshotTick
+    : true;
 
-    if (hasNewServerTick && Number.isFinite(pixelX) && Number.isFinite(pixelY) && this.components.player?.sprite) {
-      const localX = this.components.player.sprite.x;
-      const localY = this.components.player.sprite.y;
-      const errX = pixelX - localX;
-      const errY = pixelY - localY;
-      const errorDistance = Math.hypot(errX, errY);
+  if (
+    hasNewServerTick &&
+    Number.isFinite(pixelX) &&
+    Number.isFinite(pixelY) &&
+    this.components.player?.sprite
+  ) {
 
-      this.localAuthorityTarget = {
-        x: Math.round(pixelX),
-        y: Math.round(pixelY),
-      };
+    const sprite = this.components.player.sprite;
 
-      if (errorDistance >= 10) {
-        this.components.player.sprite.position.set(pixelX, pixelY);
-      }
-
-      if (Number.isFinite(snapshotTick)) {
-        this.lastAppliedLocalSnapshotTick = snapshotTick;
-      }
-    }
-
-    const state = this.components.player.gameState.playerState;
-    const previousLives = Number(state.lives || 0);
-    state.maxBombs = Number.isFinite(localEntry.maxBombs) ? localEntry.maxBombs : state.maxBombs;
-    state.activeBombs = Number.isFinite(localEntry.activeBombs) ? localEntry.activeBombs : state.activeBombs;
-    state.explosionRange = Number.isFinite(localEntry.explosionRange) ? localEntry.explosionRange : state.explosionRange;
-    state.speedPowerups = Number.isFinite(localEntry.speedPowerups) ? localEntry.speedPowerups : state.speedPowerups;
-    state.canPierceBlocks = !!localEntry.canPierceBlocks;
-    state.hasKickBomb = !!localEntry.hasKickBomb;
-    state.hasThrowBomb = !!localEntry.hasThrowBomb;
-    state.hasCrossBlock = !!localEntry.hasCrossBlock;
-    state.hasCrossBomb = !!localEntry.hasCrossBomb;
-    state.hasFollowerBomb = !!localEntry.hasFollowerBomb;
-    state.hasLandMine = !!localEntry.hasLandMine;
-    state.lives = Number.isFinite(localEntry.lives) ? localEntry.lives : state.lives;
-
-    // Online damage is authoritative on server; trigger local blink only when lives drop.
-    if (state.lives < previousLives) {
-      this.components.player.startBlink?.();
-    } else if (Number(localEntry.damageBlinkTicks || 0) > 0 && !this.components.player.isBlinking) {
-      this.components.player.startBlink?.();
-    }
-
-    const speedMultiplier = Math.pow(1.2, Math.max(0, state.speedPowerups || 0));
-    this.components.player.speed = this.components.player.baseSpeed * speedMultiplier;
-    this.components.managers.hud?.setLives?.(state.lives);
-    this.components.managers.hud?.updatePowerups?.(this.components.player);
-  }
-
-  _applyLocalReconciliation(tickDelta = 1) {
-    if (!this.localAuthorityTarget || !this.components.player?.sprite) return;
-
-    const localSprite = this.components.player.sprite;
-    const errX = this.localAuthorityTarget.x - localSprite.x;
-    const errY = this.localAuthorityTarget.y - localSprite.y;
+    const errX = pixelX - sprite.x;
+    const errY = pixelY - sprite.y;
     const errorDistance = Math.hypot(errX, errY);
-    const movement = this.components.managers.input?.getMovementCommand?.() || { x: 0, y: 0 };
-    const isInputMoving = Math.abs(movement.x) > 0.001 || Math.abs(movement.y) > 0.001;
 
-    if (!isInputMoving) {
-      localSprite.x = this.localAuthorityTarget.x;
-      localSprite.y = this.localAuthorityTarget.y;
-      return;
+    // Mantém precisão do servidor (não arredonda)
+    this.localAuthorityTarget = {
+      x: pixelX,
+      y: pixelY,
+    };
+
+    // Apenas teleporta se realmente houve grande divergência
+    const HARD_SNAP_DISTANCE = tileSize * 2;
+
+    if (errorDistance > HARD_SNAP_DISTANCE) {
+      sprite.position.set(pixelX, pixelY);
     }
 
-    if (errorDistance < 0.15) {
-      localSprite.x = this.localAuthorityTarget.x;
-      localSprite.y = this.localAuthorityTarget.y;
-      return;
+    if (Number.isFinite(snapshotTick)) {
+      this.lastAppliedLocalSnapshotTick = snapshotTick;
     }
-
-    const correction = Math.min(0.7, Math.max(0.35, 0.45 * (Number(tickDelta) || 1)));
-    localSprite.x += errX * correction;
-    localSprite.y += errY * correction;
   }
+
+  const state = this.components.player.gameState.playerState;
+
+  const previousLives = Number(state.lives || 0);
+
+  state.maxBombs = Number.isFinite(localEntry.maxBombs)
+    ? localEntry.maxBombs
+    : state.maxBombs;
+
+  state.activeBombs = Number.isFinite(localEntry.activeBombs)
+    ? localEntry.activeBombs
+    : state.activeBombs;
+
+  state.explosionRange = Number.isFinite(localEntry.explosionRange)
+    ? localEntry.explosionRange
+    : state.explosionRange;
+
+  state.speedPowerups = Number.isFinite(localEntry.speedPowerups)
+    ? localEntry.speedPowerups
+    : state.speedPowerups;
+
+  state.canPierceBlocks = !!localEntry.canPierceBlocks;
+  state.hasKickBomb = !!localEntry.hasKickBomb;
+  state.hasThrowBomb = !!localEntry.hasThrowBomb;
+  state.hasCrossBlock = !!localEntry.hasCrossBlock;
+  state.hasCrossBomb = !!localEntry.hasCrossBomb;
+  state.hasFollowerBomb = !!localEntry.hasFollowerBomb;
+  state.hasLandMine = !!localEntry.hasLandMine;
+
+  state.lives = Number.isFinite(localEntry.lives)
+    ? localEntry.lives
+    : state.lives;
+
+  // Blink quando perde vida
+  if (state.lives < previousLives) {
+    this.components.player.startBlink?.();
+  } else if (
+    Number(localEntry.damageBlinkTicks || 0) > 0 &&
+    !this.components.player.isBlinking
+  ) {
+    this.components.player.startBlink?.();
+  }
+
+  // Atualiza velocidade
+  const speedMultiplier = Math.pow(
+    1.2,
+    Math.max(0, state.speedPowerups || 0)
+  );
+
+  this.components.player.speed =
+    this.components.player.baseSpeed * speedMultiplier;
+
+  // HUD
+  this.components.managers.hud?.setLives?.(state.lives);
+  this.components.managers.hud?.updatePowerups?.(this.components.player);
+}
+
+  _applyLocalReconciliation() {
+  if (!this.localAuthorityTarget || !this.components.player?.sprite) {
+    return;
+  }
+
+  const sprite = this.components.player.sprite;
+
+  const errX = this.localAuthorityTarget.x - sprite.x;
+  const errY = this.localAuthorityTarget.y - sprite.y;
+
+  const errorDistance = Math.hypot(errX, errY);
+
+  const movement =
+    this.components.managers.input?.getMovementCommand?.() || { x: 0, y: 0 };
+
+  const isMoving =
+    Math.abs(movement.x) > 0.001 ||
+    Math.abs(movement.y) > 0.001;
+
+  // ==========================
+  // Erro absurdo -> teleporta
+  // ==========================
+  const HARD_SNAP_DISTANCE = this.tileSize * 2;
+
+  if (errorDistance > HARD_SNAP_DISTANCE) {
+    sprite.position.set(
+      this.localAuthorityTarget.x,
+      this.localAuthorityTarget.y
+    );
+    return;
+  }
+
+  // =====================================
+  // Erro muito pequeno -> ignora totalmente
+  // =====================================
+  if (errorDistance < 1) {
+    return;
+  }
+
+  // =====================================
+  // Parado -> corrige um pouco mais rápido
+  // =====================================
+  if (!isMoving) {
+    sprite.x += errX * 0.15;
+    sprite.y += errY * 0.15;
+    return;
+  }
+
+  // =====================================
+  // Andando -> corrige bem suavemente
+  // =====================================
+  sprite.x += errX * 0.08;
+  sprite.y += errY * 0.08;
+}
 
   _createRemotePlayerEntry() {
     const localPlayer = this.components.player;
