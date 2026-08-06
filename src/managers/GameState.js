@@ -34,6 +34,7 @@ export class GameState {
       hasCrossBomb: false,
       hasFollowerBomb: false,
       hasLandMine: false,
+      damageBlinkTicks: 0,
     };
     
     // Score
@@ -80,6 +81,7 @@ export class GameState {
       hasCrossBomb: false,
       hasFollowerBomb: false,
       hasLandMine: false,
+      damageBlinkTicks: 0,
     };
     
     this.score = 0;

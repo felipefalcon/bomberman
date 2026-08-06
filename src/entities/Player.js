@@ -4,8 +4,8 @@ import { ComponentManager } from '../components/ComponentManager.js';
 import { getCornerTileKeys, getCorners, tileCenter, tileKey, toTile } from '../utils/tileUtils.js';
 
 export class Player {
-  // textures: optional array of PIXI.Texture frames
-  // mapping: optional animation mapping object
+  // textures: optional object with player spritesheets by player number {1: frames, 2: frames, ...}
+  // mapping: optional object with animation mappings by player number {1: mapping, 2: mapping, ...}
   constructor(x, y, tileSize = GAME_CONFIG.TILE_SIZE, textures = null, mapping = null, gameState = null) {
     this.tileSize = tileSize;
     this.spriteScale = GAME_CONFIG.PLAYER_SPRITE_SCALE;
@@ -15,17 +15,23 @@ export class Player {
     this.hitboxSize = GAME_CONFIG.PLAYER_HITBOX_SIZE;
     this.collisionHalf = Math.floor(this.hitboxSize / 2);
 
-    this.textures = textures;
-    this.mapping = mapping;
+    this.textures = textures || {};
+    this.mapping = mapping || {};
     this.gameState = gameState; // Reference to GameState for reading state
-    
+
     // Component system for powerups
     this.componentManager = new ComponentManager();
 
-    if (this.textures && this.mapping) {
+    // Default to player 1 sprites
+    this.playerId = null;
+    this.currentPlayerNumber = 1;
+
+    if (this.textures[this.currentPlayerNumber] && this.mapping[this.currentPlayerNumber]) {
       // create an AnimatedSprite using the idle frame by default
-      const idleFrames = (this.mapping.idleDown || [0]).map(i => this.textures[i]).filter(Boolean);
-      this.sprite = new AnimatedSprite(idleFrames.length ? idleFrames : [this.textures[0]]);
+      const playerTextures = this.textures[this.currentPlayerNumber];
+      const playerMapping = this.mapping[this.currentPlayerNumber];
+      const idleFrames = (playerMapping.idleDown || [0]).map(i => playerTextures[i]).filter(Boolean);
+      this.sprite = new AnimatedSprite(idleFrames.length ? idleFrames : [playerTextures[0]]);
       this.sprite.animationSpeed = GAME_CONFIG.ANIMATION_SPEED;
       this.sprite.loop = true;
       this.sprite.play();
@@ -48,8 +54,6 @@ export class Player {
     this.blinkTimer = 0;
     this.isBlinking = false;
     this.blinkDuration = GAME_CONFIG.PLAYER_BLINK_DURATION;
-    this.playerId = null;
-    this._applyPlayerTint();
   }
 
   // Getters for player state from GameState
@@ -107,33 +111,14 @@ export class Player {
     return (this.componentManager.hasComponent('land_mine') || this.gameState?.playerState?.hasLandMine) ?? false;
   }
 
+  get damageBlinkTicks() {
+    return this.gameState?.playerState?.damageBlinkTicks ?? 0;
+  }
+
   setPlayerIdentity(playerId) {
     this.playerId = playerId;
-    this._applyPlayerTint();
-  }
-
-  _applyPlayerTint() {
-    const tint = this._getTintForPlayerId(this.playerId);
-    if (this.sprite && typeof this.sprite === 'object' && 'tint' in this.sprite) {
-      this.sprite.tint = tint;
-    }
-  }
-
-  _getTintForPlayerId(playerId) {
-    const normalized = String(playerId || '').trim().toLowerCase();
-    const number = this._resolvePlayerNumber(normalized);
-
-    switch (number) {
-      case 2:
-        return 0xff6666;
-      case 3:
-        return 0x66ff66;
-      case 4:
-        return 0xffd166;
-      case 1:
-      default:
-        return null;
-    }
+    const playerNumber = this._resolvePlayerNumber(playerId);
+    this._updatePlayerSprites(playerNumber);
   }
 
   _resolvePlayerNumber(playerId) {
@@ -149,8 +134,27 @@ export class Player {
     return 1;
   }
 
+  _updatePlayerSprites(playerNumber) {
+    if (this.currentPlayerNumber === playerNumber) return;
+
+    this.currentPlayerNumber = playerNumber;
+
+    // Check if we have sprites for this player
+    if (this.textures[playerNumber] && this.mapping[playerNumber]) {
+      const playerTextures = this.textures[playerNumber];
+      const playerMapping = this.mapping[playerNumber];
+
+      // Update the sprite textures
+      if (this.sprite instanceof AnimatedSprite) {
+        const idleFrames = (playerMapping.idleDown || [0]).map(i => playerTextures[i]).filter(Boolean);
+        this.sprite.textures = idleFrames.length ? idleFrames : [playerTextures[0]];
+      }
+    }
+  }
+
   takeDamage() {
-    if (this.lives <= 0 || this.isBlinking) return false;
+    const damageBlinkTicks = this.gameState?.playerState?.damageBlinkTicks ?? 0;
+    if (this.lives <= 0 || damageBlinkTicks > 0) return false;
     // Update GameState instead of local state
     if (this.gameState) {
       this.gameState.playerState.lives -= 1;
@@ -162,10 +166,27 @@ export class Player {
   startBlink() {
     this.isBlinking = true;
     this.blinkTimer = 0;
+    // Set damageBlinkTicks in gameState for online sync
+    if (this.gameState) {
+      this.gameState.playerState.damageBlinkTicks = this.blinkDuration;
+    }
   }
 
   update(delta, keys, map, bombs = [], bombSystem = null, skipLocalPositionIntegration = false) {
     // Handle blink effect when taking damage
+    const damageBlinkTicks = this.gameState?.playerState?.damageBlinkTicks ?? 0;
+    
+    // Start blinking if damageBlinkTicks is set and not already blinking
+    if (damageBlinkTicks > 0 && !this.isBlinking) {
+      this.startBlink();
+    }
+    
+    // Stop blinking if damageBlinkTicks is 0
+    if (damageBlinkTicks <= 0 && this.isBlinking) {
+      this.isBlinking = false;
+      this.sprite.alpha = 1;
+    }
+    
     if (this.isBlinking) {
       this.blinkTimer += delta;
       
@@ -177,6 +198,11 @@ export class Player {
       if (this.blinkTimer >= this.blinkDuration) {
         this.isBlinking = false;
         this.sprite.alpha = 1;
+      }
+      
+      // Decrement damageBlinkTicks in gameState for online sync (only in local mode)
+      if (this.gameState && !window.__ONLINE_ENABLED__) {
+        this.gameState.playerState.damageBlinkTicks = Math.max(0, damageBlinkTicks - delta);
       }
     }
     
@@ -321,7 +347,10 @@ export class Player {
   }
 
   _updateAnimation(vx, vy) {
-    if (!this.textures || !this.mapping) return;
+    const playerTextures = this.textures[this.currentPlayerNumber];
+    const playerMapping = this.mapping[this.currentPlayerNumber];
+
+    if (!playerTextures || !playerMapping) return;
 
     let anim = null;
     if (vx === 0 && vy === 0) {
@@ -335,7 +364,7 @@ export class Player {
       anim = 'walk' + capitalize(this._facing);
     }
 
-    const frames = (this.mapping[anim] || []).map(i => this.textures[i]).filter(Boolean);
+    const frames = (playerMapping[anim] || []).map(i => playerTextures[i]).filter(Boolean);
     if (frames.length === 0) return;
     const animationFrames = anim.startsWith('walk') ? this._toPingPongFrames(frames) : frames;
 

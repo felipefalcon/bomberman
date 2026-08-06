@@ -35,9 +35,9 @@ export class RoomManager {
     this.wallTiles = new Set();
     this.spawnPositions = new Map([
       ['player-1', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
-      ['player-2', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
-      ['player-3', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
-      ['player-4', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
+      ['player-4', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
+      ['player-2', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
+      ['player-3', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
     ]);
     this.tileRandomCache = new Map();
     this.metrics = {
@@ -358,9 +358,11 @@ export class RoomManager {
               seenPlayerIds.add(player.playerId);
               const inputX = Number(player.input?.x || 0);
               const inputY = Number(player.input?.y || 0);
+              // Não re-normalizar IDs válidos - usar o playerId já armazenado
+              const normalizedPlayerId = this.normalizePlayerId(player.playerId, 0);
               uniquePlayers[playerCount] = {
                 id: player.id,
-                playerId: this.normalizePlayerId(player.playerId, playerCount),
+                playerId: normalizedPlayerId,
                 x: Math.round(player.x),
                 y: Math.round(player.y),
                 lives: player.lives,
@@ -374,6 +376,7 @@ export class RoomManager {
                 hasCrossBomb: player.hasCrossBomb || false,
                 hasFollowerBomb: player.hasFollowerBomb || false,
                 hasLandMine: player.hasLandMine || false,
+                damageBlinkTicks: Number(player.damageBlinkTicks || 0),
                 isBlinking: Number(player.damageBlinkTicks || 0) > 0,
                 facing: player.lastFacing || 'down',
                 moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
@@ -411,14 +414,17 @@ export class RoomManager {
           seenPlayerIds.add(player.playerId);
           const inputX = Number(player.input?.x || 0);
           const inputY = Number(player.input?.y || 0);
+          // Não re-normalizar IDs válidos - usar o playerId já armazenado
+          const normalizedPlayerId = this.normalizePlayerId(player.playerId, 0);
           result.push({
             id: player.id,
-            playerId: this.normalizePlayerId(player.playerId, result.length),
+            playerId: normalizedPlayerId,
             x: Math.round(player.x),
             y: Math.round(player.y),
             lives: player.lives,
             maxBombs: player.maxBombs,
             explosionRange: player.explosionRange,
+            damageBlinkTicks: Number(player.damageBlinkTicks || 0),
             isBlinking: Number(player.damageBlinkTicks || 0) > 0,
             facing: player.lastFacing || 'down',
             moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
@@ -611,9 +617,15 @@ export class RoomManager {
         result = 'player-1';
       } else if (lowered === 'p2' || lowered === 'player2' || lowered === '2') {
         result = 'player-2';
+      } else if (lowered === 'p3' || lowered === 'player3' || lowered === '3') {
+        result = 'player-3';
+      } else if (lowered === 'p4' || lowered === 'player4' || lowered === '4') {
+        result = 'player-4';
       } else if (lowered.startsWith('player-')) {
+        // Já é um ID válido no formato player-X, não re-normalizar
         result = lowered;
       } else {
+        // IDs não reconhecidos são retornados como-is
         result = raw;
       }
     }

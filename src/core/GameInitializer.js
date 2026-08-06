@@ -14,7 +14,7 @@ import { MonsterSystem } from '../systems/MonsterSystem.js';
 import { CollisionSystem } from '../systems/CollisionSystem.js';
 import { GameEvents, globalEventBus } from '../infrastructure/index.js';
 import { OnlineStateBridge } from '../infrastructure/network/OnlineStateBridge.js';
-import { loadPlayerSprites } from '../loaders/playerSprite.js';
+import { loadPlayerSprites, getPlayerSpritesheetUrl } from '../loaders/playerSprite.js';
 import { loadEnemySprites } from '../loaders/enemySprite.js';
 import { loadBombSprite } from '../loaders/bombLoader.js';
 import { loadItemSprites } from '../loaders/itemsLoader.js';
@@ -55,8 +55,8 @@ export class GameInitializer {
     this.collisionSystem = null;
     
     // Asset storage
-    this.playerFrames = null;
-    this.playerMapping = null;
+    this.playerFrames = {};
+    this.playerMapping = {};
     this.enemyFrames = null;
     this.enemyMapping = null;
     this.bombFrames = null;
@@ -96,6 +96,8 @@ export class GameInitializer {
       map: this.map,
       player: this.player,
       tileSize: this.tileSize,
+      playerFrames: this.playerFrames,
+      playerMapping: this.playerMapping,
       systems: {
         bomb: this.bombSystem,
         explosion: this.explosionSystem,
@@ -202,17 +204,24 @@ export class GameInitializer {
    * Load all game assets
    */
   async _loadAssets() {
-    // Load player spritesheet
-    const playerPromise = loadPlayerSprites(`${import.meta.env.BASE_URL}assets/player-spritesheet.png`, this.tileSize)
-      .then(({ frames, mapping }) => {
-        this.playerFrames = frames;
-        this.playerMapping = mapping;
-      })
-      .catch((err) => {
-        console.warn('Could not load player spritesheet, using placeholder. Error:', err);
-        this.playerFrames = null;
-        this.playerMapping = null;
-      });
+    // Load all player spritesheets (1-4)
+    const playerPromises = [];
+    for (let i = 1; i <= 4; i++) {
+      const url = getPlayerSpritesheetUrl(i, `${import.meta.env.BASE_URL}assets/`);
+      playerPromises.push(
+        loadPlayerSprites(url, this.tileSize)
+          .then(({ frames, mapping }) => {
+            this.playerFrames[i] = frames;
+            this.playerMapping[i] = mapping;
+          })
+          .catch((err) => {
+            console.warn(`Could not load player ${i} spritesheet, using placeholder. Error:`, err);
+            this.playerFrames[i] = null;
+            this.playerMapping[i] = null;
+          })
+      );
+    }
+    const playerPromise = Promise.all(playerPromises);
 
     // Load enemy spritesheet
     const enemyPromise = this.map._initPromise.then(async () => {
@@ -278,6 +287,7 @@ export class GameInitializer {
     const startX = this.tileSize * GAME_CONFIG.PLAYER_START_X;
     const startY = this.tileSize * GAME_CONFIG.PLAYER_START_Y;
 
+    // Pass all player sprites so the player can switch based on playerId
     this.player = new Player(startX, startY, this.tileSize, this.playerFrames, this.playerMapping, this.gameState);
     this.gameContainer.addChild(this.player.sprite);
   }

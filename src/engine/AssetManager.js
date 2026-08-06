@@ -1,6 +1,6 @@
 import { GAME_CONFIG } from '../config/Constants.js';
 import { globalEventBus, GameEvents } from './EventBus.js';
-import { loadPlayerSprites } from '../loaders/playerSprite.js';
+import { loadPlayerSprites, getPlayerSpritesheetUrl } from '../loaders/playerSprite.js';
 import { loadEnemySprites } from '../loaders/enemySprite.js';
 import { loadBombSprite } from '../loaders/bombLoader.js';
 import { loadItemSprites } from '../loaders/itemsLoader.js';
@@ -13,7 +13,10 @@ export class AssetManager {
   constructor(eventBus = globalEventBus) {
     this.eventBus = eventBus;
     this.assets = {
-      player: { frames: null, mapping: null, loaded: false },
+      player1: { frames: null, mapping: null, loaded: false },
+      player2: { frames: null, mapping: null, loaded: false },
+      player3: { frames: null, mapping: null, loaded: false },
+      player4: { frames: null, mapping: null, loaded: false },
       enemy: { frames: null, mapping: null, loaded: false },
       bomb: { frames: null, mapping: null, loaded: false },
       items: { frames: null, mapping: null, loaded: false },
@@ -29,7 +32,10 @@ export class AssetManager {
     const baseUrl = GAME_CONFIG.ASSETS_PATH;
     
     const promises = [
-      this.loadPlayerSprites(`${baseUrl}player-spritesheet.png`),
+      this.loadPlayerSprites(1, baseUrl),
+      this.loadPlayerSprites(2, baseUrl),
+      this.loadPlayerSprites(3, baseUrl),
+      this.loadPlayerSprites(4, baseUrl),
       this.loadEnemySprites(`${baseUrl}enemy_1.png`),
       this.loadBombSprite(),
       this.loadItemSprites(),
@@ -46,21 +52,24 @@ export class AssetManager {
   }
 
   /**
-   * Load player sprites
-   * @param {string} url - Spritesheet URL
+   * Load player sprites for a specific player
+   * @param {number} playerNumber - Player number (1-4)
+   * @param {string} baseUrl - Base URL for assets
    * @returns {Promise<void>}
    */
-  async loadPlayerSprites(url) {
-    if (this.assets.player.loaded) return;
+  async loadPlayerSprites(playerNumber = 1, baseUrl = GAME_CONFIG.ASSETS_PATH) {
+    const assetKey = `player${playerNumber}`;
+    if (this.assets[assetKey].loaded) return;
 
     try {
+      const url = getPlayerSpritesheetUrl(playerNumber, baseUrl);
       const { frames, mapping } = await loadPlayerSprites(url, GAME_CONFIG.TILE_SIZE);
-      this.assets.player = { frames, mapping, loaded: true };
-      this.eventBus.emit(GameEvents.ASSET_LOADED, { type: 'player', data: { frames, mapping } });
+      this.assets[assetKey] = { frames, mapping, loaded: true };
+      this.eventBus.emit(GameEvents.ASSET_LOADED, { type: assetKey, data: { frames, mapping } });
     } catch (error) {
-      console.warn('AssetManager: Could not load player sprites, using placeholder:', error);
-      this.assets.player = { frames: null, mapping: null, loaded: true };
-      this.eventBus.emit(GameEvents.ASSET_ERROR, { type: 'player', error });
+      console.warn(`AssetManager: Could not load player ${playerNumber} sprites, using placeholder:`, error);
+      this.assets[assetKey] = { frames: null, mapping: null, loaded: true };
+      this.eventBus.emit(GameEvents.ASSET_ERROR, { type: assetKey, error });
     }
   }
 
@@ -120,11 +129,13 @@ export class AssetManager {
   }
 
   /**
-   * Get player asset data
+   * Get player asset data for a specific player
+   * @param {number} playerNumber - Player number (1-4)
    * @returns {Object} Player frames and mapping
    */
-  getPlayerAssets() {
-    return this.assets.player;
+  getPlayerAssets(playerNumber = 1) {
+    const assetKey = `player${playerNumber}`;
+    return this.assets[assetKey] || { frames: null, mapping: null, loaded: false };
   }
 
   /**
@@ -174,7 +185,10 @@ export class AssetManager {
    */
   clear() {
     this.assets = {
-      player: { frames: null, mapping: null, loaded: false },
+      player1: { frames: null, mapping: null, loaded: false },
+      player2: { frames: null, mapping: null, loaded: false },
+      player3: { frames: null, mapping: null, loaded: false },
+      player4: { frames: null, mapping: null, loaded: false },
       enemy: { frames: null, mapping: null, loaded: false },
       bomb: { frames: null, mapping: null, loaded: false },
       items: { frames: null, mapping: null, loaded: false },
