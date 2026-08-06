@@ -1,4 +1,10 @@
 export class RoomManager {
+  static FACING_DIRECTION_MAP = new Map([
+    ['up', { dx: 0, dy: -1 }],
+    ['left', { dx: -1, dy: 0 }],
+    ['right', { dx: 1, dy: 0 }],
+    ['down', { dx: 0, dy: 1 }],
+  ]);
   constructor(io) {
     this.io = io;
     this.rooms = new Map();
@@ -22,6 +28,28 @@ export class RoomManager {
     this.powerupSpawnChance = 0.8;
     this.powerupImmuneTicks = 10;
     this.SQRT1_2 = Math.SQRT1_2;
+    this.playerPositionsCache = new Map();
+    this.uniquePlayersPool = new Map();
+    this.setPool = [];
+    this.normalizePlayerIdCache = new Map();
+    this.wallTiles = new Set();
+    this.spawnPositions = new Map([
+      ['player-1', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
+      ['player-2', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
+      ['player-3', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
+      ['player-4', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
+    ]);
+    this.tileRandomCache = new Map();
+    this.metrics = {
+      tickCount: 0,
+      totalTickTime: 0,
+      playerUpdateTime: 0,
+      bombUpdateTime: 0,
+      explosionUpdateTime: 0,
+      powerupUpdateTime: 0,
+      snapshotEmitTime: 0,
+      maxTickTime: 0,
+    };
     this.powerupWeights = {
       range: 25,
       pierce: 15,
@@ -35,8 +63,34 @@ export class RoomManager {
       land_mine: 3,
       extra_life: 2,
     };
+    this.initializeWallTiles();
     this.initialize();
     this.startSimulationLoop();
+  }
+
+  getPooledSet() {
+    let set = this.setPool.pop();
+    if (!set) {
+      set = new Set();
+    }
+    return set;
+  }
+
+  releasePooledSet(set) {
+    set.clear();
+    if (this.setPool.length < 10) {
+      this.setPool.push(set);
+    }
+  }
+
+  initializeWallTiles() {
+    for (let tx = 0; tx < this.mapCols; tx++) {
+      for (let ty = 0; ty < this.mapRows; ty++) {
+        if (this.isWallTile(tx, ty)) {
+          this.wallTiles.add(`${tx},${ty}`);
+        }
+      }
+    }
   }
 
   initialize() {
@@ -179,11 +233,13 @@ export class RoomManager {
 
   startSimulationLoop() {
     const loop = () => {
-      const start = Date.now();
-      const now = start;
+      const tickStart = Date.now();
+      const now = tickStart;
       const roomsNeedingSnapshot = new Set();
       const roomsNeedingBroadcast = new Set();
 
+      // Player update
+      const playerStart = Date.now();
       for (const [roomId, room] of this.rooms.entries()) {
         if (room.status === 'countdown') {
           if (room.countdownEndsAt && now >= room.countdownEndsAt) {
@@ -249,6 +305,7 @@ export class RoomManager {
 
           player.tx = Math.floor(player.x / this.tileSize);
           player.ty = Math.floor(player.y / this.tileSize);
+          this.playerPositionsCache.set(player.id, { tx: player.tx, ty: player.ty });
           this.releaseBombPassThrough(room, player);
           if (this.shouldAcceptBombCommand(player)) {
             this.handleBombCommand(room, player);
@@ -260,10 +317,12 @@ export class RoomManager {
         this.updateExplosions(room, deltaTicks);
         this.updatePowerups(room, deltaTicks);
         this.updateMatchEndState(room);
-
         roomsNeedingSnapshot.add(roomId);
       }
+      this.metrics.playerUpdateTime += Date.now() - playerStart;
 
+      // Snapshot emit
+      const snapshotStart = Date.now();
       // Emitir broadcasts em batch
       for (const roomId of roomsNeedingBroadcast) {
         this.broadcastRoomState(roomId);
@@ -273,29 +332,48 @@ export class RoomManager {
       for (const roomId of roomsNeedingSnapshot) {
         const room = this.rooms.get(roomId);
         if (room) {
-          const uniquePlayers = [];
+          let uniquePlayers = this.uniquePlayersPool.get(roomId);
+          if (!uniquePlayers || uniquePlayers.length < 4) {
+            uniquePlayers = new Array(4);
+            this.uniquePlayersPool.set(roomId, uniquePlayers);
+          }
+
           const seenPlayerIds = new Set();
+          let playerCount = 0;
           for (const player of room.players.values()) {
             if (!seenPlayerIds.has(player.playerId)) {
               seenPlayerIds.add(player.playerId);
               const inputX = Number(player.input?.x || 0);
               const inputY = Number(player.input?.y || 0);
-              uniquePlayers.push({
-                ...player,
+              uniquePlayers[playerCount] = {
+                id: player.id,
+                playerId: this.normalizePlayerId(player.playerId, playerCount),
                 x: Math.round(player.x),
                 y: Math.round(player.y),
-                playerId: this.normalizePlayerId(player.playerId, uniquePlayers.length),
+                lives: player.lives,
+                maxBombs: player.maxBombs,
+                explosionRange: player.explosionRange,
                 isBlinking: Number(player.damageBlinkTicks || 0) > 0,
                 facing: player.lastFacing || 'down',
                 moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
-              });
+              };
+              playerCount++;
             }
           }
-          this.emitSnapshot(roomId, room, uniquePlayers);
+
+          const validPlayers = uniquePlayers.slice(0, playerCount);
+          this.emitSnapshot(roomId, room, validPlayers);
         }
       }
+      this.metrics.snapshotEmitTime += Date.now() - snapshotStart;
 
-      const elapsed = Date.now() - start;
+      // Update metrics
+      const tickTime = Date.now() - tickStart;
+      this.metrics.tickCount++;
+      this.metrics.totalTickTime += tickTime;
+      this.metrics.maxTickTime = Math.max(this.metrics.maxTickTime, tickTime);
+
+      const elapsed = Date.now() - tickStart;
       const delay = Math.max(0, this.simulationStepMs - elapsed);
       this.tickTimeout = setTimeout(loop, delay);
     };
@@ -304,22 +382,30 @@ export class RoomManager {
   }
 
   emitSnapshot(roomId, room, uniquePlayers = null) {
-    const players = uniquePlayers || Array.from(room.players.values()).reduce((acc, player) => {
-      if (!acc.some((entry) => entry.playerId === player.playerId)) {
-        const inputX = Number(player.input?.x || 0);
-        const inputY = Number(player.input?.y || 0);
-        acc.push({
-          ...player,
-          x: Math.round(player.x),
-          y: Math.round(player.y),
-          playerId: this.normalizePlayerId(player.playerId, acc.length),
-          isBlinking: Number(player.damageBlinkTicks || 0) > 0,
-          facing: player.lastFacing || 'down',
-          moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
-        });
+    const players = uniquePlayers || (() => {
+      const result = [];
+      const seenPlayerIds = new Set();
+      for (const player of room.players.values()) {
+        if (!seenPlayerIds.has(player.playerId)) {
+          seenPlayerIds.add(player.playerId);
+          const inputX = Number(player.input?.x || 0);
+          const inputY = Number(player.input?.y || 0);
+          result.push({
+            id: player.id,
+            playerId: this.normalizePlayerId(player.playerId, result.length),
+            x: Math.round(player.x),
+            y: Math.round(player.y),
+            lives: player.lives,
+            maxBombs: player.maxBombs,
+            explosionRange: player.explosionRange,
+            isBlinking: Number(player.damageBlinkTicks || 0) > 0,
+            facing: player.lastFacing || 'down',
+            moving: Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001,
+          });
+        }
       }
-      return acc;
-    }, []);
+      return result;
+    })();
 
     this.io.to(roomId).emit('snapshot', {
       roomId,
@@ -358,7 +444,7 @@ export class RoomManager {
       destructibleTiles: Array.from(room.destructibleTiles.values()),
       status: room.status,
       winnerPlayerId: room.winnerPlayerId || null,
-      seed: this.getRoomSeed(roomId),
+      seed: room.seed,
     });
   }
 
@@ -378,7 +464,7 @@ export class RoomManager {
       roomId,
       players: Array.from(room.players.values()),
       status: room.status,
-      seed: this.getRoomSeed(roomId),
+      seed: room.seed,
       playerCount: room.players.size,
       minPlayers: 2,
       maxPlayers: 4,
@@ -484,49 +570,35 @@ export class RoomManager {
 
   getSpawnPosition(playerId, playerCount) {
     const normalizedId = this.normalizePlayerId(playerId, playerCount).toLowerCase();
-    const tileSize = this.tileSize;
-    const col = this.mapCols;
-    const row = this.mapRows;
-
-    if (normalizedId === 'player-1') {
-      return { x: tileSize * 1 + tileSize / 2, y: tileSize * 1 + tileSize / 2 };
-    }
-    if (normalizedId === 'player-2') {
-      return { x: tileSize * (col - 2) + tileSize / 2, y: tileSize * (row - 2) + tileSize / 2 };
-    }
-    if (normalizedId === 'player-3') {
-      return { x: tileSize * (col - 2) + tileSize / 2, y: tileSize * 1 + tileSize / 2 };
-    }
-    if (normalizedId === 'player-4') {
-      return { x: tileSize * 1 + tileSize / 2, y: tileSize * (row - 2) + tileSize / 2 };
-    }
-
-    const fallbackSpawns = [
-      { x: tileSize * 1 + tileSize / 2, y: tileSize * 1 + tileSize / 2 },
-      { x: tileSize * (col - 2) + tileSize / 2, y: tileSize * (row - 2) + tileSize / 2 },
-      { x: tileSize * (col - 2) + tileSize / 2, y: tileSize * 1 + tileSize / 2 },
-      { x: tileSize * 1 + tileSize / 2, y: tileSize * (row - 2) + tileSize / 2 },
-    ];
-    return fallbackSpawns[Math.max(0, Math.min(fallbackSpawns.length - 1, playerCount))];
+    return this.spawnPositions.get(normalizedId) || this.spawnPositions.get('player-1');
   }
 
   normalizePlayerId(playerId, playerCount = 0) {
-    const raw = String(playerId || '').trim();
-    if (!raw) {
-      return `player-${playerCount + 1}`;
+    const cacheKey = `${playerId}:${playerCount}`;
+    if (this.normalizePlayerIdCache.has(cacheKey)) {
+      return this.normalizePlayerIdCache.get(cacheKey);
     }
 
-    const lowered = raw.toLowerCase();
-    if (lowered === 'p1' || lowered === 'player1' || lowered === '1') {
-      return 'player-1';
+    const raw = String(playerId || '').trim();
+    let result;
+
+    if (!raw) {
+      result = `player-${playerCount + 1}`;
+    } else {
+      const lowered = raw.toLowerCase();
+      if (lowered === 'p1' || lowered === 'player1' || lowered === '1') {
+        result = 'player-1';
+      } else if (lowered === 'p2' || lowered === 'player2' || lowered === '2') {
+        result = 'player-2';
+      } else if (lowered.startsWith('player-')) {
+        result = lowered;
+      } else {
+        result = raw;
+      }
     }
-    if (lowered === 'p2' || lowered === 'player2' || lowered === '2') {
-      return 'player-2';
-    }
-    if (lowered.startsWith('player-')) {
-      return lowered;
-    }
-    return raw;
+
+    this.normalizePlayerIdCache.set(cacheKey, result);
+    return result;
   }
 
   getOrCreateRoom(roomId) {
@@ -547,6 +619,7 @@ export class RoomManager {
         nextBombId: 1,
         nextExplosionId: 1,
         nextPowerupId: 1,
+        seed: this.getRoomSeed(roomId),
       });
     }
 
@@ -871,6 +944,12 @@ export class RoomManager {
       return !explodedTileKeys.has(`${powerup.tx},${powerup.ty}`);
     });
 
+    // Criar Map de bombs para lookup O(1)
+    const bombMap = new Map();
+    for (const b of room.bombs) {
+      bombMap.set(`${b.tx},${b.ty}`, b);
+    }
+
     for (const tile of tiles) {
       this.upsertExplosion(room, tile.tx, tile.ty, tile.isCenter);
 
@@ -883,7 +962,7 @@ export class RoomManager {
 
     const chained = [];
     for (const tile of tiles) {
-      const hitBomb = room.bombs.find((entry) => entry.tx === tile.tx && entry.ty === tile.ty);
+      const hitBomb = bombMap.get(`${tile.tx},${tile.ty}`);
       if (hitBomb) {
         hitBomb.timer = 0;
         chained.push(hitBomb);
@@ -949,19 +1028,16 @@ export class RoomManager {
   }
 
   facingToDirection(facing = 'down') {
-    switch (facing) {
-      case 'up':
-        return { dx: 0, dy: -1 };
-      case 'left':
-        return { dx: -1, dy: 0 };
-      case 'right':
-        return { dx: 1, dy: 0 };
-      default:
-        return { dx: 0, dy: 1 };
-    }
+    return RoomManager.FACING_DIRECTION_MAP.get(facing) || { dx: 0, dy: 1 };
   }
 
   updateSlidingBombs(room, deltaTicks) {
+    // Criar Map de posições de bombs para lookup O(1)
+    const bombPositions = new Map();
+    for (const bomb of room.bombs) {
+      bombPositions.set(`${bomb.tx},${bomb.ty}`, bomb);
+    }
+
     for (const bomb of room.bombs) {
       if (!bomb.isSliding || bomb.isThrowing) continue;
 
@@ -980,7 +1056,10 @@ export class RoomManager {
         bomb.slideProgress -= this.tileSize;
         const nextTx = bomb.tx + bomb.slideDx;
         const nextTy = bomb.ty + bomb.slideDy;
-        if (this.isTileBlocked(room, nextTx, nextTy) || room.bombs.some((entry) => entry !== bomb && entry.tx === nextTx && entry.ty === nextTy)) {
+        const nextKey = `${nextTx},${nextTy}`;
+
+        if (this.isTileBlocked(room, nextTx, nextTy) ||
+            (bombPositions.has(nextKey) && bombPositions.get(nextKey) !== bomb)) {
           bomb.isSliding = false;
           bomb.slideDx = 0;
           bomb.slideDy = 0;
@@ -990,6 +1069,7 @@ export class RoomManager {
 
         bomb.tx = nextTx;
         bomb.ty = nextTy;
+        bombPositions.set(nextKey, bomb);
       }
 
       if (!bomb.isSliding) {
@@ -1002,6 +1082,12 @@ export class RoomManager {
   }
 
   updateThrownBombs(room, deltaTicks) {
+    // Criar Map de posições de bombs para lookup O(1)
+    const bombPositions = new Map();
+    for (const bomb of room.bombs) {
+      bombPositions.set(`${bomb.tx},${bomb.ty}`, bomb);
+    }
+
     for (const bomb of room.bombs) {
       if (!bomb.isThrowing) continue;
 
@@ -1040,7 +1126,8 @@ export class RoomManager {
 
       if (currentSegment >= bomb.throwPath.length - 1 && segmentProgress > 0.8) {
         const lastTile = bomb.throwPath[bomb.throwPath.length - 1];
-        const hasBombAtTarget = room.bombs.some((entry) => entry !== bomb && entry.tx === lastTile.tx && entry.ty === lastTile.ty);
+        const lastKey = `${lastTile.tx},${lastTile.ty}`;
+        const hasBombAtTarget = bombPositions.has(lastKey) && bombPositions.get(lastKey) !== bomb;
 
         if (this.isTileBlocked(room, lastTile.tx, lastTile.ty) || hasBombAtTarget) {
           let nextTx = lastTile.tx + bomb.throwDx;
@@ -1132,6 +1219,12 @@ export class RoomManager {
   }
 
   updateFollowerBombs(room, deltaTicks) {
+    // Criar Map de posições de bombs para lookup O(1)
+    const bombPositions = new Map();
+    for (const bomb of room.bombs) {
+      bombPositions.set(`${bomb.tx},${bomb.ty}`, bomb);
+    }
+
     for (const bomb of room.bombs) {
       if (!bomb.isFollower || bomb.isLandMine || bomb.isSliding || bomb.isThrowing) continue;
 
@@ -1187,8 +1280,10 @@ export class RoomManager {
 
         const nextTx = bomb.tx + bomb.followDx;
         const nextTy = bomb.ty + bomb.followDy;
+        const nextKey = `${nextTx},${nextTy}`;
 
-        if (this.isTileBlocked(room, nextTx, nextTy) || room.bombs.some((entry) => entry !== bomb && entry.tx === nextTx && entry.ty === nextTy)) {
+        if (this.isTileBlocked(room, nextTx, nextTy) ||
+            (bombPositions.has(nextKey) && bombPositions.get(nextKey) !== bomb)) {
           const reroute = this.pickFollowerDirection(room, bomb, target);
           if (!reroute) {
             bomb.followDx = 0;
@@ -1203,6 +1298,7 @@ export class RoomManager {
 
         bomb.tx = nextTx;
         bomb.ty = nextTy;
+        bombPositions.set(nextKey, bomb);
         bomb.followProgress -= this.tileSize;
 
         const remainingX = target.tx - bomb.tx;
@@ -1267,7 +1363,10 @@ export class RoomManager {
     let bestDist = Number.POSITIVE_INFINITY;
     for (const player of room.players.values()) {
       if (player.id === bomb.ownerSocketId) continue;
-      const dist = Math.abs(player.tx - bomb.tx) + Math.abs(player.ty - bomb.ty);
+      const cached = this.playerPositionsCache.get(player.id);
+      const tx = cached ? cached.tx : player.tx;
+      const ty = cached ? cached.ty : player.ty;
+      const dist = Math.abs(tx - bomb.tx) + Math.abs(ty - bomb.ty);
       if (dist > 0 && dist < bestDist) {
         bestDist = dist;
         best = player;
@@ -1323,10 +1422,11 @@ export class RoomManager {
       for (let i = 1; i <= bomb.range; i += 1) {
         const tx = bomb.tx + dir.dx * i;
         const ty = bomb.ty + dir.dy * i;
-
-        if (this.isWallTile(tx, ty)) break;
-
         const key = `${tx},${ty}`;
+
+        // Usar cache de wall tiles em vez de chamada de função
+        if (this.wallTiles.has(key)) break;
+
         const isDestructible = room.destructibleTiles.has(key);
         tiles.push({ tx, ty, isCenter: false });
 
@@ -1367,30 +1467,36 @@ export class RoomManager {
 
   updateExplosions(room, deltaTicks) {
     // Criar mapa de tiles com explosões para lookup O(1)
-    const explosionTiles = new Map();
-    for (const explosion of room.explosions) {
-      const key = `${explosion.tx},${explosion.ty}`;
-      if (!explosionTiles.has(key)) {
-        explosionTiles.set(key, explosion);
+    const explosionTiles = this.getPooledSet();
+    try {
+      for (const explosion of room.explosions) {
+        const key = `${explosion.tx},${explosion.ty}`;
+        if (!explosionTiles.has(key)) {
+          explosionTiles.add(key);
+        }
       }
-    }
 
-    // Verificar cada player uma vez
-    for (const player of room.players.values()) {
-      const key = `${player.tx},${player.ty}`;
-      const explosion = explosionTiles.get(key);
-      if (explosion && !explosion.damagedPlayers?.has(player.id) && Number(player.damageBlinkTicks || 0) <= 0) {
-        player.lives = Math.max(0, Number(player.lives || 0) - 1);
-        player.damageBlinkTicks = this.playerDamageBlinkDurationTicks;
-        explosion.damagedPlayers?.add(player.id);
+      // Verificar cada player uma vez
+      for (const player of room.players.values()) {
+        const key = `${player.tx},${player.ty}`;
+        if (explosionTiles.has(key)) {
+          const explosion = room.explosions.find(e => `${e.tx},${e.ty}` === key);
+          if (explosion && !explosion.damagedPlayers?.has(player.id) && Number(player.damageBlinkTicks || 0) <= 0) {
+            player.lives = Math.max(0, Number(player.lives || 0) - 1);
+            player.damageBlinkTicks = this.playerDamageBlinkDurationTicks;
+            explosion.damagedPlayers?.add(player.id);
+          }
+        }
       }
-    }
 
-    for (const explosion of room.explosions) {
-      explosion.timer -= deltaTicks;
-    }
+      for (const explosion of room.explosions) {
+        explosion.timer -= deltaTicks;
+      }
 
-    room.explosions = room.explosions.filter((explosion) => explosion.timer > 0);
+      room.explosions = room.explosions.filter((explosion) => explosion.timer > 0);
+    } finally {
+      this.releasePooledSet(explosionTiles);
+    }
   }
 
   updateMatchEndState(room) {
@@ -1454,18 +1560,22 @@ export class RoomManager {
     }
 
     // Coletar powerups
-    const collectedIds = new Set();
-    for (const player of room.players.values()) {
-      const key = `${player.tx},${player.ty}`;
-      const powerup = powerupTiles.get(key);
-      if (powerup && !collectedIds.has(powerup.id)) {
-        this.applyPowerup(player, powerup.type);
-        collectedIds.add(powerup.id);
+    const collectedIds = this.getPooledSet();
+    try {
+      for (const player of room.players.values()) {
+        const key = `${player.tx},${player.ty}`;
+        const powerup = powerupTiles.get(key);
+        if (powerup && !collectedIds.has(powerup.id)) {
+          this.applyPowerup(player, powerup.type);
+          collectedIds.add(powerup.id);
+        }
       }
-    }
 
-    if (collectedIds.size > 0) {
-      room.powerups = room.powerups.filter((powerup) => !collectedIds.has(powerup.id));
+      if (collectedIds.size > 0) {
+        room.powerups = room.powerups.filter((powerup) => !collectedIds.has(powerup.id));
+      }
+    } finally {
+      this.releasePooledSet(collectedIds);
     }
   }
 
@@ -1517,6 +1627,13 @@ export class RoomManager {
   }
 
   buildDestructibleTiles(roomId, matchNonce = 0) {
+    const cacheKey = `${roomId}:${matchNonce}`;
+
+    // Verificar cache
+    if (this.tileRandomCache.has(cacheKey)) {
+      return new Set(this.tileRandomCache.get(cacheKey));
+    }
+
     const tiles = new Set();
 
     for (let ty = 1; ty < this.mapRows - 1; ty += 1) {
@@ -1555,6 +1672,8 @@ export class RoomManager {
       }
     }
 
+    // Cache resultado
+    this.tileRandomCache.set(cacheKey, Array.from(tiles));
     return tiles;
   }
 
@@ -1573,11 +1692,29 @@ export class RoomManager {
   }
 
   getTileRandomValue(roomId, tx, ty, channel = 'default', matchNonce = 0) {
-    const seedInput = `${this.getRoomSeed(roomId)}:${matchNonce}:${tx},${ty}:${channel}`;
+    const room = this.rooms.get(roomId);
+    const seed = room ? room.seed : this.getRoomSeed(roomId);
+    const seedInput = `${seed}:${matchNonce}:${tx},${ty}:${channel}`;
     const seedHash = String(seedInput)
       .split('')
       .reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) >>> 0, 0);
     const state = (seedHash * 1664525 + 1013904223) >>> 0;
     return state / 0x100000000;
+  }
+
+  getMetrics() {
+    const avgTickTime = this.metrics.tickCount > 0
+      ? this.metrics.totalTickTime / this.metrics.tickCount
+      : 0;
+
+    return {
+      ...this.metrics,
+      avgTickTime,
+      avgPlayerUpdate: this.metrics.tickCount > 0 ? this.metrics.playerUpdateTime / this.metrics.tickCount : 0,
+      avgBombUpdate: this.metrics.tickCount > 0 ? this.metrics.bombUpdateTime / this.metrics.tickCount : 0,
+      avgExplosionUpdate: this.metrics.tickCount > 0 ? this.metrics.explosionUpdateTime / this.metrics.tickCount : 0,
+      avgPowerupUpdate: this.metrics.tickCount > 0 ? this.metrics.powerupUpdateTime / this.metrics.tickCount : 0,
+      avgSnapshotEmit: this.metrics.tickCount > 0 ? this.metrics.snapshotEmitTime / this.metrics.tickCount : 0,
+    };
   }
 }
