@@ -6,6 +6,7 @@ import {
   DestroyingBlockAnimator,
 } from '../application/index.js';
 import { RuntimeMetricsCollector } from '../infrastructure/index.js';
+import { GameEvents } from '../engine/EventBus.js';
 
 /**
  * GameLoop - Manages the main game update loop
@@ -422,10 +423,55 @@ export class GameLoop {
 
   if (!localEntry) return;
 
-  // Invalidate player state cache when syncing from snapshot
-  if (this.components.player.invalidateStateCache) {
-    this.components.player.invalidateStateCache();
+  // Atualizar powerups do playerState local com dados do snapshot
+  if (localEntry.lives !== undefined) {
+    this.components.player.gameState.playerState.lives = localEntry.lives;
   }
+  if (localEntry.maxBombs !== undefined) {
+    this.components.player.gameState.playerState.maxBombs = localEntry.maxBombs;
+  }
+  if (localEntry.explosionRange !== undefined) {
+    this.components.player.gameState.playerState.explosionRange = localEntry.explosionRange;
+  }
+  if (localEntry.speedPowerups !== undefined) {
+    this.components.player.gameState.playerState.speedPowerups = localEntry.speedPowerups;
+  }
+  if (localEntry.canPierceBlocks !== undefined) {
+    this.components.player.gameState.playerState.canPierceBlocks = localEntry.canPierceBlocks;
+  }
+  if (localEntry.hasKickBomb !== undefined) {
+    this.components.player.gameState.playerState.hasKickBomb = localEntry.hasKickBomb;
+  }
+  if (localEntry.hasThrowBomb !== undefined) {
+    this.components.player.gameState.playerState.hasThrowBomb = localEntry.hasThrowBomb;
+  }
+  if (localEntry.hasCrossBlock !== undefined) {
+    this.components.player.gameState.playerState.hasCrossBlock = localEntry.hasCrossBlock;
+  }
+  if (localEntry.hasCrossBomb !== undefined) {
+    this.components.player.gameState.playerState.hasCrossBomb = localEntry.hasCrossBomb;
+  }
+  if (localEntry.hasFollowerBomb !== undefined) {
+    this.components.player.gameState.playerState.hasFollowerBomb = localEntry.hasFollowerBomb;
+  }
+  if (localEntry.hasLandMine !== undefined) {
+    this.components.player.gameState.playerState.hasLandMine = localEntry.hasLandMine;
+  }
+
+  // Debug: logar powerups do snapshot
+  console.log('[DEBUG] Powerups from snapshot:', {
+    speedPowerups: localEntry.speedPowerups,
+    canPierceBlocks: localEntry.canPierceBlocks,
+    hasKickBomb: localEntry.hasKickBomb,
+    hasThrowBomb: localEntry.hasThrowBomb,
+    hasCrossBlock: localEntry.hasCrossBlock,
+    hasCrossBomb: localEntry.hasCrossBomb,
+    hasFollowerBomb: localEntry.hasFollowerBomb,
+    hasLandMine: localEntry.hasLandMine,
+  });
+
+  // Emitir evento de atualização de UI para powerups
+  this.components.managers.gameState.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.components.player.gameState.playerState });
 
   const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
 
