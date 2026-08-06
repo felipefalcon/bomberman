@@ -306,6 +306,13 @@ export class HudManager {
       ? this.currentRoomPlayers
       : [{ playerId: 'player-1', lives: Number(this.lastRenderedLives || GAME_CONFIG.PLAYER_STARTING_LIVES) }];
 
+    console.log('Rendering shared players:', players);
+    players.sort((a, b) => {
+      const idA = String(a?.playerId || a?.id || '').toLowerCase();
+      const idB = String(b?.playerId || b?.id || '').toLowerCase();
+      return idA.localeCompare(idB);
+    });
+
     players.forEach((player, index) => {
       const slot = this.createPlayerSlot(player, index);
       this.playerSlotsContainer.addChild(slot);
@@ -315,10 +322,12 @@ export class HudManager {
 
   createPlayerSlot(player, index) {
     const container = new PIXI.Container();
-    container.x = index * 64;
+    container.x = index * 48;
     container.y = 0;
 
-    const icon = this.createPlayerIcon();
+    const playerId = player?.playerId || null;
+    const icon = this.createPlayerIcon(playerId);
+    
     icon.x = 0;
     icon.y = 1;
     icon.scale.set(1.5);
@@ -329,18 +338,18 @@ export class HudManager {
       style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
       roundPixels: true,
     });
-    livesText.x = 24;
-    livesText.y = 2;
+    livesText.x = 28;
+    livesText.y = 5;
     container.addChild(livesText);
 
-    const playerLabel = new PIXI.BitmapText({
-      text: this._formatPlayerLabel(player?.playerId || player?.id || `player-${index + 1}`),
-      style: { fontFamily: 'HUDFont', fontSize: 7, fill: 0xdddddd },
-      roundPixels: true,
-    });
-    playerLabel.x = 24;
-    playerLabel.y = 16;
-    container.addChild(playerLabel);
+    // const playerLabel = new PIXI.BitmapText({
+    //   text: this._formatPlayerLabel(player?.playerId || player?.id || `player-${index + 1}`),
+    //   style: { fontFamily: 'HUDFont', fontSize: 7, fill: 0xdddddd },
+    //   roundPixels: true,
+    // });
+    // playerLabel.x = 24;
+    // playerLabel.y = 16;
+    // container.addChild(playerLabel);
 
     return container;
   }
@@ -412,10 +421,26 @@ export class HudManager {
   }
 
   // Icon creation methods
-  createPlayerIcon() {
-    const sprite = this.createItemIcon(GAME_CONFIG.HUD.TOP.PLAYER_ICON_FRAME);
+  createPlayerIcon(playerId) {
+    const icon = this.getPlayerIconTexture(playerId);
+    const sprite = this.createItemIcon(icon);
     if (sprite) return sprite;
     return this.drawFaceIcon(GAME_CONFIG.HUD.TOP.PLAYER_ICON_X, GAME_CONFIG.HUD.TOP.PLAYER_ICON_Y);
+  }
+
+  getPlayerIconTexture(playerId) {
+    switch (playerId) {
+      case 'player-1':
+        return GAME_CONFIG.HUD.TOP.PLAYER_ICON_FRAME;
+      case 'player-2':
+        return GAME_CONFIG.HUD.TOP.PLAYER2_ICON_FRAME;
+      case 'player-3':
+        return GAME_CONFIG.HUD.TOP.PLAYER3_ICON_FRAME;
+      case 'player-4':
+        return GAME_CONFIG.HUD.TOP.PLAYER4_ICON_FRAME;
+      default:
+        return GAME_CONFIG.HUD.TOP.PLAYER_ICON_FRAME;
+    }
   }
 
   createClockIcon() {
