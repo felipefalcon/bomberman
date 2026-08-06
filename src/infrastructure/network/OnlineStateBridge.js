@@ -35,7 +35,7 @@ export class OnlineStateBridge {
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
     let isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    // isLocalServer = true;
+    isLocalServer = true;
 
     const socketUrl = isLocalServer
       ? 'http://localhost:3001'
