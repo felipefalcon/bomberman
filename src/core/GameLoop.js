@@ -701,8 +701,8 @@ export class GameLoop {
     );
     
     if (prevPlayer && nextPlayer) {
-      const interpX = prevPlayer.x + (nextPlayer.x - prevPlayer.x) * t;
-      const interpY = prevPlayer.y + (nextPlayer.y - prevPlayer.y) * t;
+      let interpX = prevPlayer.x + (nextPlayer.x - prevPlayer.x) * t;
+      let interpY = prevPlayer.y + (nextPlayer.y - prevPlayer.y) * t;
       
       // Extrapolation baseada em input atual
       const input = this.components.managers.input?.getMovementCommand?.() || { x: 0, y: 0 };
