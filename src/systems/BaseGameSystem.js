@@ -9,15 +9,7 @@ export class BaseGameSystem {
     this.tileSize = GAME_CONFIG.TILE_SIZE;
   }
 
-  setMap(map) {
-    this.map = map;
-  }
-
-  setGameContainer(container) {
-    this.gameContainer = container;
-  }
-
-  setAssets() {
+  setAssets(frames, mapping) {
     // Optional for subclasses
   }
 

@@ -16,11 +16,6 @@
 5. **Snapshot verificado a cada frame** - Mesmo sem mudanças
 6. **Cálculos repetidos de spawn positions** - Recalculado mesmo quando imutável
 
-### EntityManager.js
-1. **Criação de arrays em getters** - `getByType()` e `getAll()` criam novos arrays
-2. **Iteração completa em find** - Percorre todas as entidades sempre
-3. **Falta de cache** - Consultas repetidas sem cache
-
 ### OnlineStateBridge.js
 1. **Input spamming** - `sendInput` chamado a cada frame (~60x por segundo)
 2. **Sem verificação de taxa** - Não limita frequência de envio
@@ -261,27 +256,12 @@ if (window.__ONLINE_ENABLED__ && snapshot) {
 
 ---
 
-### FASE 3: Otimizações de EntityManager (Média Prioridade)
+### FASE 3: Otimizações de Renderização (Média Prioridade)
 
 #### 3.1 ⚡ Cache em Getters
-**Problema:** `getByType()` e `getAll()` criam novos arrays
+**Problema:** Métodos que criam novos arrays
 **Solução:** Retornar iteradores ou arrays imutáveis cacheados
 **Ganho:** Reduz alocação de memória
-
-**Implementação:**
-```javascript
-// No EntityManager:
-constructor() {
-  this.entities = new Map();
-  this.entitiesByType = new Map();
-  this.nextId = 1;
-  this._cachedArrays = new Map();
-  this._cacheVersion = 0;
-}
-
-invalidateCache() {
-  this._cacheVersion++;
-  this._cachedArrays.clear();
 }
 
 add(entity, type = 'default') {
@@ -470,15 +450,9 @@ this.socket = io(socketUrl, {
 
 **Impacto esperado:** 30-40% redução em CPU
 
-### Sprint 3 - EntityManager (Ganho Moderado)
-8. Cache em Getters
-9. Índice Espacial para Queries
-
-**Impacto esperado:** 20-30% redução em alocação de memória
-
-### Sprint 4 - Player (Ganho Moderado)
-10. Cache de Getters
-11. Cache de Player Tints
+### Sprint 3 - Player (Ganho Moderado)
+8. Cache de Getters
+9. Cache de Player Tints
 
 **Impacto esperado:** 10-15% redução em CPU
 
@@ -488,7 +462,7 @@ this.socket = io(socketUrl, {
 
 **Impacto esperado:** 15-20% melhoria em estabilidade
 
-### Sprint 6 - Renderização (Ganho Menor)
+### Sprint 5 - Renderização (Ganho Menor)
 14. Frame Skipping
 15. Delta Time Smoothing
 16. Culling de Entidades
@@ -505,8 +479,7 @@ this.socket = io(socketUrl, {
 | Fase 2 | Alta | 🔥🔥🔥🔥 | 🔥🔥🔥 | - |
 | Fase 3 | Média | 🔥🔥 | 🔥🔥🔥🔥 | - |
 | Fase 4 | Baixa | 🔥🔥 | 🔥 | - |
-| Fase 5 | Média | - | - | 🔥🔥🔥 |
-| Fase 6 | Baixa | 🔥 | 🔥 | - |
+| Fase 5 | Baixa | 🔥 | 🔥 | - |
 
 **Ganho total estimado frontend:** 50-70% redução em consumo de rede e 30-40% redução em CPU
 

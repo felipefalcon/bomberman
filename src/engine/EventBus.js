@@ -65,21 +65,6 @@ export class EventBus {
   }
 
   /**
-   * Subscribe to an event only once
-   * @param {string} event - Event name
-   * @param {Function} callback - Callback function
-   * @returns {Function} Unsubscribe function
-   */
-  once(event, callback) {
-    const wrappedCallback = (data) => {
-      callback(data);
-      this.off(event, wrappedCallback);
-    };
-    
-    return this.on(event, wrappedCallback);
-  }
-
-  /**
    * Remove all listeners for an event or all events
    * @param {string} event - Optional event name, if not provided clears all
    */
@@ -89,15 +74,6 @@ export class EventBus {
     } else {
       this.listeners.clear();
     }
-  }
-
-  /**
-   * Get the number of listeners for an event
-   * @param {string} event - Event name
-   * @returns {number} Number of listeners
-   */
-  listenerCount(event) {
-    return this.listeners.has(event) ? this.listeners.get(event).length : 0;
   }
 }
 

@@ -3,7 +3,6 @@ import { GAME_CONFIG } from '../config/Constants.js';
 import { TileMap } from '../map/TileMap.js';
 import { Player } from '../entities/Player.js';
 import { HudManager } from '../managers/HudManager.js';
-import { AssetManager } from '../engine/AssetManager.js';
 import { InputManager } from '../managers/InputManager.js';
 import { GameState } from '../managers/GameState.js';
 import { AudioManager } from '../managers/AudioManager.js';
@@ -11,7 +10,6 @@ import { BombSystem } from '../systems/BombSystem.js';
 import { ExplosionSystem } from '../systems/ExplosionSystem.js';
 import { PowerupSystem } from '../systems/PowerupSystem.js';
 import { MonsterSystem } from '../systems/MonsterSystem.js';
-import { CollisionSystem } from '../systems/CollisionSystem.js';
 import { GameEvents, globalEventBus } from '../infrastructure/index.js';
 import { OnlineStateBridge } from '../infrastructure/network/OnlineStateBridge.js';
 import { loadPlayerSprites, getPlayerSpritesheetUrl } from '../loaders/playerSprite.js';
@@ -41,7 +39,6 @@ export class GameInitializer {
     this.hudManager = null;
     
     // Managers
-    this.assetManager = null;
     this.inputManager = null;
     this.gameState = null;
     this.audioManager = null;
@@ -52,7 +49,6 @@ export class GameInitializer {
     this.explosionSystem = null;
     this.powerupSystem = null;
     this.monsterSystem = null;
-    this.collisionSystem = null;
     
     // Asset storage
     this.playerFrames = {};
@@ -103,10 +99,8 @@ export class GameInitializer {
         explosion: this.explosionSystem,
         powerup: this.powerupSystem,
         monster: this.monsterSystem,
-        collision: this.collisionSystem,
       },
       managers: {
-        asset: this.assetManager,
         input: this.inputManager,
         gameState: this.gameState,
         audio: this.audioManager,
@@ -143,14 +137,12 @@ export class GameInitializer {
     this.explosionSystem = new ExplosionSystem(globalEventBus, this.map, this.gameContainer);
     this.powerupSystem = new PowerupSystem(globalEventBus, this.gameContainer);
     this.monsterSystem = new MonsterSystem(globalEventBus, this.map, this.gameContainer);
-    this.collisionSystem = new CollisionSystem(globalEventBus, this.map);
   }
 
   /**
    * Initialize game managers
    */
   _initializeManagers() {
-    this.assetManager = new AssetManager();
     this.inputManager = new InputManager();
     this.gameState = new GameState();
     this.audioManager = new AudioManager();
@@ -302,7 +294,6 @@ export class GameInitializer {
     }
     this.unsubscribers = [];
 
-    this.collisionSystem?.destroy?.();
     this.monsterSystem?.destroy?.();
     this.powerupSystem?.destroy?.();
     this.explosionSystem?.destroy?.();
