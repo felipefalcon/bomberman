@@ -95,6 +95,13 @@ export class RoomManager {
 
   initialize() {
     this.io.on('connection', (socket) => {
+      socket.on('ping', ({ clientTime }) => {
+        socket.emit('pong', {
+          clientTime,
+          serverTime: Date.now(),
+        });
+      });
+
       socket.on('create-room', ({ roomId }) => {
         const safeRoomId = String(roomId || 'room').trim();
         const room = this.getOrCreateRoom(safeRoomId);
@@ -203,6 +210,12 @@ export class RoomManager {
 
         const normalizedInput = this.normalizeInput(input || {}, player);
         player.input = normalizedInput;
+
+        // Send ack with timestamp
+        socket.emit('input-ack', {
+          tick: input.tick,
+          processedAt: Date.now(),
+        });
 
         const bombTs = Number(player.input?.bomb?.timestamp || 0);
         if (Number.isFinite(bombTs) && bombTs > 0 && bombTs !== player.lastBombCommandTs) {

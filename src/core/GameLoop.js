@@ -37,6 +37,12 @@ export class GameLoop {
     this.deltaBuffer = [];
     this.deltaBufferSize = 3;
     this.lastDelta = 1.0;
+    this.snapshotBuffer = [];
+    this.maxSnapshotBuffer = 3;
+    this.interpolationDelay = 100; // 100ms de delay para interpolação
+    this.extrapolationTime = 50; // 50ms de extrapolation
+    this.lastInput = { x: 0, y: 0 };
+    this.lastInputTime = 0;
   }
 
   /**
@@ -165,6 +171,19 @@ export class GameLoop {
         );
 
         if (window.__ONLINE_ENABLED__ && snapshot) {
+          // Adicionar snapshot ao buffer para interpolação
+          this.snapshotBuffer.push({
+            snapshot,
+            timestamp: Date.now(),
+          });
+          
+          if (this.snapshotBuffer.length > this.maxSnapshotBuffer) {
+            this.snapshotBuffer.shift();
+          }
+          
+          // Interpolar snapshots
+          this._interpolateSnapshots(tickDelta);
+          
           const hasNewSnapshot = this._hasNewOnlineSnapshot(snapshot);
           if (hasNewSnapshot) {
             this._syncOnlineWorld(snapshot, tickDelta);
@@ -178,14 +197,28 @@ export class GameLoop {
 
         if (window.__ONLINE_ENABLED__) {
           this._applyLocalReconciliation(tickDelta);
+          
+          // Client-side lag compensation
+          const onlineBridge = this.components.managers.onlineStateBridge;
+          const rtt = onlineBridge.rtt || 0;
+          const halfRtt = rtt / 2;
+          
+          // Ajustar input com compensação de lag
+          onlineBridge.sendInput({
+            type: 'move',
+            x: movementCommand.x,
+            y: movementCommand.y,
+            bomb: bombCommand,
+            predictedTick: this.lastProcessedSnapshotTick + Math.ceil(halfRtt / 16.6667),
+          });
+        } else {
+          onlineBridge?.sendInput?.({
+            type: 'move',
+            x: movementCommand.x,
+            y: movementCommand.y,
+            bomb: bombCommand,
+          });
         }
-
-        onlineBridge?.sendInput?.({
-          type: 'move',
-          x: movementCommand.x,
-          y: movementCommand.y,
-          bomb: bombCommand,
-        });
 
         if (!window.__ONLINE_ENABLED__) {
           this.bombActionHandler.processInput();
@@ -578,7 +611,77 @@ export class GameLoop {
   const lerpFactor = 0.2;
   sprite.x = sprite.x + (this.localAuthorityTarget.x - sprite.x) * lerpFactor;
   sprite.y = sprite.y + (this.localAuthorityTarget.y - sprite.y) * lerpFactor;
-}
+  }
+
+  _interpolateSnapshots(delta) {
+    if (this.snapshotBuffer.length < 2) return;
+    
+    const now = Date.now();
+    
+    // Adaptive interpolation delay baseado em RTT
+    const onlineBridge = this.components.managers.onlineStateBridge;
+    const rtt = onlineBridge.rtt || 100;
+    const adaptiveDelay = Math.max(50, Math.min(150, rtt * 0.8));
+    this.interpolationDelay = adaptiveDelay;
+    
+    const targetTime = now - this.interpolationDelay;
+    
+    // Encontrar snapshots que cercam o target time
+    let prev = null, next = null;
+    for (let i = 0; i < this.snapshotBuffer.length - 1; i++) {
+      if (this.snapshotBuffer[i].timestamp <= targetTime && 
+          this.snapshotBuffer[i + 1].timestamp > targetTime) {
+        prev = this.snapshotBuffer[i];
+        next = this.snapshotBuffer[i + 1];
+        break;
+      }
+    }
+    
+    if (!prev || !next) return;
+    
+    // Calcular fator de interpolação (0-1)
+    const range = next.timestamp - prev.timestamp;
+    const elapsed = targetTime - prev.timestamp;
+    const t = Math.max(0, Math.min(1, elapsed / range));
+    
+    // Interpolar posição do player local
+    const localId = this._normalizePlayerId(onlineBridge?.playerId);
+    
+    const prevPlayer = prev.snapshot.players?.find(p => 
+      this._normalizePlayerId(p.playerId) === localId
+    );
+    const nextPlayer = next.snapshot.players?.find(p => 
+      this._normalizePlayerId(p.playerId) === localId
+    );
+    
+    if (prevPlayer && nextPlayer) {
+      const interpX = prevPlayer.x + (nextPlayer.x - prevPlayer.x) * t;
+      const interpY = prevPlayer.y + (nextPlayer.y - prevPlayer.y) * t;
+      
+      // Extrapolation baseada em input atual
+      const input = this.components.managers.input?.getMovementCommand?.() || { x: 0, y: 0 };
+      
+      // Calcular velocidade baseada em input
+      if (input.x !== 0 || input.y !== 0) {
+        const timeSinceLastInput = now - this.lastInputTime;
+        if (timeSinceLastInput > 100) {
+          this.lastInput = input;
+          this.lastInputTime = now;
+        }
+      }
+      
+      // Extrapolar posição se estiver se movendo
+      if (this.lastInput.x !== 0 || this.lastInput.y !== 0) {
+        const speed = this.components.player?.speed || 2.6;
+        const extrapolationSeconds = this.extrapolationTime / 1000;
+        
+        interpX += this.lastInput.x * speed * extrapolationSeconds * 16.6667;
+        interpY += this.lastInput.y * speed * extrapolationSeconds * 16.6667;
+      }
+      
+      this.localAuthorityTarget = { x: interpX, y: interpY };
+    }
+  }
 
   _createRemotePlayerEntry() {
     const localPlayer = this.components.player;
