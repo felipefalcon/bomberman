@@ -1,4 +1,4 @@
-import { POWERUP_TYPES } from '../config/Constants.js';
+import { POWERUP_TYPES } from '../../config/Constants.js';
 import {
   SpeedComponent,
   BombComponent,

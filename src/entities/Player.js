@@ -1,6 +1,6 @@
 import { AnimatedSprite, Graphics } from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
-import { ComponentManager } from '../components/ComponentManager.js';
+import { ComponentManager } from '../game/components/ComponentManager.js';
 import { getCornerTileKeys, getCorners, tileCenter, tileKey, toTile } from '../utils/tileUtils.js';
 
 export class Player {

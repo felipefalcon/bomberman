@@ -1,9 +1,9 @@
 import * as PIXI from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
-import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { globalEventBus, GameEvents } from '../infrastructure/events/EventBus.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { isSpriteOnTile, spriteToTile, tileCenter } from '../utils/tileUtils.js';
-import { BombFactory } from '../domain/bomb/BombFactory.js';
+import { BombFactory } from './BombFactory.js';
 
 /**
  * BombSystem - Manages bomb placement, timing, and explosion triggers

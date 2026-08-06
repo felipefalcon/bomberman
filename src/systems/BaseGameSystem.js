@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from '../config/Constants.js';
-import { globalEventBus } from '../engine/EventBus.js';
+import { globalEventBus } from '../infrastructure/events/EventBus.js';
 
 export class BaseGameSystem {
   constructor(eventBus = globalEventBus, map = null, gameContainer = null) {

@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from '../config/Constants.js';
-import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { globalEventBus, GameEvents } from '../infrastructure/events/EventBus.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { spriteToTile, tileKey } from '../utils/tileUtils.js';
 import { ExplosionRenderer } from '../presentation/renderers/ExplosionRenderer.js';

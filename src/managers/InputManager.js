@@ -1,4 +1,4 @@
-import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { globalEventBus, GameEvents } from '../infrastructure/events/EventBus.js';
 
 /**
  * InputManager - Handles keyboard input and state management

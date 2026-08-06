@@ -11,12 +11,22 @@
 ```
 src/
 ├── config/          # Configurações centralizadas
-├── engine/          # Infraestrutura base (EventBus)
+├── core/            # Núcleo do jogo (Game, GameInitializer, GameLoop)
 ├── entities/        # Entidades do jogo (Player, Monster, Powerup)
+├── game/            # Lógica de jogo (handlers, components)
+│   ├── handlers/    # Manipuladores de lógica de jogo
+│   └── components/  # Sistema de componentes para powerups
+├── infrastructure/  # Infraestrutura técnica
+│   ├── events/      # Sistema de eventos
+│   ├── network/     # Comunicação online
+│   └── observability/ # Métricas e monitoramento
 ├── loaders/         # Carregamento de assets
 ├── managers/        # Gerenciadores (Audio, GameState, HUD, Input)
 ├── map/             # Mapa e tiles
+├── presentation/    # Renderização e apresentação
+│   └── renderers/   # Renderers específicos
 ├── systems/         # Sistemas de jogo (Bomb, Explosion, Powerup, Monster)
+└── utils/           # Utilitários reutilizáveis
 └── utils/           # Utilitários
 ```
 

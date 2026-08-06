@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
-import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { globalEventBus, GameEvents } from '../infrastructure/events/EventBus.js';
 
 /**
  * HudManager - Unified HUD management for Top and Side panels

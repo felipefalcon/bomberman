@@ -1,9 +1,10 @@
 import { GAME_CONFIG, POWERUP_TYPES } from '../config/Constants.js';
-import { globalEventBus, GameEvents } from '../engine/EventBus.js';
+import { globalEventBus, GameEvents } from '../infrastructure/events/EventBus.js';
 import { Powerup } from '../entities/Powerup.js';
 import { BaseGameSystem } from './BaseGameSystem.js';
 import { spriteToTile } from '../utils/tileUtils.js';
 import { createSeededRandom } from '../utils/seededRandom.js';
+import { ComponentManager } from '../game/components/ComponentManager.js';
 
 /**
  * PowerupSystem - Manages powerup spawning, collection, and effects

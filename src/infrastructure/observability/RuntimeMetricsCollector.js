@@ -1,4 +1,4 @@
-import { GameEvents } from '../../engine/EventBus.js';
+import { GameEvents } from '../events/EventBus.js';
 import { GAME_CONFIG } from '../../config/Constants.js';
 
 export class RuntimeMetricsCollector {
