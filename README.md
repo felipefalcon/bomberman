@@ -83,10 +83,9 @@ Exemplo em producao (GitHub Pages):
 
 - Jogador 1: `https://SEU_USUARIO.github.io/bomberman/?online=1&room=sala1&player=player-1`
 
-# Githubpages
+# VPS Hostinger
 
-- Jogador 1: `https://felipefalcon.github.io/bomberman/?online=1&room=sala1&player=player-1`
-- Jogador 2: `https://felipefalcon.github.io/bomberman/?online=1&room=sala1&player=player-2`
+- Jogador 1: `http://179.198.113.12/?online=1&room=sala1&player=player-1`
 
 Observacoes:
 
