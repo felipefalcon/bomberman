@@ -16,6 +16,16 @@ export class OnlineStateBridge {
     this.onRoomState = null;
     this.clientInputTick = 0;
     this.clientInputSeq = 0;
+    this.lastSnapshotTick = null;
+    this.lastAckedTick = 0;
+    this.unackedInputs = new Map();
+    this.reconnectAttempts = 0;
+    this.maxReconnectDelay = 30000; // 30s max
+    this.rtt = 0;
+    this.clockOffset = 0;
+    this.lastPingTime = 0;
+    this.pingInterval = 1000; // Ping a cada 1s
+    this.pingTimer = null;
   }
 
   connect(roomId = 'room', playerId = null) {
@@ -24,7 +34,8 @@ export class OnlineStateBridge {
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
-    const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    let isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // isLocalServer = true;
 
     const socketUrl = isLocalServer
       ? 'http://localhost:3001'
@@ -34,8 +45,12 @@ export class OnlineStateBridge {
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 2000,
+      reconnectionDelay: (attemptNumber) => {
+        this.reconnectAttempts = attemptNumber;
+        const delay = Math.min(1000 * Math.pow(2, attemptNumber), this.maxReconnectDelay);
+        return delay + Math.random() * 500; // Add jitter
+      },
+      reconnectionDelayMax: this.maxReconnectDelay,
       timeout: 2000,
     });
 
@@ -53,6 +68,23 @@ export class OnlineStateBridge {
       this.onRoomState?.(roomState);
     });
 
+    this.socket.on('input-ack', (ack) => {
+      if (ack.tick === this.clientInputTick) {
+        this.lastAckedTick = ack.tick;
+      }
+    });
+
+    this.socket.on('pong', (data) => {
+      const now = Date.now();
+      const roundTripTime = now - this.lastPingTime;
+      this.rtt = roundTripTime;
+      
+      // Calcular offset do relógio
+      const serverTime = data.serverTime;
+      const oneWayDelay = roundTripTime / 2;
+      this.clockOffset = serverTime + oneWayDelay - now;
+    });
+
     this.socket.on('snapshot', (snapshot) => {
       this.lastSnapshot = snapshot;
       this.hasRemoteSnapshot = true;
@@ -61,7 +93,14 @@ export class OnlineStateBridge {
 
     this.socket.on('disconnect', () => {
       this.connected = false;
+      if (this.pingTimer) {
+        clearInterval(this.pingTimer);
+        this.pingTimer = null;
+      }
     });
+
+    // Iniciar ping loop
+    this._startPingLoop();
   }
 
   disconnect() {
@@ -100,11 +139,26 @@ export class OnlineStateBridge {
         tick: this.clientInputTick,
         seq: this.clientInputSeq,
         sentAt: Date.now(),
+        priority: 'high', // Marcar como alta prioridade
       },
     });
   }
 
   getSnapshot() {
     return this.enabled && this.connected && this.hasRemoteSnapshot ? this.lastSnapshot : null;
+  }
+
+  _startPingLoop() {
+    this.pingTimer = setInterval(() => {
+      if (!this.socket?.connected) return;
+      
+      const clientTime = Date.now();
+      this.lastPingTime = clientTime;
+      this.socket.emit('ping', { clientTime });
+    }, this.pingInterval);
+  }
+
+  getServerTime() {
+    return Date.now() + this.clockOffset;
   }
 }

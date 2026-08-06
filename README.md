@@ -82,7 +82,11 @@ Exemplo (mesma sala `sala1`):
 Exemplo em producao (GitHub Pages):
 
 - Jogador 1: `https://SEU_USUARIO.github.io/bomberman/?online=1&room=sala1&player=player-1`
-https://felipefalcon.github.io/bomberman/?online=1&room=sala1&player=player-1
+
+# Githubpages
+
+- Jogador 1: `https://felipefalcon.github.io/bomberman/?online=1&room=sala1&player=player-1`
+- Jogador 2: `https://felipefalcon.github.io/bomberman/?online=1&room=sala1&player=player-2`
 
 Observacoes:
 

@@ -6,6 +6,7 @@ import {
   DestroyingBlockAnimator,
 } from '../application/index.js';
 import { RuntimeMetricsCollector } from '../infrastructure/index.js';
+import { GameEvents } from '../engine/EventBus.js';
 
 /**
  * GameLoop - Manages the main game update loop
@@ -28,6 +29,21 @@ export class GameLoop {
     this.localAuthorityTarget = null;
     this.lastProcessedSnapshotTick = null;
     this.lastProcessedSnapshotRef = null;
+    this.playerIdCache = new Map();
+    this.playerIdCacheMaxSize = 50;
+    this.remotePlayerPool = [];
+    this.maxPoolSize = 8;
+    this.needsSorting = false;
+    this.playerTintCache = new Map();
+    this.deltaBuffer = [];
+    this.deltaBufferSize = 3;
+    this.lastDelta = 1.0;
+    this.snapshotBuffer = [];
+    this.maxSnapshotBuffer = 3;
+    this.interpolationDelay = 100; // 100ms de delay para interpolação
+    this.extrapolationTime = 50; // 50ms de extrapolation
+    this.lastInput = { x: 0, y: 0 };
+    this.lastInputTime = 0;
   }
 
   /**
@@ -73,7 +89,24 @@ export class GameLoop {
       this.lastFrameTime = timestamp;
     }
 
-    const delta = Math.min(4, (timestamp - this.lastFrameTime) / 16.6667);
+    const frameTime = timestamp - this.lastFrameTime;
+    
+    // Delta time suave com buffer
+    this.deltaBuffer.push(frameTime);
+    if (this.deltaBuffer.length > this.deltaBufferSize) {
+      this.deltaBuffer.shift();
+    }
+
+    const avgFrameTime = this.deltaBuffer.reduce((a, b) => a + b, 0) / this.deltaBuffer.length;
+    let delta = avgFrameTime / 16.6667;
+
+    // Clamp mais agressivo para evitar picos
+    delta = Math.max(0.5, Math.min(2.0, delta));
+
+    // Suavização com lastDelta
+    delta = delta * 0.7 + this.lastDelta * 0.3;
+    this.lastDelta = delta;
+    
     this.lastFrameTime = timestamp;
 
     this.boundUpdate(delta);
@@ -139,6 +172,19 @@ export class GameLoop {
         );
 
         if (window.__ONLINE_ENABLED__ && snapshot) {
+          // Adicionar snapshot ao buffer para interpolação
+          this.snapshotBuffer.push({
+            snapshot,
+            timestamp: Date.now(),
+          });
+          
+          if (this.snapshotBuffer.length > this.maxSnapshotBuffer) {
+            this.snapshotBuffer.shift();
+          }
+          
+          // Interpolar snapshots
+          this._interpolateSnapshots(tickDelta);
+          
           const hasNewSnapshot = this._hasNewOnlineSnapshot(snapshot);
           if (hasNewSnapshot) {
             this._syncOnlineWorld(snapshot, tickDelta);
@@ -152,14 +198,28 @@ export class GameLoop {
 
         if (window.__ONLINE_ENABLED__) {
           this._applyLocalReconciliation(tickDelta);
+          
+          // Client-side lag compensation
+          const onlineBridge = this.components.managers.onlineStateBridge;
+          const rtt = onlineBridge.rtt || 0;
+          const halfRtt = rtt / 2;
+          
+          // Ajustar input com compensação de lag
+          onlineBridge.sendInput({
+            type: 'move',
+            x: movementCommand.x,
+            y: movementCommand.y,
+            bomb: bombCommand,
+            predictedTick: this.lastProcessedSnapshotTick + Math.ceil(halfRtt / 16.6667),
+          });
+        } else {
+          onlineBridge?.sendInput?.({
+            type: 'move',
+            x: movementCommand.x,
+            y: movementCommand.y,
+            bomb: bombCommand,
+          });
         }
-
-        onlineBridge?.sendInput?.({
-          type: 'move',
-          x: movementCommand.x,
-          y: movementCommand.y,
-          bomb: bombCommand,
-        });
 
         if (!window.__ONLINE_ENABLED__) {
           this.bombActionHandler.processInput();
@@ -218,10 +278,45 @@ export class GameLoop {
   _normalizePlayerId(playerId) {
     const raw = String(playerId || '').trim().toLowerCase();
     if (!raw) return '';
-    if (raw === 'p1' || raw === 'player1' || raw === '1') return 'player-1';
-    if (raw === 'p2' || raw === 'player2' || raw === '2') return 'player-2';
-    if (raw.startsWith('player-')) return raw;
-    return raw;
+    
+    if (this.playerIdCache.has(raw)) {
+      return this.playerIdCache.get(raw);
+    }
+    
+    let result;
+    if (raw === 'p1' || raw === 'player1' || raw === '1') {
+      result = 'player-1';
+    } else if (raw === 'p2' || raw === 'player2' || raw === '2') {
+      result = 'player-2';
+    } else if (raw.startsWith('player-')) {
+      result = raw;
+    } else {
+      result = raw;
+    }
+    
+    // Cache com LRU
+    if (this.playerIdCache.size >= this.playerIdCacheMaxSize) {
+      const firstKey = this.playerIdCache.keys().next().value;
+      this.playerIdCache.delete(firstKey);
+    }
+    this.playerIdCache.set(raw, result);
+    
+    return result;
+  }
+
+  _getPooledRemotePlayer() {
+    return this.remotePlayerPool.pop() || this._createRemotePlayerEntry();
+  }
+
+  _releaseRemotePlayer(remoteEntry) {
+    if (this.remotePlayerPool.length < this.maxPoolSize) {
+      const sprite = remoteEntry?.sprite || remoteEntry;
+      sprite.visible = false;
+      this.remotePlayerPool.push(remoteEntry);
+    } else {
+      const sprite = remoteEntry?.sprite || remoteEntry;
+      sprite?.parent?.removeChild(sprite);
+    }
   }
 
   _renderRemotePlayers(players = [], snapshotTick = null) {
@@ -242,12 +337,7 @@ export class GameLoop {
 
     for (const [playerId, remoteEntry] of Array.from(remotePlayers.entries())) {
       if (!otherPlayers.some((entry) => this._normalizePlayerId(entry?.playerId) === playerId)) {
-        try {
-          const sprite = remoteEntry?.sprite || remoteEntry;
-          sprite?.parent?.removeChild(sprite);
-        } catch (error) {
-          console.warn('[gameLoop] failed to remove remote sprite', error);
-        }
+        this._releaseRemotePlayer(remoteEntry);
         remotePlayers.delete(playerId);
       }
     }
@@ -256,10 +346,11 @@ export class GameLoop {
       const entryId = this._normalizePlayerId(entry?.playerId);
       let remoteEntry = remotePlayers.get(entryId);
       if (!remoteEntry) {
-        remoteEntry = this._createRemotePlayerEntry();
+        remoteEntry = this._getPooledRemotePlayer();
         const sprite = remoteEntry?.sprite || remoteEntry;
+        sprite.visible = true;
         this.components.gameContainer.addChild(sprite);
-        this.components.gameContainer.sortChildren();
+        this.needsSorting = true;
         remotePlayers.set(entryId, remoteEntry);
       }
 
@@ -284,6 +375,11 @@ export class GameLoop {
         remoteEntry.lastX = pixelX;
         remoteEntry.lastY = pixelY;
       }
+    }
+
+    if (this.needsSorting) {
+      this.components.gameContainer.sortChildren();
+      this.needsSorting = false;
     }
 
     this.components.remotePlayers = remotePlayers;
@@ -326,6 +422,56 @@ export class GameLoop {
     : null;
 
   if (!localEntry) return;
+
+  // Atualizar powerups do playerState local com dados do snapshot
+  if (localEntry.lives !== undefined) {
+    this.components.player.gameState.playerState.lives = localEntry.lives;
+  }
+  if (localEntry.maxBombs !== undefined) {
+    this.components.player.gameState.playerState.maxBombs = localEntry.maxBombs;
+  }
+  if (localEntry.explosionRange !== undefined) {
+    this.components.player.gameState.playerState.explosionRange = localEntry.explosionRange;
+  }
+  if (localEntry.speedPowerups !== undefined) {
+    this.components.player.gameState.playerState.speedPowerups = localEntry.speedPowerups;
+  }
+  if (localEntry.canPierceBlocks !== undefined) {
+    this.components.player.gameState.playerState.canPierceBlocks = localEntry.canPierceBlocks;
+  }
+  if (localEntry.hasKickBomb !== undefined) {
+    this.components.player.gameState.playerState.hasKickBomb = localEntry.hasKickBomb;
+  }
+  if (localEntry.hasThrowBomb !== undefined) {
+    this.components.player.gameState.playerState.hasThrowBomb = localEntry.hasThrowBomb;
+  }
+  if (localEntry.hasCrossBlock !== undefined) {
+    this.components.player.gameState.playerState.hasCrossBlock = localEntry.hasCrossBlock;
+  }
+  if (localEntry.hasCrossBomb !== undefined) {
+    this.components.player.gameState.playerState.hasCrossBomb = localEntry.hasCrossBomb;
+  }
+  if (localEntry.hasFollowerBomb !== undefined) {
+    this.components.player.gameState.playerState.hasFollowerBomb = localEntry.hasFollowerBomb;
+  }
+  if (localEntry.hasLandMine !== undefined) {
+    this.components.player.gameState.playerState.hasLandMine = localEntry.hasLandMine;
+  }
+
+  // Debug: logar powerups do snapshot
+  console.log('[DEBUG] Powerups from snapshot:', {
+    speedPowerups: localEntry.speedPowerups,
+    canPierceBlocks: localEntry.canPierceBlocks,
+    hasKickBomb: localEntry.hasKickBomb,
+    hasThrowBomb: localEntry.hasThrowBomb,
+    hasCrossBlock: localEntry.hasCrossBlock,
+    hasCrossBomb: localEntry.hasCrossBomb,
+    hasFollowerBomb: localEntry.hasFollowerBomb,
+    hasLandMine: localEntry.hasLandMine,
+  });
+
+  // Emitir evento de atualização de UI para powerups
+  this.components.managers.gameState.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.components.player.gameState.playerState });
 
   const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
 
@@ -468,27 +614,120 @@ export class GameLoop {
   }
 
   // =====================================
-  // Erro muito pequeno -> ignora totalmente
+  // Dead zone para evitar micro-correções
   // =====================================
-  if (errorDistance < 1) {
+  if (errorDistance < 0.5) {
     return;
   }
 
   // =====================================
-  // Parado -> corrige um pouco mais rápido
+  // Snap instantâneo quando parado e erro pequeno
+  // =====================================
+  if (!isMoving && errorDistance < 2) {
+    sprite.position.set(
+      this.localAuthorityTarget.x,
+      this.localAuthorityTarget.y
+    );
+    return;
+  }
+
+  // =====================================
+  // Erro pequeno -> corrige instantaneamente
+  // =====================================
+  if (errorDistance < 2) {
+    sprite.position.set(
+      this.localAuthorityTarget.x,
+      this.localAuthorityTarget.y
+    );
+    return;
+  }
+
+  // =====================================
+  // Parado -> corrige muito mais rápido
   // =====================================
   if (!isMoving) {
-    sprite.x += errX * 0.15;
-    sprite.y += errY * 0.15;
+    sprite.x += errX * 0.4;
+    sprite.y += errY * 0.4;
     return;
   }
 
   // =====================================
-  // Andando -> corrige bem suavemente
+  // Andando -> corrige mais rápido (interpolação linear)
   // =====================================
-  sprite.x += errX * 0.08;
-  sprite.y += errY * 0.08;
-}
+  const lerpFactor = 0.2;
+  sprite.x = sprite.x + (this.localAuthorityTarget.x - sprite.x) * lerpFactor;
+  sprite.y = sprite.y + (this.localAuthorityTarget.y - sprite.y) * lerpFactor;
+  }
+
+  _interpolateSnapshots(delta) {
+    if (this.snapshotBuffer.length < 2) return;
+    
+    const now = Date.now();
+    
+    // Adaptive interpolation delay baseado em RTT
+    const onlineBridge = this.components.managers.onlineStateBridge;
+    const rtt = onlineBridge.rtt || 100;
+    const adaptiveDelay = Math.max(50, Math.min(150, rtt * 0.8));
+    this.interpolationDelay = adaptiveDelay;
+    
+    const targetTime = now - this.interpolationDelay;
+    
+    // Encontrar snapshots que cercam o target time
+    let prev = null, next = null;
+    for (let i = 0; i < this.snapshotBuffer.length - 1; i++) {
+      if (this.snapshotBuffer[i].timestamp <= targetTime && 
+          this.snapshotBuffer[i + 1].timestamp > targetTime) {
+        prev = this.snapshotBuffer[i];
+        next = this.snapshotBuffer[i + 1];
+        break;
+      }
+    }
+    
+    if (!prev || !next) return;
+    
+    // Calcular fator de interpolação (0-1)
+    const range = next.timestamp - prev.timestamp;
+    const elapsed = targetTime - prev.timestamp;
+    const t = Math.max(0, Math.min(1, elapsed / range));
+    
+    // Interpolar posição do player local
+    const localId = this._normalizePlayerId(onlineBridge?.playerId);
+    
+    const prevPlayer = prev.snapshot.players?.find(p => 
+      this._normalizePlayerId(p.playerId) === localId
+    );
+    const nextPlayer = next.snapshot.players?.find(p => 
+      this._normalizePlayerId(p.playerId) === localId
+    );
+    
+    if (prevPlayer && nextPlayer) {
+      const interpX = prevPlayer.x + (nextPlayer.x - prevPlayer.x) * t;
+      const interpY = prevPlayer.y + (nextPlayer.y - prevPlayer.y) * t;
+      
+      // Extrapolation baseada em input atual
+      const input = this.components.managers.input?.getMovementCommand?.() || { x: 0, y: 0 };
+      
+      // Calcular velocidade baseada em input
+      if (input.x !== 0 || input.y !== 0) {
+        const timeSinceLastInput = now - this.lastInputTime;
+        if (timeSinceLastInput > 100) {
+          this.lastInput = input;
+          this.lastInputTime = now;
+        }
+      }
+      
+      // Extrapolar posição se estiver se movendo
+      if (this.lastInput.x !== 0 || this.lastInput.y !== 0) {
+        const speed = this.components.player?.speed || 2.6;
+        const extrapolationSeconds = this.extrapolationTime / 1000;
+        
+        interpX += this.lastInput.x * speed * extrapolationSeconds * 16.6667;
+        interpY += this.lastInput.y * speed * extrapolationSeconds * 16.6667;
+      }
+      
+      this.localAuthorityTarget = { x: interpX, y: interpY };
+    }
+  }
 
   _createRemotePlayerEntry() {
     const localPlayer = this.components.player;
@@ -617,7 +856,14 @@ export class GameLoop {
   _applyPlayerTint(sprite, playerId) {
     if (!sprite || typeof sprite !== 'object' || !('tint' in sprite)) return;
 
-    const normalized = String(playerId || '').trim().toLowerCase();
+    const normalized = this._normalizePlayerId(playerId);
+    
+    if (this.playerTintCache.has(normalized)) {
+      const tint = this.playerTintCache.get(normalized);
+      sprite.tint = tint;
+      return;
+    }
+    
     let tint = null;
 
     if (normalized.startsWith('player-')) {
@@ -633,6 +879,7 @@ export class GameLoop {
       tint = 0xffd166;
     }
 
+    this.playerTintCache.set(normalized, tint);
     sprite.tint = tint;
   }
 

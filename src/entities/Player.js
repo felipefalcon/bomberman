@@ -219,6 +219,17 @@ export class Player {
     if (Math.abs(this.sprite.y - centeredTile.y) < 1.1) {
       this.sprite.y = centeredTile.y;
     }
+
+    // Snap instantâneo para posição alvo se estiver online e parado
+    if (window.__ONLINE_ENABLED__ && this.gameState?.playerState?.localAuthorityTarget) {
+      const target = this.gameState.playerState.localAuthorityTarget;
+      const errX = target.x - this.sprite.x;
+      const errY = target.y - this.sprite.y;
+      if (Math.abs(errX) < 2 && Math.abs(errY) < 2) {
+        this.sprite.x = target.x;
+        this.sprite.y = target.y;
+      }
+    }
   }
 
   _tryMove(dx, dy, map, bombs, bombSystem = null) {
@@ -227,7 +238,7 @@ export class Player {
       // Moving horizontally - snap Y to tile center if close
       const centeredTileY = tileCenter(0, toTile(this.sprite.y, this.tileSize), this.tileSize).y;
       const distFromCenter = Math.abs(this.sprite.y - centeredTileY);
-      if (distFromCenter < 8) {
+      if (distFromCenter < 4) { // Reduzido de 8 para 4
         this.sprite.y = centeredTileY;
       }
     }
@@ -235,7 +246,7 @@ export class Player {
       // Moving vertically - snap X to tile center if close
       const centeredTileX = tileCenter(toTile(this.sprite.x, this.tileSize), 0, this.tileSize).x;
       const distFromCenter = Math.abs(this.sprite.x - centeredTileX);
-      if (distFromCenter < 8) {
+      if (distFromCenter < 4) { // Reduzido de 8 para 4
         this.sprite.x = centeredTileX;
       }
     }
