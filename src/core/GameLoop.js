@@ -28,6 +28,12 @@ export class GameLoop {
     this.localAuthorityTarget = null;
     this.lastProcessedSnapshotTick = null;
     this.lastProcessedSnapshotRef = null;
+    this.playerIdCache = new Map();
+    this.playerIdCacheMaxSize = 50;
+    this.remotePlayerPool = [];
+    this.maxPoolSize = 8;
+    this.needsSorting = false;
+    this.playerTintCache = new Map();
   }
 
   /**
@@ -218,10 +224,45 @@ export class GameLoop {
   _normalizePlayerId(playerId) {
     const raw = String(playerId || '').trim().toLowerCase();
     if (!raw) return '';
-    if (raw === 'p1' || raw === 'player1' || raw === '1') return 'player-1';
-    if (raw === 'p2' || raw === 'player2' || raw === '2') return 'player-2';
-    if (raw.startsWith('player-')) return raw;
-    return raw;
+    
+    if (this.playerIdCache.has(raw)) {
+      return this.playerIdCache.get(raw);
+    }
+    
+    let result;
+    if (raw === 'p1' || raw === 'player1' || raw === '1') {
+      result = 'player-1';
+    } else if (raw === 'p2' || raw === 'player2' || raw === '2') {
+      result = 'player-2';
+    } else if (raw.startsWith('player-')) {
+      result = raw;
+    } else {
+      result = raw;
+    }
+    
+    // Cache com LRU
+    if (this.playerIdCache.size >= this.playerIdCacheMaxSize) {
+      const firstKey = this.playerIdCache.keys().next().value;
+      this.playerIdCache.delete(firstKey);
+    }
+    this.playerIdCache.set(raw, result);
+    
+    return result;
+  }
+
+  _getPooledRemotePlayer() {
+    return this.remotePlayerPool.pop() || this._createRemotePlayerEntry();
+  }
+
+  _releaseRemotePlayer(remoteEntry) {
+    if (this.remotePlayerPool.length < this.maxPoolSize) {
+      const sprite = remoteEntry?.sprite || remoteEntry;
+      sprite.visible = false;
+      this.remotePlayerPool.push(remoteEntry);
+    } else {
+      const sprite = remoteEntry?.sprite || remoteEntry;
+      sprite?.parent?.removeChild(sprite);
+    }
   }
 
   _renderRemotePlayers(players = [], snapshotTick = null) {
@@ -242,12 +283,7 @@ export class GameLoop {
 
     for (const [playerId, remoteEntry] of Array.from(remotePlayers.entries())) {
       if (!otherPlayers.some((entry) => this._normalizePlayerId(entry?.playerId) === playerId)) {
-        try {
-          const sprite = remoteEntry?.sprite || remoteEntry;
-          sprite?.parent?.removeChild(sprite);
-        } catch (error) {
-          console.warn('[gameLoop] failed to remove remote sprite', error);
-        }
+        this._releaseRemotePlayer(remoteEntry);
         remotePlayers.delete(playerId);
       }
     }
@@ -256,10 +292,11 @@ export class GameLoop {
       const entryId = this._normalizePlayerId(entry?.playerId);
       let remoteEntry = remotePlayers.get(entryId);
       if (!remoteEntry) {
-        remoteEntry = this._createRemotePlayerEntry();
+        remoteEntry = this._getPooledRemotePlayer();
         const sprite = remoteEntry?.sprite || remoteEntry;
+        sprite.visible = true;
         this.components.gameContainer.addChild(sprite);
-        this.components.gameContainer.sortChildren();
+        this.needsSorting = true;
         remotePlayers.set(entryId, remoteEntry);
       }
 
@@ -284,6 +321,11 @@ export class GameLoop {
         remoteEntry.lastX = pixelX;
         remoteEntry.lastY = pixelY;
       }
+    }
+
+    if (this.needsSorting) {
+      this.components.gameContainer.sortChildren();
+      this.needsSorting = false;
     }
 
     this.components.remotePlayers = remotePlayers;
@@ -326,6 +368,11 @@ export class GameLoop {
     : null;
 
   if (!localEntry) return;
+
+  // Invalidate player state cache when syncing from snapshot
+  if (this.components.player.invalidateStateCache) {
+    this.components.player.invalidateStateCache();
+  }
 
   const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
 
@@ -617,7 +664,14 @@ export class GameLoop {
   _applyPlayerTint(sprite, playerId) {
     if (!sprite || typeof sprite !== 'object' || !('tint' in sprite)) return;
 
-    const normalized = String(playerId || '').trim().toLowerCase();
+    const normalized = this._normalizePlayerId(playerId);
+    
+    if (this.playerTintCache.has(normalized)) {
+      const tint = this.playerTintCache.get(normalized);
+      sprite.tint = tint;
+      return;
+    }
+    
     let tint = null;
 
     if (normalized.startsWith('player-')) {
@@ -633,6 +687,7 @@ export class GameLoop {
       tint = 0xffd166;
     }
 
+    this.playerTintCache.set(normalized, tint);
     sprite.tint = tint;
   }
 

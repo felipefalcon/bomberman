@@ -16,6 +16,11 @@ export class OnlineStateBridge {
     this.onRoomState = null;
     this.clientInputTick = 0;
     this.clientInputSeq = 0;
+    this.lastSnapshotTick = null;
+    this.lastAckedTick = 0;
+    this.unackedInputs = new Map();
+    this.reconnectAttempts = 0;
+    this.maxReconnectDelay = 30000; // 30s max
   }
 
   connect(roomId = 'room', playerId = null) {
@@ -24,7 +29,8 @@ export class OnlineStateBridge {
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
-    const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    let isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    isLocalServer = false;
 
     const socketUrl = isLocalServer
       ? 'http://localhost:3001'
@@ -34,8 +40,12 @@ export class OnlineStateBridge {
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 2000,
+      reconnectionDelay: (attemptNumber) => {
+        this.reconnectAttempts = attemptNumber;
+        const delay = Math.min(1000 * Math.pow(2, attemptNumber), this.maxReconnectDelay);
+        return delay + Math.random() * 500; // Add jitter
+      },
+      reconnectionDelayMax: this.maxReconnectDelay,
       timeout: 2000,
     });
 
@@ -51,6 +61,12 @@ export class OnlineStateBridge {
     this.socket.on('room-state', (roomState) => {
       this.roomState = roomState;
       this.onRoomState?.(roomState);
+    });
+
+    this.socket.on('input-ack', (ack) => {
+      if (ack.tick === this.clientInputTick) {
+        this.lastAckedTick = ack.tick;
+      }
     });
 
     this.socket.on('snapshot', (snapshot) => {

@@ -7,6 +7,8 @@ export class EntityManager {
     this.entities = new Map();
     this.entitiesByType = new Map();
     this.nextId = 1;
+    this._cachedArrays = new Map();
+    this._cacheVersion = 0;
   }
 
   /**
@@ -24,6 +26,7 @@ export class EntityManager {
     }
     this.entitiesByType.get(type).add(id);
     
+    this.invalidateCache();
     return id;
   }
 
@@ -39,6 +42,7 @@ export class EntityManager {
     this.entities.delete(id);
     this.entitiesByType.get(data.type)?.delete(id);
     
+    this.invalidateCache();
     return data.entity;
   }
 
@@ -58,8 +62,16 @@ export class EntityManager {
    * @returns {Array} Array of entities
    */
   getByType(type) {
+    const cacheKey = `type:${type}:${this._cacheVersion}`;
+    if (this._cachedArrays.has(cacheKey)) {
+      return this._cachedArrays.get(cacheKey);
+    }
+    
     const ids = this.entitiesByType.get(type);
-    if (!ids) return [];
+    if (!ids) {
+      this._cachedArrays.set(cacheKey, []);
+      return [];
+    }
     
     const entities = [];
     for (const id of ids) {
@@ -69,6 +81,7 @@ export class EntityManager {
       }
     }
     
+    this._cachedArrays.set(cacheKey, entities);
     return entities;
   }
 
@@ -77,7 +90,14 @@ export class EntityManager {
    * @returns {Array} Array of all entities
    */
   getAll() {
-    return Array.from(this.entities.values()).map(data => data.entity);
+    const cacheKey = `all:${this._cacheVersion}`;
+    if (this._cachedArrays.has(cacheKey)) {
+      return this._cachedArrays.get(cacheKey);
+    }
+    
+    const entities = Array.from(this.entities.values()).map(data => data.entity);
+    this._cachedArrays.set(cacheKey, entities);
+    return entities;
   }
 
   /**
@@ -87,6 +107,12 @@ export class EntityManager {
     this.entities.clear();
     this.entitiesByType.clear();
     this.nextId = 1;
+    this.invalidateCache();
+  }
+
+  invalidateCache() {
+    this._cacheVersion++;
+    this._cachedArrays.clear();
   }
 
   /**
