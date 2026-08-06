@@ -107,6 +107,10 @@ export class Player {
     return (this.componentManager.hasComponent('land_mine') || this.gameState?.playerState?.hasLandMine) ?? false;
   }
 
+  get damageBlinkTicks() {
+    return this.gameState?.playerState?.damageBlinkTicks ?? 0;
+  }
+
   setPlayerIdentity(playerId) {
     this.playerId = playerId;
     this._applyPlayerTint();
@@ -150,7 +154,8 @@ export class Player {
   }
 
   takeDamage() {
-    if (this.lives <= 0 || this.isBlinking) return false;
+    const damageBlinkTicks = this.gameState?.playerState?.damageBlinkTicks ?? 0;
+    if (this.lives <= 0 || damageBlinkTicks > 0) return false;
     // Update GameState instead of local state
     if (this.gameState) {
       this.gameState.playerState.lives -= 1;
@@ -162,10 +167,27 @@ export class Player {
   startBlink() {
     this.isBlinking = true;
     this.blinkTimer = 0;
+    // Set damageBlinkTicks in gameState for online sync
+    if (this.gameState) {
+      this.gameState.playerState.damageBlinkTicks = this.blinkDuration;
+    }
   }
 
   update(delta, keys, map, bombs = [], bombSystem = null, skipLocalPositionIntegration = false) {
     // Handle blink effect when taking damage
+    const damageBlinkTicks = this.gameState?.playerState?.damageBlinkTicks ?? 0;
+    
+    // Start blinking if damageBlinkTicks is set and not already blinking
+    if (damageBlinkTicks > 0 && !this.isBlinking) {
+      this.startBlink();
+    }
+    
+    // Stop blinking if damageBlinkTicks is 0
+    if (damageBlinkTicks <= 0 && this.isBlinking) {
+      this.isBlinking = false;
+      this.sprite.alpha = 1;
+    }
+    
     if (this.isBlinking) {
       this.blinkTimer += delta;
       
@@ -177,6 +199,11 @@ export class Player {
       if (this.blinkTimer >= this.blinkDuration) {
         this.isBlinking = false;
         this.sprite.alpha = 1;
+      }
+      
+      // Decrement damageBlinkTicks in gameState for online sync (only in local mode)
+      if (this.gameState && !window.__ONLINE_ENABLED__) {
+        this.gameState.playerState.damageBlinkTicks = Math.max(0, damageBlinkTicks - delta);
       }
     }
     

@@ -457,18 +457,9 @@ export class GameLoop {
   if (localEntry.hasLandMine !== undefined) {
     this.components.player.gameState.playerState.hasLandMine = localEntry.hasLandMine;
   }
-
-  // Debug: logar powerups do snapshot
-  console.log('[DEBUG] Powerups from snapshot:', {
-    speedPowerups: localEntry.speedPowerups,
-    canPierceBlocks: localEntry.canPierceBlocks,
-    hasKickBomb: localEntry.hasKickBomb,
-    hasThrowBomb: localEntry.hasThrowBomb,
-    hasCrossBlock: localEntry.hasCrossBlock,
-    hasCrossBomb: localEntry.hasCrossBomb,
-    hasFollowerBomb: localEntry.hasFollowerBomb,
-    hasLandMine: localEntry.hasLandMine,
-  });
+  if (localEntry.damageBlinkTicks !== undefined) {
+    this.components.player.gameState.playerState.damageBlinkTicks = localEntry.damageBlinkTicks;
+  }
 
   // Emitir evento de atualização de UI para powerups
   this.components.managers.gameState.eventBus.emit(GameEvents.UI_UPDATE_POWERUPS, { player: this.components.player.gameState.playerState });
