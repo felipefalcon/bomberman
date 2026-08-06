@@ -34,25 +34,29 @@ export class OnlineStateBridge {
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
-    let isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    isLocalServer = true;
+    const isLocalServer =
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1';
 
-    const socketUrl = isLocalServer
-      ? 'http://localhost:3001'
-      : (import.meta.env.VITE_SOCKET_URL || 'https://bomberman-k61t.onrender.com').trim();
+  const socketUrl = isLocalServer
+    ? 'http://localhost:3001'
+    : undefined;
 
-    this.socket = io(socketUrl, {
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: (attemptNumber) => {
-        this.reconnectAttempts = attemptNumber;
-        const delay = Math.min(1000 * Math.pow(2, attemptNumber), this.maxReconnectDelay);
-        return delay + Math.random() * 500; // Add jitter
-      },
-      reconnectionDelayMax: this.maxReconnectDelay,
-      timeout: 2000,
-    });
+  this.socket = io(socketUrl, {
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: (attemptNumber) => {
+      this.reconnectAttempts = attemptNumber;
+      const delay = Math.min(
+        1000 * Math.pow(2, attemptNumber),
+        this.maxReconnectDelay
+      );
+      return delay + Math.random() * 500;
+    },
+    reconnectionDelayMax: this.maxReconnectDelay,
+    timeout: 2000,
+  });
 
     this.socket.on('connect', () => {
       this.connected = true;
