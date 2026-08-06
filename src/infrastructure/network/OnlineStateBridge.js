@@ -24,7 +24,7 @@ export class OnlineStateBridge {
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
     this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
-    const isLocalServer = false; // Set to true if you want to connect to a local server for testing
+    const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
     const socketUrl = isLocalServer
       ? 'http://localhost:3001'
