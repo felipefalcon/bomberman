@@ -35,9 +35,9 @@ export class RoomManager {
     this.wallTiles = new Set();
     this.spawnPositions = new Map([
       ['player-1', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
-      ['player-2', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
-      ['player-3', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
-      ['player-4', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
+      ['player-4', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
+      ['player-2', { x: this.tileSize * (this.mapCols - 2) + this.tileSize / 2, y: this.tileSize * 1 + this.tileSize / 2 }],
+      ['player-3', { x: this.tileSize * 1 + this.tileSize / 2, y: this.tileSize * (this.mapRows - 2) + this.tileSize / 2 }],
     ]);
     this.tileRandomCache = new Map();
     this.metrics = {
