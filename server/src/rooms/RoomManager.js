@@ -358,9 +358,11 @@ export class RoomManager {
               seenPlayerIds.add(player.playerId);
               const inputX = Number(player.input?.x || 0);
               const inputY = Number(player.input?.y || 0);
+              // Não re-normalizar IDs válidos - usar o playerId já armazenado
+              const normalizedPlayerId = this.normalizePlayerId(player.playerId, 0);
               uniquePlayers[playerCount] = {
                 id: player.id,
-                playerId: this.normalizePlayerId(player.playerId, playerCount),
+                playerId: normalizedPlayerId,
                 x: Math.round(player.x),
                 y: Math.round(player.y),
                 lives: player.lives,
@@ -412,9 +414,11 @@ export class RoomManager {
           seenPlayerIds.add(player.playerId);
           const inputX = Number(player.input?.x || 0);
           const inputY = Number(player.input?.y || 0);
+          // Não re-normalizar IDs válidos - usar o playerId já armazenado
+          const normalizedPlayerId = this.normalizePlayerId(player.playerId, 0);
           result.push({
             id: player.id,
-            playerId: this.normalizePlayerId(player.playerId, result.length),
+            playerId: normalizedPlayerId,
             x: Math.round(player.x),
             y: Math.round(player.y),
             lives: player.lives,
@@ -613,9 +617,15 @@ export class RoomManager {
         result = 'player-1';
       } else if (lowered === 'p2' || lowered === 'player2' || lowered === '2') {
         result = 'player-2';
+      } else if (lowered === 'p3' || lowered === 'player3' || lowered === '3') {
+        result = 'player-3';
+      } else if (lowered === 'p4' || lowered === 'player4' || lowered === '4') {
+        result = 'player-4';
       } else if (lowered.startsWith('player-')) {
+        // Já é um ID válido no formato player-X, não re-normalizar
         result = lowered;
       } else {
+        // IDs não reconhecidos são retornados como-is
         result = raw;
       }
     }

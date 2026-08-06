@@ -287,6 +287,10 @@ export class GameLoop {
       result = 'player-1';
     } else if (raw === 'p2' || raw === 'player2' || raw === '2') {
       result = 'player-2';
+    } else if (raw === 'p3' || raw === 'player3' || raw === '3') {
+      result = 'player-3';
+    } else if (raw === 'p4' || raw === 'player4' || raw === '4') {
+      result = 'player-4';
     } else if (raw.startsWith('player-')) {
       result = raw;
     } else {
