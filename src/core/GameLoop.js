@@ -34,7 +34,6 @@ export class GameLoop {
     this.remotePlayerPool = [];
     this.maxPoolSize = 8;
     this.needsSorting = false;
-    this.playerTintCache = new Map();
     this.deltaBuffer = [];
     this.deltaBufferSize = 3;
     this.lastDelta = 1.0;
@@ -312,6 +311,8 @@ export class GameLoop {
     if (this.remotePlayerPool.length < this.maxPoolSize) {
       const sprite = remoteEntry?.sprite || remoteEntry;
       sprite.visible = false;
+      // Reset player number when returning to pool
+      remoteEntry.playerNumber = 1;
       this.remotePlayerPool.push(remoteEntry);
     } else {
       const sprite = remoteEntry?.sprite || remoteEntry;
@@ -355,7 +356,7 @@ export class GameLoop {
       }
 
       const remoteSprite = remoteEntry?.sprite || remoteEntry;
-      this._applyPlayerTint(remoteSprite, entry?.playerId);
+      this._updateRemotePlayerSprites(remoteEntry, entry?.playerId);
 
       const tileSize = this.components.tileSize || GAME_CONFIG.TILE_SIZE;
       const pixelX = Number.isFinite(entry?.x) ? entry.x : Number.isFinite(entry?.tx) ? entry.tx * tileSize + tileSize / 2 : tileSize * 1.5;
@@ -722,10 +723,14 @@ export class GameLoop {
 
   _createRemotePlayerEntry() {
     const localPlayer = this.components.player;
-    const textures = localPlayer?.textures;
-    const mapping = localPlayer?.mapping;
+    const playerTextures = localPlayer?.textures;
+    const playerMapping = localPlayer?.mapping;
 
-    if (Array.isArray(textures) && textures.length > 0 && mapping) {
+    // Default to player 1 sprites
+    const textures = playerTextures?.[1];
+    const mapping = playerMapping?.[1];
+
+    if (textures && mapping) {
       const idleDownIndices = mapping.idleDown || [0];
       const idleFrames = idleDownIndices
         .map((index) => textures[index])
@@ -750,6 +755,7 @@ export class GameLoop {
         renderY: null,
         facing: 'down',
         animationKey: 'idleDown',
+        playerNumber: 1,
       };
     }
 
@@ -775,6 +781,7 @@ export class GameLoop {
       renderY: null,
       facing: 'down',
       animationKey: 'fallback',
+      playerNumber: 1,
     };
   }
 
@@ -785,9 +792,15 @@ export class GameLoop {
     if (!(sprite instanceof PIXI.AnimatedSprite)) return;
 
     const localPlayer = this.components.player;
-    const textures = localPlayer?.textures;
-    const mapping = localPlayer?.mapping;
-    if (!Array.isArray(textures) || textures.length === 0 || !mapping) return;
+    const playerTextures = localPlayer?.textures;
+    const playerMapping = localPlayer?.mapping;
+    if (!playerTextures || !playerMapping) return;
+
+    // Get the textures and mapping for this specific remote player
+    const playerNumber = remoteEntry.playerNumber || 1;
+    const textures = playerTextures[playerNumber];
+    const mapping = playerMapping[playerNumber];
+    if (!textures || !mapping) return;
 
     const lastX = Number.isFinite(remoteEntry.lastX) ? remoteEntry.lastX : pixelX;
     const lastY = Number.isFinite(remoteEntry.lastY) ? remoteEntry.lastY : pixelY;
@@ -844,34 +857,53 @@ export class GameLoop {
     sprite.alpha = 0.95;
   }
 
-  _applyPlayerTint(sprite, playerId) {
-    if (!sprite || typeof sprite !== 'object' || !('tint' in sprite)) return;
+  _updateRemotePlayerSprites(remoteEntry, playerId) {
+    if (!remoteEntry || !playerId) return;
 
-    const normalized = this._normalizePlayerId(playerId);
-    
-    if (this.playerTintCache.has(normalized)) {
-      const tint = this.playerTintCache.get(normalized);
-      sprite.tint = tint;
-      return;
+    const sprite = remoteEntry?.sprite;
+    if (!sprite) return;
+
+    const playerNumber = this._resolvePlayerNumber(playerId);
+    const localPlayer = this.components.player;
+    const playerTextures = localPlayer?.textures;
+    const playerMapping = localPlayer?.mapping;
+
+    if (!playerTextures || !playerMapping) return;
+
+    // Check if we need to update the sprites
+    if (remoteEntry.playerNumber === playerNumber) return;
+
+    remoteEntry.playerNumber = playerNumber;
+
+    // Update the sprite textures if we have sprites for this player
+    if (playerTextures[playerNumber] && playerMapping[playerNumber]) {
+      const textures = playerTextures[playerNumber];
+      const mapping = playerMapping[playerNumber];
+
+      if (sprite instanceof PIXI.AnimatedSprite) {
+        const idleDownIndices = mapping.idleDown || [0];
+        const idleFrames = idleDownIndices
+          .map((index) => textures[index])
+          .filter(Boolean);
+        sprite.textures = idleFrames.length > 0 ? idleFrames : [textures[0]];
+        remoteEntry.animationKey = 'idleDown';
+      }
     }
-    
-    let tint = null;
+  }
+
+  _resolvePlayerNumber(playerId) {
+    if (!playerId) return 1;
+    const normalized = this._normalizePlayerId(playerId);
 
     if (normalized.startsWith('player-')) {
-      const number = Number(normalized.split('-').pop());
-      if (number === 2) tint = 0xff6666;
-      else if (number === 3) tint = 0x66ff66;
-      else if (number === 4) tint = 0xffd166;
-    } else if (normalized === 'p2' || normalized === 'player2' || normalized === '2') {
-      tint = 0xff6666;
-    } else if (normalized === 'p3' || normalized === 'player3' || normalized === '3') {
-      tint = 0x66ff66;
-    } else if (normalized === 'p4' || normalized === 'player4' || normalized === '4') {
-      tint = 0xffd166;
+      const parsed = Number(normalized.split('-').pop());
+      return Number.isFinite(parsed) ? parsed : 1;
     }
-
-    this.playerTintCache.set(normalized, tint);
-    sprite.tint = tint;
+    if (normalized === 'p1' || normalized === 'player1' || normalized === '1') return 1;
+    if (normalized === 'p2' || normalized === 'player2' || normalized === '2') return 2;
+    if (normalized === 'p3' || normalized === 'player3' || normalized === '3') return 3;
+    if (normalized === 'p4' || normalized === 'player4' || normalized === '4') return 4;
+    return 1;
   }
 
   _toPingPongFrames(frames) {

@@ -1,6 +1,3 @@
-// Player spritesheet loader temporarily disabled.
-// Keep this file minimal and syntactically safe so Vite import analysis won't fail.
-
 import {
   applyTopLeftColorKeyTransparency,
   drawImageToCanvas,
@@ -8,8 +5,18 @@ import {
   sliceTextureGrid,
 } from './spritesheetLoader.js';
 
+// Get the spritesheet URL for a specific player number
+export function getPlayerSpritesheetUrl(playerNumber = 1, baseUrl = `${import.meta.env.BASE_URL}assets/`) {
+  const normalizedPlayerNumber = Math.max(1, Math.min(4, playerNumber));
+  if (normalizedPlayerNumber === 1) {
+    return `${baseUrl}player-spritesheet.png`;
+  }
+  return `${baseUrl}player${normalizedPlayerNumber}-spritesheet.png`;
+}
+
 // Load spritesheet from public path (e.g. /assets/player-spritesheet.png),
 // slice it into tileSize grid, detect non-empty tiles and return frames + mapping.
+// Supports loading different player spritesheets: player-spritesheet.png, player2-spritesheet.png, etc.
 export async function loadPlayerSprites(url = `${import.meta.env.BASE_URL}assets/player-spritesheet.png`, tileSize = 32) {
   const img = await loadImage(url);
   const { canvas, ctx } = drawImageToCanvas(img);
