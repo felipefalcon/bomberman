@@ -1,9 +1,8 @@
 import * as PIXI from 'pixi.js';
-import { GameInitializer } from './core/GameInitializer.js';
-import { GameLoop } from './core/GameLoop.js';
-import { EntityManager } from './core/EntityManager.js';
-import { GameEvents } from './engine/EventBus.js';
-import { GAME_CONFIG } from './config/Constants.js';
+import { GameInitializer } from './GameInitializer.js';
+import { GameLoop } from './GameLoop.js';
+import { GameEvents } from '../infrastructure/events/EventBus.js';
+import { GAME_CONFIG } from '../config/Constants.js';
 
 /**
  * Game - Main game class
@@ -17,7 +16,6 @@ export class Game {
     // Modular components
     this.initializer = null;
     this.gameLoop = null;
-    this.entityManager = null;
     
     // Game components (set by initializer)
     this.components = null;
@@ -57,14 +55,6 @@ export class Game {
     // Initialize game components
     this.initializer = new GameInitializer(this.app);
     this.components = await this.initializer.initialize();
-    
-    // Initialize entity manager
-    this.entityManager = new EntityManager();
-    
-    // Register main entities
-    if (this.components.player) {
-      this.entityManager.add(this.components.player, 'player');
-    }
     
     // Initialize game loop
     this.gameLoop = new GameLoop(this.components);
@@ -338,22 +328,6 @@ export class Game {
     }
 
     this.initializer?.destroy?.();
-  }
-
-  /**
-   * Get the entity manager
-   * @returns {EntityManager}
-   */
-  getEntityManager() {
-    return this.entityManager;
-  }
-
-  /**
-   * Get game components
-   * @returns {Object}
-   */
-  getComponents() {
-    return this.components;
   }
 }
 

@@ -1,4 +1,4 @@
-import { GameEvents, globalEventBus } from '../../engine/EventBus.js';
+import { GameEvents, globalEventBus } from './EventBus.js';
 
 export { globalEventBus, GameEvents };
 

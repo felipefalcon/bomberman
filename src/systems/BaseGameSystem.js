@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from '../config/Constants.js';
-import { globalEventBus } from '../engine/EventBus.js';
+import { globalEventBus } from '../infrastructure/events/EventBus.js';
 
 export class BaseGameSystem {
   constructor(eventBus = globalEventBus, map = null, gameContainer = null) {
@@ -9,15 +9,7 @@ export class BaseGameSystem {
     this.tileSize = GAME_CONFIG.TILE_SIZE;
   }
 
-  setMap(map) {
-    this.map = map;
-  }
-
-  setGameContainer(container) {
-    this.gameContainer = container;
-  }
-
-  setAssets() {
+  setAssets(frames, mapping) {
     // Optional for subclasses
   }
 

@@ -1,5 +1,5 @@
-import { GAME_CONFIG } from '../../config/Constants.js';
-import { isSpriteOnTile } from '../../utils/tileUtils.js';
+import { GAME_CONFIG } from '../config/Constants.js';
+import { isSpriteOnTile } from '../utils/tileUtils.js';
 
 export class BombFactory {
   static createBomb({ tx, ty, player, enemies, tileSize, bombFuseTicks, createBombSprite, findNearestEnemy }) {

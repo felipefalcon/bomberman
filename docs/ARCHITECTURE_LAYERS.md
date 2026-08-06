@@ -33,7 +33,7 @@ This project now uses an incremental layered architecture. The structure is desi
 
 The temporary migration shims were removed after the layered structure stabilized.
 
-- Use direct imports from `domain/` and `presentation/` modules.
+- Use direct imports from `game/` and `presentation/` modules.
 - Prefer `application/` handlers over legacy core paths.
 
 This keeps ownership boundaries explicit and reduces indirection.

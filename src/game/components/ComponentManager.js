@@ -1,4 +1,4 @@
-import { POWERUP_TYPES } from '../config/Constants.js';
+import { POWERUP_TYPES } from '../../config/Constants.js';
 import {
   SpeedComponent,
   BombComponent,
@@ -37,55 +37,12 @@ export class ComponentManager {
   }
 
   /**
-   * Remove a component by type
-   * @param {string} type - Powerup type from POWERUP_TYPES
-   * @param {Object} player - Player entity
-   * @param {Object} gameState - GameState instance
-   */
-  removeComponent(type, player, gameState) {
-    const component = this.components.get(type);
-    if (component) {
-      component.remove(player, gameState);
-      this.components.delete(type);
-    }
-  }
-
-  /**
    * Check if a component exists
    * @param {string} type - Powerup type from POWERUP_TYPES
    * @returns {boolean}
    */
   hasComponent(type) {
     return this.components.has(type);
-  }
-
-  /**
-   * Get a component by type
-   * @param {string} type - Powerup type from POWERUP_TYPES
-   * @returns {PowerupComponent|null}
-   */
-  getComponent(type) {
-    return this.components.get(type) || null;
-  }
-
-  /**
-   * Get all components
-   * @returns {Map}
-   */
-  getAllComponents() {
-    return this.components;
-  }
-
-  /**
-   * Clear all components
-   * @param {Object} player - Player entity
-   * @param {Object} gameState - GameState instance
-   */
-  clear(player, gameState) {
-    for (const [type, component] of this.components) {
-      component.remove(player, gameState);
-    }
-    this.components.clear();
   }
 
   /**

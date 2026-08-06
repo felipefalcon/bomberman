@@ -24,20 +24,4 @@ export class PowerupComponent {
   remove(player, gameState) {
     // Override in subclasses
   }
-
-  /**
-   * Check if component is enabled
-   * @returns {boolean}
-   */
-  isEnabled() {
-    return this.enabled;
-  }
-
-  /**
-   * Enable or disable the component
-   * @param {boolean} enabled
-   */
-  setEnabled(enabled) {
-    this.enabled = enabled;
-  }
 }

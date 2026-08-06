@@ -4,9 +4,9 @@ import {
   BombActionHandler,
   BombLifecycleHandler,
   DestroyingBlockAnimator,
-} from '../application/index.js';
+} from '../game/handlers/index.js';
 import { RuntimeMetricsCollector } from '../infrastructure/index.js';
-import { GameEvents } from '../engine/EventBus.js';
+import { GameEvents } from '../infrastructure/events/EventBus.js';
 
 /**
  * GameLoop - Manages the main game update loop

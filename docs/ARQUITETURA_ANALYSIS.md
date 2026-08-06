@@ -11,12 +11,22 @@
 ```
 src/
 ├── config/          # Configurações centralizadas
-├── engine/          # Infraestrutura base (EventBus, Scene, AssetManager)
+├── core/            # Núcleo do jogo (Game, GameInitializer, GameLoop)
 ├── entities/        # Entidades do jogo (Player, Monster, Powerup)
+├── game/            # Lógica de jogo (handlers, components)
+│   ├── handlers/    # Manipuladores de lógica de jogo
+│   └── components/  # Sistema de componentes para powerups
+├── infrastructure/  # Infraestrutura técnica
+│   ├── events/      # Sistema de eventos
+│   ├── network/     # Comunicação online
+│   └── observability/ # Métricas e monitoramento
 ├── loaders/         # Carregamento de assets
 ├── managers/        # Gerenciadores (Audio, GameState, HUD, Input)
 ├── map/             # Mapa e tiles
-├── systems/         # Sistemas de jogo (Bomb, Explosion, Collision, etc.)
+├── presentation/    # Renderização e apresentação
+│   └── renderers/   # Renderers específicos
+├── systems/         # Sistemas de jogo (Bomb, Explosion, Powerup, Monster)
+└── utils/           # Utilitários reutilizáveis
 └── utils/           # Utilitários
 ```
 
@@ -63,7 +73,7 @@ this.explosionSystem.setScene({ getContainer: () => this.gameContainer, map: thi
 
 #### 3. Duplicação de Código
 - Lógica de bombas em `Game.js` (métodos legacy) e `BombSystem.js`
-- Collision detection em `Player.js` e `CollisionSystem.js`
+- Collision detection em `Player.js`
 - Métodos legacy em Game.js: `_updateBombs`, `_spawnMonsters`, `_updateExplosions`
 
 #### 4. Estado Duplicado
@@ -94,15 +104,10 @@ class VelocityComponent { vx, vy }
 class HealthComponent { lives, maxLives }
 class BombComponent { maxBombs, activeBombs, range }
 
-// Sistemas puros que operam em componentes
-class MovementSystem {
-  update(entities, delta) {
-    entities.forEach(entity => {
-      const pos = entity.getComponent(PositionComponent);
-      const vel = entity.getComponent(VelocityComponent);
-      // Lógica de movimento
-    });
-  }
+// Component manager simplificado
+class ComponentManager {
+  addComponent(type, player, gameState) { /* ... */ }
+  hasComponent(type) { /* ... */ }
 }
 ```
 
@@ -132,7 +137,6 @@ constructor(container, map, collisionSystem) {
 src/core/
 ├── GameInitializer.js    # Setup inicial
 ├── GameLoop.js           # Loop principal
-├── EntityManager.js      # Gerenciamento de entidades
 └── SystemCoordinator.js  # Orquestração de sistemas
 ```
 
@@ -176,14 +180,6 @@ this.components = {
   - Nomes descritivos
   - Valores centralizados
 - **Localização**: `src/config/Constants.js`
-
-#### AssetManager
-- Gerenciamento de assets com:
-  - Progress tracking
-  - Error handling
-  - Event emission
-  - Fallback para placeholders
-- **Localização**: `src/engine/AssetManager.js`
 
 #### InputManager
 - Abstração limpa de input:
@@ -247,7 +243,6 @@ this.components = {
 #### 6. Quebrar Game.js em Módulos
 - [ ] Criar GameInitializer
 - [ ] Criar GameLoop
-- [ ] Criar EntityManager
 - [ ] Criar SystemCoordinator
 - **Impacto**: Melhora manutenibilidade
 
@@ -337,7 +332,7 @@ this.components = {
 
 A arquitetura atual do projeto Bomberman demonstra **boas práticas fundamentais** com separação clara de responsabilidades, sistema de eventos robusto e configuração centralizada. No entanto, sofre de **problemas de escalabilidade** devido ao `Game.js` funcionar como God Object, estado duplicado entre entidades e gerenciadores, e acoplamento alto via injeção manual de dependências.
 
-**Principais pontos fortes**: EventBus, Constants.js, AssetManager, InputManager, e organização modular de sistemas.
+**Principais pontos fortes**: EventBus, Constants.js, InputManager, e organização modular de sistemas.
 
 **Principais pontos fracos**: Game.js monolítico (567 linhas), duplicação de lógica de bombas/collision, estado duplicado do player, e falta de ECS completo.
 
