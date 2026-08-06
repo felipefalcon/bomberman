@@ -34,6 +34,9 @@ export class GameLoop {
     this.maxPoolSize = 8;
     this.needsSorting = false;
     this.playerTintCache = new Map();
+    this.deltaBuffer = [];
+    this.deltaBufferSize = 3;
+    this.lastDelta = 1.0;
   }
 
   /**
@@ -79,7 +82,24 @@ export class GameLoop {
       this.lastFrameTime = timestamp;
     }
 
-    const delta = Math.min(4, (timestamp - this.lastFrameTime) / 16.6667);
+    const frameTime = timestamp - this.lastFrameTime;
+    
+    // Delta time suave com buffer
+    this.deltaBuffer.push(frameTime);
+    if (this.deltaBuffer.length > this.deltaBufferSize) {
+      this.deltaBuffer.shift();
+    }
+
+    const avgFrameTime = this.deltaBuffer.reduce((a, b) => a + b, 0) / this.deltaBuffer.length;
+    let delta = avgFrameTime / 16.6667;
+
+    // Clamp mais agressivo para evitar picos
+    delta = Math.max(0.5, Math.min(2.0, delta));
+
+    // Suavização com lastDelta
+    delta = delta * 0.7 + this.lastDelta * 0.3;
+    this.lastDelta = delta;
+    
     this.lastFrameTime = timestamp;
 
     this.boundUpdate(delta);
@@ -515,26 +535,49 @@ export class GameLoop {
   }
 
   // =====================================
-  // Erro muito pequeno -> ignora totalmente
+  // Dead zone para evitar micro-correções
   // =====================================
-  if (errorDistance < 1) {
+  if (errorDistance < 0.5) {
     return;
   }
 
   // =====================================
-  // Parado -> corrige um pouco mais rápido
+  // Snap instantâneo quando parado e erro pequeno
+  // =====================================
+  if (!isMoving && errorDistance < 2) {
+    sprite.position.set(
+      this.localAuthorityTarget.x,
+      this.localAuthorityTarget.y
+    );
+    return;
+  }
+
+  // =====================================
+  // Erro pequeno -> corrige instantaneamente
+  // =====================================
+  if (errorDistance < 2) {
+    sprite.position.set(
+      this.localAuthorityTarget.x,
+      this.localAuthorityTarget.y
+    );
+    return;
+  }
+
+  // =====================================
+  // Parado -> corrige muito mais rápido
   // =====================================
   if (!isMoving) {
-    sprite.x += errX * 0.15;
-    sprite.y += errY * 0.15;
+    sprite.x += errX * 0.4;
+    sprite.y += errY * 0.4;
     return;
   }
 
   // =====================================
-  // Andando -> corrige bem suavemente
+  // Andando -> corrige mais rápido (interpolação linear)
   // =====================================
-  sprite.x += errX * 0.08;
-  sprite.y += errY * 0.08;
+  const lerpFactor = 0.2;
+  sprite.x = sprite.x + (this.localAuthorityTarget.x - sprite.x) * lerpFactor;
+  sprite.y = sprite.y + (this.localAuthorityTarget.y - sprite.y) * lerpFactor;
 }
 
   _createRemotePlayerEntry() {
