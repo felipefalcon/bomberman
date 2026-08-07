@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teste CRUD Salas - Bomberman</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; background: #1a1a2e; color: #eee; }
+      .section { margin-bottom: 24px; padding: 16px; background: #16213e; border-radius: 8px; }
+      h2, h3 { margin-top: 0; color: #e94560; }
+      .row { margin-bottom: 12px; }
+      label { display: inline-block; width: 120px; }
+      input, button { padding: 8px; margin-right: 8px; border-radius: 4px; border: 1px solid #0f3460; background: #0f3460; color: #eee; }
+      button { cursor: pointer; background: #e94560; border: none; }
+      button:hover { background: #ff6b6b; }
+      #log { white-space: pre-wrap; background: #0f0f23; color: #00ff88; padding: 12px; border-radius: 6px; min-height: 300px; max-height: 500px; overflow-y: auto; }
+      #roomsList { background: #0f0f23; padding: 12px; border-radius: 6px; min-height: 100px; }
+      .room-item { padding: 8px; margin: 4px 0; background: #1a1a2e; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <h2>Teste CRUD de Salas - Bomberman</h2>
+
+    <div class="section">
+      <h3>Conexão</h3>
+      <div class="row">
+        <label>Servidor:</label>
+        <input id="serverUrl" value="http://localhost:3001" />
+      </div>
+      <div class="row">
+        <button onclick="connectSocket()">Conectar</button>
+        <button onclick="disconnectSocket()">Desconectar</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Listar Salas</h3>
+      <div class="row">
+        <button onclick="listRooms()">Listar Salas</button>
+        <button onclick="autoRefresh()">Auto Refresh (5s)</button>
+      </div>
+      <div id="roomsList"></div>
+    </div>
+
+    <div class="section">
+      <h3>Criar Sala com Config</h3>
+      <div class="row">
+        <label>Nome:</label>
+        <input id="roomName" value="Minha Sala" />
+      </div>
+      <div class="row">
+        <label>Max Jogadores:</label>
+        <input id="maxPlayers" value="4" type="number" min="2" max="4" />
+      </div>
+      <div class="row">
+        <label>Senha (opcional):</label>
+        <input id="roomPassword" value="" />
+      </div>
+      <div class="row">
+        <label>Player ID:</label>
+        <input id="playerId" value="" placeholder="Deixe vazio para auto-assigned" />
+      </div>
+      <div class="row">
+        <button onclick="createRoomWithConfig()">Criar Sala</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Entrar em Sala</h3>
+      <div class="row">
+        <label>Room ID:</label>
+        <input id="joinRoomId" value="" />
+      </div>
+      <div class="row">
+        <label>Senha:</label>
+        <input id="joinPassword" value="" />
+      </div>
+      <div class="row">
+        <label>Player ID:</label>
+        <input id="joinPlayerId" value="player2" />
+      </div>
+      <div class="row">
+        <button onclick="joinRoom()">Entrar na Sala</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Detalhes da Sala</h3>
+      <div class="row">
+        <label>Room ID:</label>
+        <input id="detailsRoomId" value="" />
+      </div>
+      <div class="row">
+        <button onclick="getRoomDetails()">Ver Detalhes</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Iniciar Jogo</h3>
+      <div class="row">
+        <label>Room ID:</label>
+        <input id="startRoomId" value="" />
+      </div>
+      <div class="row">
+        <button onclick="startGame()">Iniciar Jogo</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Sair da Sala</h3>
+      <div class="row">
+        <label>Room ID:</label>
+        <input id="leaveRoomId" value="" />
+      </div>
+      <div class="row">
+        <button onclick="leaveRoom()">Sair da Sala</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Log</h3>
+      <div id="log"></div>
+    </div>
+
+    <script>
+      let socket = null;
+      let refreshInterval = null;
+
+      function log(message) {
+        const target = document.getElementById('log');
+        const timestamp = new Date().toLocaleTimeString();
+        target.textContent += `[${timestamp}] ${message}\n`;
+        target.scrollTop = target.scrollHeight;
+      }
+
+      function connectSocket() {
+        const serverUrl = document.getElementById('serverUrl').value;
+        if (socket) {
+          socket.disconnect();
+        }
+
+        socket = io(serverUrl, { transports: ['websocket'] });
+
+        socket.on('connect', () => {
+          log(`✓ Conectado: ${socket.id}`);
+        });
+
+        socket.on('connect_error', (err) => {
+          log(`✗ Erro de conexão: ${err.message}`);
+        });
+
+        socket.on('disconnect', () => {
+          log(`✗ Desconectado`);
+        });
+
+        socket.on('rooms-list', (data) => {
+          log(`📋 Lista de salas recebida: ${JSON.stringify(data)}`);
+          displayRooms(data.rooms);
+        });
+
+        socket.on('room-created', (data) => {
+          log(`✓ Sala criada: ${JSON.stringify(data)}`);
+          if (data.playerId) {
+            log(`✓ Seu Player ID: ${data.playerId}`);
+            document.getElementById('joinPlayerId').value = data.playerId;
+          }
+          document.getElementById('joinRoomId').value = data.roomId;
+          document.getElementById('detailsRoomId').value = data.roomId;
+          document.getElementById('startRoomId').value = data.roomId;
+          document.getElementById('leaveRoomId').value = data.roomId;
+        });
+
+        socket.on('room-details', (data) => {
+          log(`📋 Detalhes da sala: ${JSON.stringify(data)}`);
+        });
+
+        socket.on('room-error', (error) => {
+          log(`✗ Erro: ${error.message}`);
+        });
+
+        socket.on('room-state', (state) => {
+          log(`📊 Estado da sala: status=${state.status}, players=${state.players?.size || 0}`);
+        });
+
+        socket.on('game-starting', (data) => {
+          log(`🎮 Jogo iniciando: ${JSON.stringify(data)}`);
+        });
+
+        socket.on('host-changed', (data) => {
+          log(`👑 Host mudou: ${JSON.stringify(data)}`);
+        });
+      }
+
+      function disconnectSocket() {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+          log(`✓ Desconectado manualmente`);
+        }
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
+        }
+      }
+
+      function listRooms() {
+        if (!socket || !socket.connected) {
+          log('✗ Conecte primeiro.');
+          return;
+        }
+        socket.emit('list-rooms');
+        log(`📤 Enviando list-rooms`);
+      }
+
+      function autoRefresh() {
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
+          log(`✓ Auto refresh desativado`);
+          return;
+        }
+        listRooms();
+        refreshInterval = setInterval(listRooms, 5000);
+        log(`✓ Auto refresh ativado (5s)`);
+      }
+
+      function createRoomWithConfig() {
+        if (!socket || !socket.connected) {
+          log('✗ Conecte primeiro.');
+          return;
+        }
+        const name = document.getElementById('roomName').value;
+        const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
+        const password = document.getElementById('roomPassword').value;
+        const playerId = document.getElementById('playerId').value;
+
+        socket.emit('create-room-with-config', { name, maxPlayers, password, playerId });
+        log(`📤 Enviando create-room-with-config: name=${name}, maxPlayers=${maxPlayers}, hasPassword=${!!password}`);
+      }
+
+      function joinRoom() {
+        if (!socket || !socket.connected) {
+          log('✗ Conecte primeiro.');
+          return;
+        }
+        const roomId = document.getElementById('joinRoomId').value;
+        const password = document.getElementById('joinPassword').value;
+        const playerId = document.getElementById('joinPlayerId').value;
+
+        socket.emit('join-room', { roomId, password, playerId });
+        log(`📤 Enviando join-room: roomId=${roomId}, hasPassword=${!!password}, playerId=${playerId}`);
+      }
+
+      function getRoomDetails() {
+        if (!socket || !socket.connected) {
+          log('✗ Conecte primeiro.');
+          return;
+        }
+        const roomId = document.getElementById('detailsRoomId').value;
+        socket.emit('get-room-details', { roomId });
+        log(`📤 Enviando get-room-details: ${roomId}`);
+      }
+
+      function startGame() {
+        if (!socket || !socket.connected) {
+          log('✗ Conecte primeiro.');
+          return;
+        }
+        const roomId = document.getElementById('startRoomId').value;
+        socket.emit('start-game', { roomId });
+        log(`📤 Enviando start-game: ${roomId}`);
+      }
+
+      function leaveRoom() {
+        if (!socket || !socket.connected) {
+          log('✗ Conecte primeiro.');
+          return;
+        }
+        const roomId = document.getElementById('leaveRoomId').value;
+        socket.emit('leave-room', { roomId });
+        log(`📤 Enviando leave-room: ${roomId}`);
+      }
+
+      function displayRooms(rooms) {
+        const container = document.getElementById('roomsList');
+        if (!rooms || rooms.length === 0) {
+          container.innerHTML = '<p>Nenhuma sala disponível</p>';
+          return;
+        }
+        
+        container.innerHTML = rooms.map(room => `
+          <div class="room-item">
+            <strong>${room.name}</strong> (${room.id})<br>
+            Jogadores: ${room.currentPlayers}/${room.maxPlayers}<br>
+            Senha: ${room.hasPassword ? '🔒 Sim' : '🔓 Não'}<br>
+            Status: ${room.status} ${room.locked ? '(Bloqueada)' : ''}
+          </div>
+        `).join('');
+      }
+    </script>
+  </body>
+</html>
