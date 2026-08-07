@@ -43,10 +43,10 @@ export class Game {
     });
 
     const params = new URLSearchParams(window.location.search);
-    const roomId = params.get('room') || 'room';
+    const roomId = params.get('roomId') || params.get('room') || 'room';
     const seed = this._buildSeed(roomId);
-    const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true';
-    const playerId = params.get('player') || undefined;
+    const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true' || params.get('roomId') !== null;
+    const playerId = params.get('playerId') || params.get('player') || undefined;
 
     GAME_CONFIG.RNG_SEED = seed;
     window.__ROOM_SEED__ = seed;

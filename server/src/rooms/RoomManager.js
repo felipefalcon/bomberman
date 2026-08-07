@@ -15,6 +15,7 @@ export class RoomManager {
     this.playerSpeed = 2.6;
     this.playerCollisionHalf = Math.floor(26 / 2);
     this.simulationStepMs = 16;
+    this.reconnectGraceMs = 15000;
     this.destructibleChance = 0.7;
     this.bombSlideSpeed = 4;
     this.bombThrowSpeed = 4;
@@ -104,7 +105,7 @@ export class RoomManager {
 
       socket.on('create-room', ({ roomId }) => {
         const safeRoomId = String(roomId || 'room').trim();
-        const room = this.getOrCreateRoom(safeRoomId);
+        const room = this.getOrCreateRoom(safeRoomId, { creatorId: socket.id });
         if (room.status === 'finished') {
           this.resetRoomForNextMatch(safeRoomId, room);
         }
@@ -116,26 +117,98 @@ export class RoomManager {
         this.broadcastRoomState(safeRoomId);
       });
 
-      socket.on('join-room', ({ roomId, playerId }) => {
+      socket.on('join-room', ({ roomId, playerId, password }) => {
         const safeRoomId = String(roomId || 'room').trim();
-        const room = this.getOrCreateRoom(safeRoomId);
+        const room = this.rooms.get(safeRoomId);
+        
+        if (!room) {
+          socket.emit('room-error', { message: 'Room not found' });
+          return;
+        }
+
+        if (room.password && room.password !== password) {
+          socket.emit('room-error', { message: 'Invalid password' });
+          return;
+        }
+
+        const requestedPlayerId = this.normalizePlayerId(playerId, room.players.size);
+        let existingSocketId = null;
+        let existingPlayer = null;
+        for (const [candidateSocketId, candidatePlayer] of room.players.entries()) {
+          if (candidatePlayer?.playerId === requestedPlayerId) {
+            existingSocketId = candidateSocketId;
+            existingPlayer = candidatePlayer;
+            break;
+          }
+        }
+
+        if (room.locked) {
+          if (!existingPlayer) {
+            socket.emit('room-error', { message: 'Room is locked - game in progress' });
+            return;
+          }
+
+          if (existingSocketId !== socket.id) {
+            room.players.delete(existingSocketId);
+          }
+          existingPlayer.id = socket.id;
+          existingPlayer.playerId = requestedPlayerId;
+          existingPlayer.input = {};
+          existingPlayer.connected = true;
+          existingPlayer.disconnectedAt = null;
+          room.players.set(socket.id, existingPlayer);
+
+          if (room.hostSocketId === existingSocketId) {
+            room.hostSocketId = socket.id;
+          }
+
+          socket.join(safeRoomId);
+          this.broadcastRoomState(safeRoomId);
+          this.emitSnapshot(safeRoomId, room);
+          socket.emit('player-assigned', { playerId: requestedPlayerId });
+          return;
+        }
+
         if (room.status === 'finished') {
           this.resetRoomForNextMatch(safeRoomId, room);
         }
-        const safePlayerId = this.normalizePlayerId(playerId, room.players.size);
 
-        if (room.players.size >= 4) {
+        if (existingPlayer) {
+          if (existingSocketId !== socket.id) {
+            room.players.delete(existingSocketId);
+          }
+          existingPlayer.id = socket.id;
+          existingPlayer.input = {};
+          existingPlayer.connected = true;
+          existingPlayer.disconnectedAt = null;
+          room.players.set(socket.id, existingPlayer);
+          if (room.hostSocketId === existingSocketId) {
+            room.hostSocketId = socket.id;
+          }
+          socket.join(safeRoomId);
+          this.handleRoomCountdown(safeRoomId, room);
+          this.broadcastRoomState(safeRoomId);
+          socket.emit('player-assigned', { playerId: existingPlayer.playerId });
+          return;
+        }
+
+        if (room.players.size >= room.maxPlayers) {
           socket.emit('room-error', { message: 'Room is full' });
           return;
         }
 
-        const existingPlayer = room.players.get(socket.id);
-        if (existingPlayer) {
-          existingPlayer.playerId = safePlayerId;
-          existingPlayer.input = {};
+        // Assign player ID based on current player count (player-1, player-2, etc.)
+        const safePlayerId = `player-${room.players.size + 1}`;
+
+        const existingBySocket = room.players.get(socket.id);
+        if (existingBySocket) {
+          existingBySocket.playerId = safePlayerId;
+          existingBySocket.input = {};
           socket.join(safeRoomId);
           this.handleRoomCountdown(safeRoomId, room);
           this.broadcastRoomState(safeRoomId);
+          // Send the assigned player ID back to the client
+          socket.emit('player-assigned', { playerId: safePlayerId });
           return;
         }
 
@@ -172,6 +245,8 @@ export class RoomManager {
           lastInputSeq: 0,
           inputCooldownTicks: 0,
           damageBlinkTicks: 0,
+          connected: true,
+          disconnectedAt: null,
         });
         if (!room.hostSocketId) {
           room.hostSocketId = socket.id;
@@ -179,6 +254,8 @@ export class RoomManager {
         socket.join(safeRoomId);
         this.handleRoomCountdown(safeRoomId, room);
         this.broadcastRoomState(safeRoomId);
+        // Send the assigned player ID back to the client
+        socket.emit('player-assigned', { playerId: safePlayerId });
       });
 
       socket.on('leave-room', ({ roomId }) => {
@@ -186,10 +263,20 @@ export class RoomManager {
         const room = this.rooms.get(safeRoomId);
         if (!room) return;
 
+        const oldHostSocketId = room.hostSocketId;
         room.players.delete(socket.id);
+        
         if (room.hostSocketId === socket.id) {
           room.hostSocketId = Array.from(room.players.keys())[0] || null;
+          // Notify about host change
+          if (room.hostSocketId && room.hostSocketId !== oldHostSocketId) {
+            this.io.to(safeRoomId).emit('host-changed', { 
+              newHostSocketId: room.hostSocketId,
+              newHostPlayerId: room.players.get(room.hostSocketId)?.playerId 
+            });
+          }
         }
+        
         socket.leave(safeRoomId);
         if (room.players.size < 2) {
           this.setRoomWaiting(room);
@@ -197,6 +284,112 @@ export class RoomManager {
           this.handleRoomCountdown(safeRoomId, room);
         }
         this.broadcastRoomState(safeRoomId);
+      });
+
+      socket.on('list-rooms', () => {
+        const roomsList = [];
+        for (const [roomId, room] of this.rooms.entries()) {
+          roomsList.push({
+            id: room.id,
+            name: room.name,
+            maxPlayers: room.maxPlayers,
+            currentPlayers: room.players.size,
+            hasPassword: !!room.password,
+            locked: room.locked,
+            status: room.status,
+          });
+        }
+        socket.emit('rooms-list', { rooms: roomsList });
+      });
+
+      socket.on('create-room-with-config', ({ name, maxPlayers, password, playerId }) => {
+        const roomId = `room-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        // When creating a room, always assign player-1 to the creator
+        const safePlayerId = 'player-1';
+        
+        const room = this.getOrCreateRoom(roomId, {
+          name: name || roomId,
+          maxPlayers: Math.min(Math.max(maxPlayers || 2, 2), 4),
+          password: password || null,
+          creatorId: socket.id,
+        });
+
+        room.hostSocketId = socket.id;
+        
+        const spawn = this.getSpawnPosition(safePlayerId, room.players.size);
+        room.players.set(socket.id, {
+          id: socket.id,
+          playerId: safePlayerId,
+          x: spawn.x,
+          y: spawn.y,
+          tx: Math.floor(spawn.x / 32),
+          ty: Math.floor(spawn.y / 32),
+          input: {},
+          lives: 3,
+          maxBombs: 1,
+          activeBombs: 0,
+          explosionRange: 1,
+          speedPowerups: 0,
+          canPierceBlocks: false,
+          hasKickBomb: false,
+          hasThrowBomb: false,
+          hasCrossBlock: false,
+          hasCrossBomb: false,
+          hasFollowerBomb: false,
+          hasLandMine: false,
+          lastBombCommandTs: 0,
+          lastFacing: 'down',
+          lastAcceptedInputTick: 0,
+          lastInputSeq: 0,
+          inputCooldownTicks: 0,
+          damageBlinkTicks: 0,
+        });
+
+        socket.join(roomId);
+        this.broadcastRoomState(roomId);
+        
+        // Return the assigned player ID to the client
+        const currentPlayer = room.players.get(socket.id);
+        socket.emit('room-created', { 
+          roomId, 
+          room: this.getRoomPublicInfo(room),
+          playerId: currentPlayer?.playerId 
+        });
+      });
+
+      socket.on('get-room-details', ({ roomId }) => {
+        const safeRoomId = String(roomId || 'room').trim();
+        const room = this.rooms.get(safeRoomId);
+        if (!room) {
+          socket.emit('room-error', { message: 'Room not found' });
+          return;
+        }
+        socket.emit('room-details', { room: this.getRoomPublicInfo(room) });
+      });
+
+      socket.on('start-game', ({ roomId }) => {
+        const safeRoomId = String(roomId || 'room').trim();
+        console.log(`Start game requested for room: ${safeRoomId} by socket: ${socket.id}`);
+        const room = this.rooms.get(safeRoomId);
+        if (!room) {
+          socket.emit('room-error', { message: 'Room not found' });
+          return;
+        }
+
+        if (room.hostSocketId !== socket.id) {
+          socket.emit('room-error', { message: 'Only host can start the game' });
+          return;
+        }
+
+        if (room.players.size < 2) {
+          socket.emit('room-error', { message: 'Need at least 2 players to start' });
+          return;
+        }
+
+        room.locked = true;
+        this.handleRoomCountdown(safeRoomId, room);
+        this.broadcastRoomState(safeRoomId);
+        this.io.to(safeRoomId).emit('game-starting', { roomId: safeRoomId });
       });
 
       socket.on('player-input', ({ roomId, input }) => {
@@ -228,17 +421,38 @@ export class RoomManager {
 
       socket.on('disconnect', () => {
         for (const [roomId, room] of this.rooms.entries()) {
-          if (room.players.delete(socket.id)) {
-            if (room.hostSocketId === socket.id) {
-              room.hostSocketId = Array.from(room.players.keys())[0] || null;
-            }
-            if (room.players.size < 2) {
-              this.setRoomWaiting(room);
-            } else if (room.status !== 'playing') {
-              this.handleRoomCountdown(roomId, room);
-            }
+          const player = room.players.get(socket.id);
+          if (!player) continue;
+
+          const preserveForReconnect = room.locked || room.status === 'playing' || room.status === 'countdown';
+          if (preserveForReconnect) {
+            player.connected = false;
+            player.disconnectedAt = Date.now();
+            player.input = {};
             this.broadcastRoomState(roomId);
+            continue;
           }
+
+          room.players.delete(socket.id);
+          const oldHostSocketId = room.hostSocketId;
+
+          if (room.hostSocketId === socket.id) {
+            room.hostSocketId = Array.from(room.players.keys())[0] || null;
+            // Notify about host change
+            if (room.hostSocketId && room.hostSocketId !== oldHostSocketId) {
+              this.io.to(roomId).emit('host-changed', {
+                newHostSocketId: room.hostSocketId,
+                newHostPlayerId: room.players.get(room.hostSocketId)?.playerId,
+              });
+            }
+          }
+
+          if (room.players.size < 2) {
+            this.setRoomWaiting(room);
+          } else if (room.status !== 'playing') {
+            this.handleRoomCountdown(roomId, room);
+          }
+          this.broadcastRoomState(roomId);
         }
       });
     });
@@ -254,6 +468,13 @@ export class RoomManager {
       // Player update
       const playerStart = Date.now();
       for (const [roomId, room] of this.rooms.entries()) {
+        if (this.pruneDisconnectedPlayers(room, now)) {
+          roomsNeedingBroadcast.add(roomId);
+          if (room.status === 'playing' || room.status === 'countdown') {
+            roomsNeedingSnapshot.add(roomId);
+          }
+        }
+
         if (room.status === 'countdown') {
           if (room.countdownEndsAt && now >= room.countdownEndsAt) {
             room.status = 'playing';
@@ -634,13 +855,18 @@ export class RoomManager {
     return result;
   }
 
-  getOrCreateRoom(roomId) {
+  getOrCreateRoom(roomId, config = {}) {
     if (!this.rooms.has(roomId)) {
       const matchNonce = this.buildNextMatchNonce(0);
       this.rooms.set(roomId, {
         id: roomId,
+        name: config.name || roomId,
+        maxPlayers: config.maxPlayers || 4,
+        password: config.password || null,
+        creatorId: config.creatorId || null,
         players: new Map(),
         status: 'waiting',
+        locked: false,
         tick: 0,
         lastTickAt: Date.now(),
         winnerPlayerId: null,
@@ -657,6 +883,60 @@ export class RoomManager {
     }
 
     return this.rooms.get(roomId);
+  }
+
+  getRoomPublicInfo(room) {
+    const playersList = [];
+    for (const [socketId, player] of room.players.entries()) {
+      playersList.push({
+        playerId: player.playerId,
+        isHost: room.hostSocketId === socketId,
+        connected: player.connected !== false,
+      });
+    }
+
+    return {
+      id: room.id,
+      name: room.name,
+      maxPlayers: room.maxPlayers,
+      currentPlayers: room.players.size,
+      hasPassword: !!room.password,
+      locked: room.locked,
+      status: room.status,
+      players: playersList,
+    };
+  }
+
+  pruneDisconnectedPlayers(room, now = Date.now()) {
+    const staleSocketIds = [];
+
+    for (const [socketId, player] of room.players.entries()) {
+      if (player?.connected !== false) continue;
+      const disconnectedAt = Number(player?.disconnectedAt || 0);
+      if (disconnectedAt <= 0) continue;
+      if (now - disconnectedAt > this.reconnectGraceMs) {
+        staleSocketIds.push(socketId);
+      }
+    }
+
+    if (staleSocketIds.length === 0) return false;
+
+    for (const socketId of staleSocketIds) {
+      room.players.delete(socketId);
+      if (room.hostSocketId === socketId) {
+        room.hostSocketId = null;
+      }
+    }
+
+    if (!room.hostSocketId) {
+      room.hostSocketId = Array.from(room.players.keys())[0] || null;
+    }
+
+    if (room.players.size < 2) {
+      this.setRoomWaiting(room);
+    }
+
+    return true;
   }
 
   applyPlayerMovement(room, player, dx, dy) {
