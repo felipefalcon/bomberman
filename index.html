@@ -415,7 +415,7 @@
         socket.on('room-created', (data) => {
           // Redirect to waiting room with the playerId assigned by server
           const assignedPlayerId = data.room?.players?.[0]?.playerId || 'player-1';
-          window.location.href = `/waiting-room.html?roomId=${encodeURIComponent(data.roomId)}&playerId=${encodeURIComponent(assignedPlayerId)}`;
+          window.location.href = `waiting-room.html?roomId=${encodeURIComponent(data.roomId)}&playerId=${encodeURIComponent(assignedPlayerId)}`;
         });
 
         socket.on('room-details', (data) => {
