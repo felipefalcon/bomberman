@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bomberman - Sala de Espera</title>
+    <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Silkscreen', monospace;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: #eee;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+      }
+
+      h1 {
+        color: #e94560;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 0 #0f3460;
+      }
+
+      .waiting-container {
+        width: 100%;
+        max-width: 600px;
+      }
+
+      .room-info {
+        background: rgba(22, 33, 62, 0.8);
+        border: 2px solid #0f3460;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+
+      .room-name {
+        font-size: 24px;
+        color: #e94560;
+        margin-bottom: 8px;
+      }
+
+      .room-details {
+        display: flex;
+        gap: 20px;
+        font-size: 12px;
+        color: #aaa;
+      }
+
+      .status-banner {
+        background: #0f3460;
+        padding: 12px;
+        border-radius: 8px;
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 14px;
+      }
+
+      .status-banner.waiting {
+        background: rgba(0, 255, 136, 0.2);
+        border: 1px solid #00ff88;
+        color: #00ff88;
+      }
+
+      .status-banner.ready {
+        background: rgba(233, 69, 96, 0.2);
+        border: 1px solid #e94560;
+        color: #e94560;
+      }
+
+      .players-section {
+        background: rgba(22, 33, 62, 0.8);
+        border: 2px solid #0f3460;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+
+      .players-section h2 {
+        color: #e94560;
+        margin-bottom: 16px;
+        font-size: 16px;
+      }
+
+      .players-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .player-card {
+        background: #1a1a2e;
+        border: 1px solid #0f3460;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .player-card.is-me {
+        border-color: #e94560;
+        background: rgba(233, 69, 96, 0.1);
+      }
+
+      .player-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .player-avatar {
+        width: 40px;
+        height: 40px;
+        background: #0f3460;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+      }
+
+      .player-name {
+        font-size: 14px;
+      }
+
+      .player-badge {
+        font-size: 10px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: #0f3460;
+      }
+
+      .player-badge.host {
+        background: #e94560;
+        color: #eee;
+      }
+
+      .player-badge.you {
+        background: #00ff88;
+        color: #1a1a2e;
+      }
+
+      .empty-slots {
+        display: grid;
+        gap: 8px;
+      }
+
+      .empty-slot {
+        background: rgba(15, 52, 96, 0.3);
+        border: 1px dashed #0f3460;
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+        color: #666;
+        font-size: 12px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      .btn {
+        font-family: 'Silkscreen', monospace;
+        padding: 14px 28px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        flex: 1;
+      }
+
+      .btn-primary {
+        background: #e94560;
+        color: #eee;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #ff6b6b;
+        transform: translateY(-2px);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-secondary {
+        background: #0f3460;
+        color: #eee;
+      }
+
+      .btn-secondary:hover {
+        background: #1a1a2e;
+      }
+
+      .btn-danger {
+        background: #e94560;
+        color: #eee;
+      }
+
+      .btn-danger:hover {
+        background: #ff6b6b;
+      }
+
+      .countdown {
+        text-align: center;
+        font-size: 48px;
+        color: #e94560;
+        margin: 20px 0;
+        display: none;
+      }
+
+      .countdown.active {
+        display: block;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 20px;
+        color: #666;
+      }
+
+      .error-message {
+        background: rgba(233, 69, 96, 0.2);
+        border: 1px solid #e94560;
+        color: #e94560;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+        font-size: 12px;
+      }
+
+      .notification {
+        background: rgba(0, 255, 136, 0.2);
+        border: 1px solid #00ff88;
+        color: #00ff88;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+        font-size: 12px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎮 SALA DE ESPERA</h1>
+    
+    <div class="waiting-container">
+      <div id="roomInfo" class="room-info">
+        <div class="loading">Carregando informações da sala...</div>
+      </div>
+
+      <div id="statusBanner" class="status-banner waiting">
+        ⏳ Aguardando jogadores...
+      </div>
+
+      <div class="players-section">
+        <h2>👥 Jogadores na Sala</h2>
+        <div id="playersList" class="players-list">
+          <div class="loading">Carregando jogadores...</div>
+        </div>
+      </div>
+
+      <div id="countdown" class="countdown"></div>
+
+      <div id="notification" class="notification" style="display: none;"></div>
+
+      <div class="actions">
+        <button id="startBtn" class="btn btn-primary" onclick="startGame()" style="display: none;">
+          🎮 JOGAR
+        </button>
+        <button id="leaveBtn" class="btn btn-secondary" onclick="leaveRoom()">
+          🚪 SAIR
+        </button>
+      </div>
+
+      <div id="errorMessage" class="error-message" style="display: none;"></div>
+    </div>
+
+    <script>
+      let socket = null;
+      let roomDetails = null;
+      let currentPlayerId = null;
+      let isHost = false;
+      let refreshInterval = null;
+
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomId = urlParams.get('roomId');
+      const playerId = urlParams.get('playerId');
+
+      if (!roomId || !playerId) {
+        showError('Parâmetros da sala não encontrados. Redirecionando para o lobby...');
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 2000);
+      } else {
+        currentPlayerId = playerId; // Use the playerId assigned by server
+        connectSocket();
+      }
+
+      function connectSocket() {
+        const isLocalServer = 
+          window.location.hostname === 'localhost' || 
+          window.location.hostname === '127.0.0.1';
+        
+        const socketUrl = isLocalServer ? 'http://localhost:3001' : undefined;
+
+        socket = io(socketUrl, {
+          transports: ['websocket'],
+          reconnection: true,
+        });
+
+        socket.on('connect', () => {
+          joinRoom();
+        });
+
+        socket.on('room-state', (state) => {
+          updateRoomState(state);
+        });
+
+        socket.on('room-details', (data) => {
+          roomDetails = data.room;
+          displayRoomInfo();
+          displayPlayers();
+        });
+
+        socket.on('room-error', (error) => {
+          showError(error.message);
+        });
+
+        socket.on('game-starting', (data) => {
+          showCountdown();
+        });
+
+        socket.on('host-changed', (data) => {
+          isHost = data.newHostSocketId === socket.id;
+          updateRoomState({ 
+            hostSocketId: data.newHostSocketId, 
+            players: roomDetails?.players || [] 
+          });
+          
+          if (isHost) {
+            showNotification('Você é o novo host!');
+          }
+        });
+
+        socket.on('disconnect', () => {
+          showError('Desconectado do servidor. Tentando reconectar...');
+        });
+      }
+
+      function joinRoom() {
+        socket.emit('join-room', {
+          roomId,
+          playerId: currentPlayerId
+        });
+        
+        // Request room details
+        socket.emit('get-room-details', { roomId });
+        
+        // Start auto-refresh
+        startAutoRefresh();
+      }
+
+      function startAutoRefresh() {
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(() => {
+          socket.emit('get-room-details', { roomId });
+        }, 2000);
+      }
+
+      function updateRoomState(state) {
+        if (!state) return;
+
+        const players = Array.isArray(state.players) ? state.players : [];
+        const playersCount = Number.isFinite(Number(state.playerCount))
+          ? Number(state.playerCount)
+          : players.length;
+        
+        // Check if current player is host
+        isHost = state.hostSocketId === socket.id;
+        
+        // Update UI based on state
+        const startBtn = document.getElementById('startBtn');
+        const statusBanner = document.getElementById('statusBanner');
+        
+        if (isHost) {
+          startBtn.style.display = 'block';
+          startBtn.disabled = playersCount < 2;
+          
+          if (playersCount >= 2) {
+            statusBanner.className = 'status-banner ready';
+            statusBanner.textContent = '✓ Pronto para começar!';
+          } else {
+            statusBanner.className = 'status-banner waiting';
+            statusBanner.textContent = `⏳ Aguardando jogadores... (${playersCount}/2 mínimo)`;
+          }
+        } else {
+          startBtn.style.display = 'none';
+          
+          if (playersCount >= 2) {
+            statusBanner.className = 'status-banner ready';
+            statusBanner.textContent = '⏳ Aguardando o host iniciar o jogo...';
+          } else {
+            statusBanner.className = 'status-banner waiting';
+            statusBanner.textContent = `⏳ Aguardando jogadores... (${playersCount}/2 mínimo)`;
+          }
+        }
+
+        // Update players list
+        displayPlayersFromState(state);
+      }
+
+      function displayRoomInfo() {
+        if (!roomDetails) return;
+        
+        const container = document.getElementById('roomInfo');
+        container.innerHTML = `
+          <div class="room-name">${escapeHtml(roomDetails.name)}</div>
+          <div class="room-details">
+            <span>🆔 ${escapeHtml(roomDetails.id)}</span>
+            <span>👥 ${roomDetails.currentPlayers}/${roomDetails.maxPlayers}</span>
+            <span>${roomDetails.hasPassword ? '🔒 Privada' : '🔓 Pública'}</span>
+          </div>
+        `;
+      }
+
+      function displayPlayers() {
+        if (!roomDetails) return;
+        displayPlayersFromRoom(roomDetails);
+      }
+
+      function displayPlayersFromState(state) {
+        const players = Array.isArray(state.players) ? state.players : [];
+        const playersList = [];
+        players.forEach((player) => {
+          playersList.push({
+            playerId: player.playerId,
+            isHost: state.hostSocketId === player.id,
+            isMe: player.playerId === currentPlayerId
+          });
+        });
+        displayPlayersList(playersList, state.maxPlayers);
+      }
+
+      function displayPlayersFromRoom(room) {
+        const playersList = room.players.map(p => ({
+          playerId: p.playerId,
+          isHost: p.isHost,
+          isMe: p.playerId === currentPlayerId
+        }));
+        displayPlayersList(playersList, room.maxPlayers);
+      }
+
+      function displayPlayersList(players, maxPlayers) {
+        const container = document.getElementById('playersList');
+        
+        let html = '';
+        
+        // Display connected players
+        players.forEach(player => {
+          const avatars = ['🎮', '🎯', '🎲', '🎪'];
+          const avatarIndex = players.indexOf(player);
+          html += `
+            <div class="player-card ${player.isMe ? 'is-me' : ''}">
+              <div class="player-info">
+                <div class="player-avatar">${avatars[avatarIndex]}</div>
+                <div>
+                  <div class="player-name">${escapeHtml(player.playerId)}</div>
+                  <div>
+                    ${player.isHost ? '<span class="player-badge host">👑 HOST</span>' : ''}
+                    ${player.isMe ? '<span class="player-badge you">VOCÊ</span>' : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        
+        // Display empty slots
+        const emptySlots = maxPlayers - players.length;
+        for (let i = 0; i < emptySlots; i++) {
+          html += `
+            <div class="empty-slot">
+              Aguardando jogador ${players.length + i + 1}...
+            </div>
+          `;
+        }
+        
+        container.innerHTML = html;
+      }
+
+      function startGame() {
+        if (!isHost) {
+          showError('Apenas o host pode iniciar o jogo');
+          return;
+        }
+        
+        socket.emit('start-game', { roomId });
+      }
+
+      function leaveRoom() {
+        socket.emit('leave-room', { roomId });
+        window.location.href = 'index.html';
+      }
+
+      function showCountdown() {
+        const countdownEl = document.getElementById('countdown');
+        const statusBanner = document.getElementById('statusBanner');
+        const startBtn = document.getElementById('startBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+        
+        statusBanner.textContent = '🎮 JOGO INICIANDO!';
+        statusBanner.className = 'status-banner ready';
+        startBtn.style.display = 'none';
+        leaveBtn.disabled = true;
+        
+        let count = 3;
+        countdownEl.textContent = count;
+        countdownEl.classList.add('active');
+        
+        const countdownInterval = setInterval(() => {
+          count--;
+          if (count > 0) {
+            countdownEl.textContent = count;
+          } else {
+            clearInterval(countdownInterval);
+            countdownEl.textContent = 'GO!';
+            
+            // Redirect to game
+            setTimeout(() => {
+              window.location.href = `game.html?roomId=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(currentPlayerId)}`;
+            }, 500);
+          }
+        }, 1000);
+      }
+
+      function showError(message) {
+        const errorEl = document.getElementById('errorMessage');
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+      }
+
+      function showNotification(message) {
+        const notificationEl = document.getElementById('notification');
+        notificationEl.textContent = message;
+        notificationEl.style.display = 'block';
+        
+        setTimeout(() => {
+          notificationEl.style.display = 'none';
+        }, 5000);
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+    </script>
+  </body>
+</html>
