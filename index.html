@@ -19,14 +19,42 @@
         align-items: center;
         justify-content: center;
         background: #222;
+        font-family: 'Silkscreen', monospace;
       }
       #game {
         display: inline-flex;
       }
+      /* Font loading indicator */
+      #font-loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #666;
+        font-size: 14px;
+        z-index: 1000;
+      }
+      .hidden {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
+    <div id="font-loading">Carregando fonte...</div>
     <div id="game"></div>
-    <script type="module" src="/src/main.js"></script>
+    <script>
+      // Wait for Silkscreen font to load before starting the game
+      document.fonts.ready.then(() => {
+        const fontLoading = document.getElementById('font-loading');
+        if (fontLoading) {
+          fontLoading.classList.add('hidden');
+        }
+        // Load the game script after font is ready
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = '/src/main.js';
+        document.body.appendChild(script);
+      });
+    </script>
   </body>
 </html>

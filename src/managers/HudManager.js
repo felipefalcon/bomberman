@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { GAME_CONFIG } from '../config/Constants.js';
+import { createMediumBitmapText, createSmallBitmapText } from '../utils/textUtils.js';
 import { globalEventBus, GameEvents } from '../infrastructure/events/EventBus.js';
 
 /**
@@ -31,7 +32,7 @@ export class HudManager {
     this.lastRenderedTimer = null;
     this.unsubscribers = [];
     
-    this.fontSize = GAME_CONFIG.HUD.FONT_SIZE;
+    this.fontSize = GAME_CONFIG.FONT.SIZES.SMALL;
     
     this.create();
     this.setupEventListeners();
@@ -93,10 +94,8 @@ export class HudManager {
     this.clockIconContainer.addChild(this.createClockIcon());
     timerPanel.addChild(this.clockIconContainer);
 
-    this.timerText = new PIXI.BitmapText({
-      text: hudTop.DEFAULT_TIMER_TEXT,
-      style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
-      roundPixels: true,
+    this.timerText = createMediumBitmapText(hudTop.DEFAULT_TIMER_TEXT, {
+      fill: GAME_CONFIG.FONT.COLORS.WHITE,
     });
     this.timerText.x = hudTop.TIMER_TEXT_X;
     this.timerText.y = hudTop.TIMER_TEXT_Y;
@@ -227,10 +226,8 @@ export class HudManager {
 
     let text = null;
     if (withText) {
-      text = new PIXI.BitmapText({
-        text: '0',
-        style: { fontFamily: 'HUDFont', fontSize: GAME_CONFIG.HUD.SMALL_FONT_SIZE, fill: 0xffffff },
-        roundPixels: true,
+      text = createSmallBitmapText('0', {
+        fill: GAME_CONFIG.FONT.COLORS.WHITE,
       });
       text.x = hudSidebar.SLOT_TEXT_X;
       text.y = hudSidebar.SLOT_TEXT_Y;
@@ -333,11 +330,12 @@ export class HudManager {
     icon.scale.set(1.5);
     container.addChild(icon);
 
-    const livesText = new PIXI.BitmapText({
-      text: `${Number.isFinite(Number(player?.lives)) ? Number(player.lives) : GAME_CONFIG.PLAYER_STARTING_LIVES}`,
-      style: { fontFamily: 'HUDFont', fontSize: this.fontSize, fill: 0xffffff },
-      roundPixels: true,
-    });
+    const livesText = createMediumBitmapText(
+      `${Number.isFinite(Number(player?.lives)) ? Number(player.lives) : GAME_CONFIG.PLAYER_STARTING_LIVES}`,
+      {
+        fill: GAME_CONFIG.FONT.COLORS.WHITE,
+      }
+    );
     livesText.x = 28;
     livesText.y = 5;
     container.addChild(livesText);

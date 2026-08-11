@@ -3,6 +3,7 @@ import { GameInitializer } from './GameInitializer.js';
 import { GameLoop } from './GameLoop.js';
 import { GameEvents } from '../infrastructure/events/EventBus.js';
 import { GAME_CONFIG } from '../config/Constants.js';
+import { createLargeBitmapText, createSmallBitmapText } from '../utils/textUtils.js';
 
 /**
  * Game - Main game class
@@ -28,19 +29,38 @@ export class Game {
    */
   async start() {
     // Install HUD font
-    PIXI.BitmapFont.install({
-      name: 'HUDFont',
-      chars: PIXI.BitmapFontManager.ASCII,
-      resolution: window.devicePixelRatio || 1,
-      padding: 8,
-      textureStyle: { scaleMode: 'nearest' },
-      style: {
-        fontFamily: 'Silkscreen, monospace',
-        fontSize: 8,
-        fill: 0xffffff,
-        stroke: { color: 0x000000, width: 2 },
-      },
-    });
+    try {
+      PIXI.BitmapFont.install({
+        name: GAME_CONFIG.FONT.BITMAP_FONT_NAME,
+        chars: PIXI.BitmapFontManager.ASCII,
+        resolution: window.devicePixelRatio || 1,
+        padding: 8,
+        textureStyle: { scaleMode: 'nearest' },
+        style: {
+          fontFamily: GAME_CONFIG.FONT.FAMILY,
+          fontSize: GAME_CONFIG.FONT.SIZES.SMALL,
+          fill: GAME_CONFIG.FONT.COLORS.WHITE,
+          stroke: { color: GAME_CONFIG.FONT.COLORS.BLACK, width: 2 },
+        },
+      });
+      console.log('Bitmap font installed successfully');
+    } catch (error) {
+      console.error('Failed to install bitmap font:', error);
+      // Fallback to system font if Silkscreen fails
+      PIXI.BitmapFont.install({
+        name: GAME_CONFIG.FONT.BITMAP_FONT_NAME,
+        chars: PIXI.BitmapFontManager.ASCII,
+        resolution: window.devicePixelRatio || 1,
+        padding: 8,
+        textureStyle: { scaleMode: 'nearest' },
+        style: {
+          fontFamily: 'monospace',
+          fontSize: GAME_CONFIG.FONT.SIZES.SMALL,
+          fill: GAME_CONFIG.FONT.COLORS.WHITE,
+          stroke: { color: GAME_CONFIG.FONT.COLORS.BLACK, width: 2 },
+        },
+      });
+    }
 
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get('roomId') || params.get('room') || 'room';
@@ -171,44 +191,26 @@ export class Game {
     const centerX = (this.components.tileSize * this.components.map.cols) / 2;
     const centerY = (this.components.tileSize * this.components.map.rows) / 2;
 
-    const title = new PIXI.BitmapText({
-      text: titleText,
-      style: {
-        fontFamily: 'HUDFont',
-        fontSize: 16,
-        fill: isWinner ? 0x6cff9c : 0xff5f5f,
-      },
-      anchor: 0.5,
-      roundPixels: true,
+    const title = createLargeBitmapText(titleText, {
+      fill: isWinner ? 0x6cff9c : 0xff5f5f,
     });
+    title.anchor.set(0.5);
     title.x = centerX;
     title.y = centerY - 8;
     this.components.gameContainer.addChild(title);
 
-    const subtitle = new PIXI.BitmapText({
-      text: subtitleText,
-      style: {
-        fontFamily: 'HUDFont',
-        fontSize: 8,
-        fill: 0xffffff,
-      },
-      anchor: 0.5,
-      roundPixels: true,
+    const subtitle = createSmallBitmapText(subtitleText, {
+      fill: GAME_CONFIG.FONT.COLORS.WHITE,
     });
+    subtitle.anchor.set(0.5);
     subtitle.x = centerX;
     subtitle.y = centerY + 10;
     this.components.gameContainer.addChild(subtitle);
 
-    const reloadHint = new PIXI.BitmapText({
-      text: 'Recarregue a pagina para nova partida',
-      style: {
-        fontFamily: 'HUDFont',
-        fontSize: 7,
-        fill: 0xfff2b8,
-      },
-      anchor: 0.5,
-      roundPixels: true,
+    const reloadHint = createSmallBitmapText('Recarregue a pagina para nova partida', {
+      fill: 0xfff2b8,
     });
+    reloadHint.anchor.set(0.5);
     reloadHint.x = centerX;
     reloadHint.y = centerY + 26;
     this.components.gameContainer.addChild(reloadHint);
