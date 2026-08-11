@@ -17,7 +17,7 @@ export const GAME_CONFIG = {
       FRAME_INNER_STROKE_COLOR: 0x58d800,
       FRAME_STROKE_WIDTH: 1,
       LIVES_PANEL_X: 8,
-      LIVES_PANEL_Y: 5,
+      LIVES_PANEL_Y: 3,
       LIVES_PANEL_WIDTH: 90,
       TIMER_PANEL_OFFSET_X: -40,
       TIMER_PANEL_Y: 5,
@@ -26,7 +26,7 @@ export const GAME_CONFIG = {
       LIVES_TEXT_X: 26,
       LIVES_TEXT_Y: 5,
       TIMER_TEXT_X: 32,
-      TIMER_TEXT_Y: 5,
+      TIMER_TEXT_Y: 3,
       DEFAULT_LIVES_TEXT: '3',
       DEFAULT_TIMER_TEXT: '3:20',
       PLAYER_ICON_FRAME: 19,
@@ -131,6 +131,32 @@ export const GAME_CONFIG = {
   
   // Color key transparency
   COLOR_KEY_TOLERANCE: 45,
+  
+  // Font configuration for Pixi.js texts
+  FONT: {
+    FAMILY: 'Silkscreen',
+    BITMAP_FONT_NAME: 'HUDFont',
+    SIZES: {
+      SMALL: 8,
+      MEDIUM: 12,
+      LARGE: 16,
+      EXTRA_LARGE: 24,
+    },
+    WEIGHTS: {
+      NORMAL: '400',
+      BOLD: '700',
+    },
+    COLORS: {
+      WHITE: 0xFFFFFF,
+      BLACK: 0x000000,
+      RED: 0xFF0000,
+      GREEN: 0x00FF00,
+      BLUE: 0x0000FF,
+      YELLOW: 0xFFFF00,
+      CYAN: 0x00FFFF,
+      MAGENTA: 0xFF00FF,
+    },
+  },
 };
 
 // Map tile types

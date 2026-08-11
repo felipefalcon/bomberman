@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { GAME_CONFIG, TILE_TYPES } from '../config/Constants.js';
 import { createSeededRandom } from '../utils/seededRandom.js';
+import { createSmallSilkscreenText } from '../utils/textUtils.js';
 import { loadTilesetTiles } from '../loaders/tilesetLoader.js';
 import { loadBlockTexture } from '../loaders/blockLoader.js';
 import { loadPillarTexture } from '../loaders/pillarLoader.js';
@@ -139,14 +140,10 @@ export class TileMap {
 
         // Debug: Renderizar número do frame
         if (this.debugMode && frameIndex !== undefined) {
-          const debugText = new PIXI.Text({
-            text: frameIndex.toString(),
-            style: {
-              fontFamily: 'Arial',
-              fontSize: 8,
-              fill: 0xffffff,
-              stroke: { color: 0x000000, width: 1 },
-            },
+          const debugText = createSmallSilkscreenText(frameIndex.toString(), {
+            fill: GAME_CONFIG.FONT.COLORS.WHITE,
+            stroke: GAME_CONFIG.FONT.COLORS.BLACK,
+            strokeThickness: 1,
           });
           debugText.x = x * this.tileSize + 2;
           debugText.y = y * this.tileSize + 2;
