@@ -67,10 +67,15 @@ export class Game {
         this.gameLoop?._renderRemotePlayers?.(snapshot.players || [], snapshot.tick);
         this.gameLoop?._syncOnlineWorld?.(snapshot, 1);
         this._handleOnlineMatchFinished(snapshot);
+        // Update return to lobby countdown
+        if (this.gameOverUI?.returnHint && snapshot?.returnToLobbySeconds !== undefined) {
+          this.gameOverUI.returnHint.text = `Voltando para a sala em ${snapshot.returnToLobbySeconds}s...`;
+        }
       };
 
       onlineBridge.onRoomState = (roomState) => {
         if (!roomState || !window.__ONLINE_ENABLED__) return;
+        console.log('Room state received:', roomState.status, 'onlineMatchFinished:', this.onlineMatchFinished);
         const gameState = this.components?.managers?.gameState;
         this.components?.managers?.hud?.setRoomPlayers?.(roomState.players || []);
         if (gameState?.setOnlineCountdown) {
@@ -79,6 +84,31 @@ export class Game {
             gameState.setOnlineCountdown(seconds);
           } else if (roomState?.status === 'playing' || roomState?.status === 'waiting' || roomState?.status === 'finished') {
             gameState.clearOnlineCountdown();
+          }
+        }
+        // Handle return to lobby countdown
+        if (roomState?.status === 'waiting' && this.onlineMatchFinished) {
+          console.log('Room returned to waiting state, redirecting to waiting-room.html');
+          this.onlineMatchFinished = false;
+          if (gameState) {
+            gameState.isGameOver = false;
+            gameState.isPaused = false;
+          }
+          this._clearGameOverUI();
+          
+          // Redirect to waiting room
+          const urlParams = new URLSearchParams(window.location.search);
+          const roomId = urlParams.get('roomId');
+          const playerId = urlParams.get('playerId');
+          
+          console.log('Redirect params - roomId:', roomId, 'playerId:', playerId);
+          
+          if (roomId && playerId) {
+            window.location.href = `public/waiting-room.html?roomId=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(playerId)}`;
+          } else {
+            // Fallback to lobby if params are missing
+            console.log('Missing params, redirecting to lobby');
+            window.location.href = 'public/lobby.html';
           }
         }
       };
@@ -199,8 +229,8 @@ export class Game {
     subtitle.y = centerY + 10;
     this.components.gameContainer.addChild(subtitle);
 
-    const reloadHint = new PIXI.BitmapText({
-      text: 'Recarregue a pagina para nova partida',
+    const returnHint = new PIXI.BitmapText({
+      text: `Voltando para a sala em ${snapshot?.returnToLobbySeconds || 8}s...`,
       style: {
         fontFamily: 'HUDFont',
         fontSize: 7,
@@ -209,9 +239,28 @@ export class Game {
       anchor: 0.5,
       roundPixels: true,
     });
-    reloadHint.x = centerX;
-    reloadHint.y = centerY + 26;
-    this.components.gameContainer.addChild(reloadHint);
+    returnHint.x = centerX;
+    returnHint.y = centerY + 26;
+    this.components.gameContainer.addChild(returnHint);
+
+    // Store references to remove later
+    this.gameOverUI = { title, subtitle, returnHint };
+  }
+
+  _clearGameOverUI() {
+    if (this.gameOverUI) {
+      const { title, subtitle, returnHint } = this.gameOverUI;
+      if (title && this.components.gameContainer.children.includes(title)) {
+        this.components.gameContainer.removeChild(title);
+      }
+      if (subtitle && this.components.gameContainer.children.includes(subtitle)) {
+        this.components.gameContainer.removeChild(subtitle);
+      }
+      if (returnHint && this.components.gameContainer.children.includes(returnHint)) {
+        this.components.gameContainer.removeChild(returnHint);
+      }
+      this.gameOverUI = null;
+    }
   }
 
   /**

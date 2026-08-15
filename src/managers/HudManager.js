@@ -306,7 +306,6 @@ export class HudManager {
       ? this.currentRoomPlayers
       : [{ playerId: 'player-1', lives: Number(this.lastRenderedLives || GAME_CONFIG.PLAYER_STARTING_LIVES) }];
 
-    console.log('Rendering shared players:', players);
     players.sort((a, b) => {
       const idA = String(a?.playerId || a?.id || '').toLowerCase();
       const idB = String(b?.playerId || b?.id || '').toLowerCase();

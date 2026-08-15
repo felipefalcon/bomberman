@@ -490,6 +490,18 @@ export class RoomManager {
           }
         }
 
+        if (room.status === 'finished') {
+          if (room.finishedAt && room.returnToLobbyAfterMs && now >= room.finishedAt + room.returnToLobbyAfterMs) {
+            console.log(`Resetting room ${roomId} for next match after ${(now - room.finishedAt) / 1000}s`);
+            this.resetRoomForNextMatch(roomId, room);
+            roomsNeedingBroadcast.add(roomId);
+            roomsNeedingSnapshot.add(roomId);
+          } else {
+            roomsNeedingBroadcast.add(roomId);
+            roomsNeedingSnapshot.add(roomId);
+          }
+        }
+
         if (room.status !== 'playing') continue;
 
         room.tick = (room.tick || 0) + 1;
@@ -655,6 +667,10 @@ export class RoomManager {
       return result;
     })();
 
+    const returnToLobbySeconds = room.status === 'finished' && room.finishedAt && room.returnToLobbyAfterMs
+      ? Math.max(0, Math.ceil((room.finishedAt + room.returnToLobbyAfterMs - Date.now()) / 1000))
+      : 0;
+
     this.io.to(roomId).emit('snapshot', {
       roomId,
       tick: Number.isFinite(room?.tick) ? room.tick : 0,
@@ -693,6 +709,7 @@ export class RoomManager {
       status: room.status,
       winnerPlayerId: room.winnerPlayerId || null,
       seed: room.seed,
+      returnToLobbySeconds,
     });
   }
 
@@ -708,6 +725,10 @@ export class RoomManager {
       ? Math.max(0, Math.ceil((room.countdownEndsAt - Date.now()) / 1000))
       : 0;
 
+    const returnToLobbySeconds = room.status === 'finished' && room.finishedAt && room.returnToLobbyAfterMs
+      ? Math.max(0, Math.ceil((room.finishedAt + room.returnToLobbyAfterMs - Date.now()) / 1000))
+      : 0;
+
     return {
       roomId,
       players: Array.from(room.players.values()),
@@ -718,6 +739,7 @@ export class RoomManager {
       maxPlayers: 4,
       canStart: room.players.size >= 2,
       countdownSeconds,
+      returnToLobbySeconds,
       hostSocketId: room.hostSocketId || null,
       winnerPlayerId: room.winnerPlayerId || null,
     };
@@ -750,13 +772,17 @@ export class RoomManager {
   }
 
   resetRoomForNextMatch(roomId, room) {
+    console.log(`resetRoomForNextMatch called for room ${roomId}`);
     room.matchNonce = this.buildNextMatchNonce(room.matchNonce);
     room.status = 'waiting';
+    room.locked = false;
     room.tick = 0;
     room.lastTickAt = Date.now();
     room.countdownStartedAt = null;
     room.countdownEndsAt = null;
     room.winnerPlayerId = null;
+    room.finishedAt = null;
+    room.returnToLobbyAfterMs = null;
     room.destructibleTiles = this.buildDestructibleTiles(roomId, room.matchNonce);
     room.bombs = [];
     room.explosions = [];
@@ -765,6 +791,7 @@ export class RoomManager {
     room.nextExplosionId = 1;
     room.nextPowerupId = 1;
     this.resetPlayersForNextMatch(room);
+    console.log(`Room ${roomId} reset to waiting status, locked: ${room.locked}`);
   }
 
   resetPlayersForNextMatch(room) {
@@ -1822,6 +1849,8 @@ export class RoomManager {
     room.countdownStartedAt = null;
     room.countdownEndsAt = null;
     room.winnerPlayerId = alivePlayers[0]?.playerId || null;
+    room.finishedAt = Date.now();
+    room.returnToLobbyAfterMs = 8000; // 8 segundos para voltar à sala
 
     for (const player of room.players.values()) {
       player.input = {};
