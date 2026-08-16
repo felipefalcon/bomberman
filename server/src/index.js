@@ -13,6 +13,9 @@ const io = new Server(httpServer, {
     origin: frontendOrigin,
     credentials: true,
   },
+  pingTimeout: 120000, // 120 seconds - very tolerant
+  pingInterval: 60000, // 60 seconds - less frequent heartbeat
+  maxHttpBufferSize: 1e6, // 1MB - allow larger messages
 });
 
 const roomManager = new RoomManager(io);

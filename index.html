@@ -27,6 +27,16 @@
   </head>
   <body>
     <div id="game"></div>
+    <script>
+      // Verifica se o jogador está acessando diretamente via URL
+      // Se não tiver roomId, redireciona para o lobby
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomId = urlParams.get('roomId');
+
+      if (!roomId) {
+        window.location.href = 'lobby.html';
+      }
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

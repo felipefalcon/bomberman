@@ -388,8 +388,11 @@
         const socketUrl = isLocalServer ? 'http://localhost:3001' : undefined;
 
         socket = io(socketUrl, {
-          transports: ['websocket'],
+          transports: ['websocket', 'polling'], // Allow both transports for better compatibility
           reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 120000, // 120 seconds timeout
         });
 
         socket.on('connect', () => {
@@ -398,6 +401,11 @@
           document.getElementById('connectionStatus').style.color = '#1a1a2e';
           listRooms();
           startAutoRefresh();
+        });
+
+        socket.on('reconnect', () => {
+          console.log('Socket reconnected');
+          listRooms();
         });
 
         socket.on('disconnect', () => {
@@ -413,9 +421,8 @@
         });
 
         socket.on('room-created', (data) => {
-          // Redirect to waiting room with the playerId assigned by server
-          const assignedPlayerId = data.room?.players?.[0]?.playerId || 'player-1';
-          window.location.href = `waiting-room.html?roomId=${encodeURIComponent(data.roomId)}&playerId=${encodeURIComponent(assignedPlayerId)}`;
+          // Redirect to waiting room - server will assign player ID
+          window.location.href = `waiting-room.html?roomId=${encodeURIComponent(data.roomId)}&isCreator=true`;
         });
 
         socket.on('room-details', (data) => {
@@ -428,23 +435,28 @@
 
         socket.on('player-assigned', (data) => {
           currentPlayerId = data.playerId;
-          log(`Player ID atribuído: ${data.playerId}`);
+          console.log(`Player ID atribuído: ${data.playerId}`);
+          
+          // Redirect to waiting room when player ID is assigned (only once)
+          if (selectedRoom && !window.location.href.includes('waiting-room.html')) {
+            window.location.href = `waiting-room.html?roomId=${encodeURIComponent(selectedRoom.id)}`;
+          }
         });
 
         socket.on('room-state', (state) => {
           // Successfully joined room, redirect to waiting room
           if (selectedRoom && state.roomId === selectedRoom.id) {
             // Find the current player's ID from the room state
-            const myPlayer = Array.from(state.players?.values() || []).find(p => p.id === socket.id);
+            const myPlayer = Array.from(state.players || []).find(p => p.id === socket.id);
             const assignedPlayerId = myPlayer?.playerId || 'player-1';
             currentPlayerId = assignedPlayerId; // Store for future use
-            window.location.href = `waiting-room.html?roomId=${encodeURIComponent(selectedRoom.id)}&playerId=${encodeURIComponent(assignedPlayerId)}`;
+            // Don't redirect here anymore, let player-assigned handle it
           }
         });
 
         socket.on('game-starting', (data) => {
-          // Redirect to game
-          window.location.href = `index.html?roomId=${encodeURIComponent(data.roomId)}&playerId=${encodeURIComponent(currentPlayerId)}`;
+          // Redirect to game - playerId will be obtained from server
+          window.location.href = `index.html?roomId=${encodeURIComponent(data.roomId)}`;
         });
       }
 
@@ -599,12 +611,18 @@
       function joinRoom() {
         if (!selectedRoom) return;
 
+        // Don't join here - let waiting-room handle the join
+        // Just redirect to waiting-room with roomId
         const password = selectedRoom.hasPassword ? document.getElementById('joinPassword').value : null;
-        socket.emit('join-room', {
-          roomId: selectedRoom.id,
-          password: password || null,
-          playerId: null // Let server assign the player ID
-        });
+        
+        // Store password in sessionStorage for waiting-room to use
+        if (password) {
+          sessionStorage.setItem('roomPassword', password);
+        } else {
+          sessionStorage.removeItem('roomPassword');
+        }
+        
+        window.location.href = `waiting-room.html?roomId=${encodeURIComponent(selectedRoom.id)}`;
       }
 
       function showError(message) {

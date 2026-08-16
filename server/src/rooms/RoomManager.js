@@ -105,6 +105,7 @@ export class RoomManager {
 
       socket.on('create-room', ({ roomId }) => {
         const safeRoomId = String(roomId || 'room').trim();
+        console.log(`Creating room: ${safeRoomId} by socket: ${socket.id}`);
         const room = this.getOrCreateRoom(safeRoomId, { creatorId: socket.id });
         if (room.status === 'finished') {
           this.resetRoomForNextMatch(safeRoomId, room);
@@ -112,9 +113,45 @@ export class RoomManager {
         if (!room.hostSocketId) {
           room.hostSocketId = socket.id;
         }
+        
+        // Add player to the room - assign first available player ID
+        const safePlayerId = this.getAvailablePlayerId(room) || 'player-1';
+        const spawn = this.getSpawnPosition(safePlayerId, room.players.size);
+        room.players.set(socket.id, {
+          id: socket.id,
+          playerId: safePlayerId,
+          x: spawn.x,
+          y: spawn.y,
+          tx: Math.floor(spawn.x / 32),
+          ty: Math.floor(spawn.y / 32),
+          input: {},
+          lives: 3,
+          maxBombs: 1,
+          activeBombs: 0,
+          explosionRange: 1,
+          speedPowerups: 0,
+          canPierceBlocks: false,
+          hasKickBomb: false,
+          hasThrowBomb: false,
+          hasCrossBlock: false,
+          hasCrossBomb: false,
+          hasFollowerBomb: false,
+          hasLandMine: false,
+          lastBombCommandTs: 0,
+          lastFacing: 'down',
+          lastAcceptedInputTick: 0,
+          lastInputSeq: 0,
+          inputCooldownTicks: 0,
+          damageBlinkTicks: 0,
+          connected: true,
+          disconnectedAt: null,
+        });
+        
+        console.log(`Room ${safeRoomId} created with ${room.players.size} players`);
         socket.join(safeRoomId);
         this.handleRoomCountdown(safeRoomId, room);
         this.broadcastRoomState(safeRoomId);
+        socket.emit('player-assigned', { playerId: safePlayerId });
       });
 
       socket.on('join-room', ({ roomId, playerId, password }) => {
@@ -131,93 +168,23 @@ export class RoomManager {
           return;
         }
 
-        const requestedPlayerId = this.normalizePlayerId(playerId, room.players.size);
-        let existingSocketId = null;
-        let existingPlayer = null;
-        for (const [candidateSocketId, candidatePlayer] of room.players.entries()) {
-          if (candidatePlayer?.playerId === requestedPlayerId) {
-            existingSocketId = candidateSocketId;
-            existingPlayer = candidatePlayer;
-            break;
-          }
-        }
-
-        if (room.locked) {
-          if (!existingPlayer) {
-            socket.emit('room-error', { message: 'Room is locked - game in progress' });
-            return;
-          }
-
-          if (existingSocketId !== socket.id) {
-            room.players.delete(existingSocketId);
-          }
-          existingPlayer.id = socket.id;
-          existingPlayer.playerId = requestedPlayerId;
-          existingPlayer.input = {};
-          existingPlayer.connected = true;
-          existingPlayer.disconnectedAt = null;
-          room.players.set(socket.id, existingPlayer);
-
-          if (room.hostSocketId === existingSocketId) {
-            room.hostSocketId = socket.id;
-          }
-
-          socket.join(safeRoomId);
-          this.broadcastRoomState(safeRoomId);
-          this.emitSnapshot(safeRoomId, room);
-          socket.emit('player-assigned', { playerId: requestedPlayerId });
-          return;
-        }
-
-        if (room.status === 'finished') {
-          this.resetRoomForNextMatch(safeRoomId, room);
-        }
-
-        if (existingPlayer) {
-          if (existingSocketId !== socket.id) {
-            room.players.delete(existingSocketId);
-          }
-          existingPlayer.id = socket.id;
-          existingPlayer.input = {};
-          existingPlayer.connected = true;
-          existingPlayer.disconnectedAt = null;
-          room.players.set(socket.id, existingPlayer);
-          if (room.hostSocketId === existingSocketId) {
-            room.hostSocketId = socket.id;
-          }
+        // Check if socket is already in the room (reconnection case)
+        const existingBySocket = room.players.get(socket.id);
+        if (existingBySocket) {
           socket.join(safeRoomId);
           this.handleRoomCountdown(safeRoomId, room);
           this.broadcastRoomState(safeRoomId);
-          socket.emit('player-assigned', { playerId: existingPlayer.playerId });
+          socket.emit('player-assigned', { playerId: existingBySocket.playerId });
           return;
         }
 
-        if (room.players.size >= room.maxPlayers) {
+        // Always assign the first available slot - ignore requested playerId
+        const safePlayerId = this.getAvailablePlayerId(room);
+        if (!safePlayerId) {
           socket.emit('room-error', { message: 'Room is full' });
           return;
         }
-
-        // Assign player ID based on current player count (player-1, player-2, etc.)
-        const safePlayerId = `player-${room.players.size + 1}`;
-
-        const existingBySocket = room.players.get(socket.id);
-        if (existingBySocket) {
-          existingBySocket.playerId = safePlayerId;
-          existingBySocket.input = {};
-          socket.join(safeRoomId);
-          this.handleRoomCountdown(safeRoomId, room);
-          this.broadcastRoomState(safeRoomId);
-          // Send the assigned player ID back to the client
-          socket.emit('player-assigned', { playerId: safePlayerId });
-          return;
-        }
-
-        for (const [existingSocketId, existingPlayer] of Array.from(room.players.entries())) {
-          if (existingPlayer.playerId === safePlayerId && existingSocketId !== socket.id) {
-            room.players.delete(existingSocketId);
-          }
-        }
-
+        
         const spawn = this.getSpawnPosition(safePlayerId, room.players.size);
         room.players.set(socket.id, {
           id: socket.id,
@@ -254,7 +221,6 @@ export class RoomManager {
         socket.join(safeRoomId);
         this.handleRoomCountdown(safeRoomId, room);
         this.broadcastRoomState(safeRoomId);
-        // Send the assigned player ID back to the client
         socket.emit('player-assigned', { playerId: safePlayerId });
       });
 
@@ -278,12 +244,18 @@ export class RoomManager {
         }
         
         socket.leave(safeRoomId);
-        if (room.players.size < 2) {
-          this.setRoomWaiting(room);
-        } else if (room.status !== 'playing') {
-          this.handleRoomCountdown(safeRoomId, room);
+        
+        // Check if room should be removed when empty
+        if (room.players.size === 0) {
+          this.removeRoomIfEmpty(safeRoomId);
+        } else {
+          if (room.players.size < 2) {
+            this.setRoomWaiting(room);
+          } else if (room.status !== 'playing') {
+            this.handleRoomCountdown(safeRoomId, room);
+          }
+          this.broadcastRoomState(safeRoomId);
         }
-        this.broadcastRoomState(safeRoomId);
       });
 
       socket.on('list-rooms', () => {
@@ -304,8 +276,6 @@ export class RoomManager {
 
       socket.on('create-room-with-config', ({ name, maxPlayers, password, playerId }) => {
         const roomId = `room-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        // When creating a room, always assign player-1 to the creator
-        const safePlayerId = 'player-1';
         
         const room = this.getOrCreateRoom(roomId, {
           name: name || roomId,
@@ -315,6 +285,9 @@ export class RoomManager {
         });
 
         room.hostSocketId = socket.id;
+        
+        // When creating a room, assign the first available player ID to the creator
+        const safePlayerId = this.getAvailablePlayerId(room) || 'player-1';
         
         const spawn = this.getSpawnPosition(safePlayerId, room.players.size);
         room.players.set(socket.id, {
@@ -424,35 +397,33 @@ export class RoomManager {
           const player = room.players.get(socket.id);
           if (!player) continue;
 
-          const preserveForReconnect = room.locked || room.status === 'playing' || room.status === 'countdown';
-          if (preserveForReconnect) {
-            player.connected = false;
-            player.disconnectedAt = Date.now();
-            player.input = {};
-            this.broadcastRoomState(roomId);
-            continue;
-          }
-
-          room.players.delete(socket.id);
+          // Remove player immediately on disconnect
           const oldHostSocketId = room.hostSocketId;
-
+          room.players.delete(socket.id);
+          
           if (room.hostSocketId === socket.id) {
             room.hostSocketId = Array.from(room.players.keys())[0] || null;
             // Notify about host change
             if (room.hostSocketId && room.hostSocketId !== oldHostSocketId) {
-              this.io.to(roomId).emit('host-changed', {
+              this.io.to(roomId).emit('host-changed', { 
                 newHostSocketId: room.hostSocketId,
-                newHostPlayerId: room.players.get(room.hostSocketId)?.playerId,
+                newHostPlayerId: room.players.get(room.hostSocketId)?.playerId 
               });
             }
           }
-
-          if (room.players.size < 2) {
-            this.setRoomWaiting(room);
-          } else if (room.status !== 'playing') {
-            this.handleRoomCountdown(roomId, room);
-          }
+          
           this.broadcastRoomState(roomId);
+          
+          // Check if room should be removed when empty
+          if (room.players.size === 0) {
+            this.removeRoomIfEmpty(roomId);
+          } else {
+            if (room.players.size < 2) {
+              this.setRoomWaiting(room);
+            } else if (room.status !== 'playing') {
+              this.handleRoomCountdown(roomId, room);
+            }
+          }
         }
       });
     });
@@ -468,12 +439,7 @@ export class RoomManager {
       // Player update
       const playerStart = Date.now();
       for (const [roomId, room] of this.rooms.entries()) {
-        if (this.pruneDisconnectedPlayers(room, now)) {
-          roomsNeedingBroadcast.add(roomId);
-          if (room.status === 'playing' || room.status === 'countdown') {
-            roomsNeedingSnapshot.add(roomId);
-          }
-        }
+        // Removed pruneDisconnectedPlayers since we now remove players immediately on disconnect
 
         if (room.status === 'countdown') {
           if (room.countdownEndsAt && now >= room.countdownEndsAt) {
@@ -848,6 +814,37 @@ export class RoomManager {
     return this.spawnPositions.get(normalizedId) || this.spawnPositions.get('player-1');
   }
 
+  isPlayerIdUsed(room, playerId) {
+    for (const player of room.players.values()) {
+      if (player.playerId === playerId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  getAvailablePlayerId(room) {
+    // Define fixed slots in order
+    const playerSlots = ['player-1', 'player-2', 'player-3', 'player-4'];
+    
+    // Find which slots are currently occupied
+    const occupiedSlots = new Set();
+    for (const player of room.players.values()) {
+      if (player.playerId) {
+        occupiedSlots.add(player.playerId);
+      }
+    }
+
+    // Return the first available slot in order
+    for (const slot of playerSlots) {
+      if (!occupiedSlots.has(slot)) {
+        return slot;
+      }
+    }
+
+    return null; // All slots are occupied
+  }
+
   normalizePlayerId(playerId, playerCount = 0) {
     const cacheKey = `${playerId}:${playerCount}`;
     if (this.normalizePlayerIdCache.has(cacheKey)) {
@@ -906,6 +903,7 @@ export class RoomManager {
         nextExplosionId: 1,
         nextPowerupId: 1,
         seed: this.getRoomSeed(roomId),
+        createdAt: Date.now(), // Track creation time for removal logic
       });
     }
 
@@ -934,36 +932,32 @@ export class RoomManager {
     };
   }
 
-  pruneDisconnectedPlayers(room, now = Date.now()) {
-    const staleSocketIds = [];
+  removeRoomIfEmpty(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
 
-    for (const [socketId, player] of room.players.entries()) {
-      if (player?.connected !== false) continue;
-      const disconnectedAt = Number(player?.disconnectedAt || 0);
-      if (disconnectedAt <= 0) continue;
-      if (now - disconnectedAt > this.reconnectGraceMs) {
-        staleSocketIds.push(socketId);
+    if (room.players.size === 0) {
+      // Don't remove rooms that were created less than 10 seconds ago
+      // This allows time for page redirects and reconnections
+      const roomAge = Date.now() - (room.createdAt || Date.now());
+      if (roomAge < 10000) {
+        console.log(`Skipping removal of recently created room: ${roomId} (${roomAge}ms old)`);
+        return;
       }
+
+      // Add delay before removing empty room to allow for reconnection
+      setTimeout(() => {
+        const currentRoom = this.rooms.get(roomId);
+        if (currentRoom && currentRoom.players.size === 0) {
+          const currentAge = Date.now() - (currentRoom.createdAt || Date.now());
+          if (currentAge >= 10000) { // Double-check age after delay
+            console.log(`Removing empty room: ${roomId}, status: ${room.status}`);
+            this.io.to(roomId).emit('room-closed', { roomId });
+            this.rooms.delete(roomId);
+          }
+        }
+      }, 5000); // 5 second delay
     }
-
-    if (staleSocketIds.length === 0) return false;
-
-    for (const socketId of staleSocketIds) {
-      room.players.delete(socketId);
-      if (room.hostSocketId === socketId) {
-        room.hostSocketId = null;
-      }
-    }
-
-    if (!room.hostSocketId) {
-      room.hostSocketId = Array.from(room.players.keys())[0] || null;
-    }
-
-    if (room.players.size < 2) {
-      this.setRoomWaiting(room);
-    }
-
-    return true;
   }
 
   applyPlayerMovement(room, player, dx, dy) {
@@ -1850,7 +1844,7 @@ export class RoomManager {
     room.countdownEndsAt = null;
     room.winnerPlayerId = alivePlayers[0]?.playerId || null;
     room.finishedAt = Date.now();
-    room.returnToLobbyAfterMs = 8000; // 8 segundos para voltar à sala
+    room.returnToLobbyAfterMs = 5000; // 8 segundos para voltar à sala
 
     for (const player of room.players.values()) {
       player.input = {};

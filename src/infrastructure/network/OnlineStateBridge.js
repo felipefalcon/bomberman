@@ -5,6 +5,7 @@ export class OnlineStateBridge {
     this.gameState = gameState;
     this.player = player;
     this.onSnapshot = onSnapshot;
+    this.onPlayerAssigned = null; // Callback when server assigns playerId
     this.connected = false;
     this.lastSnapshot = null;
     this.enabled = false;
@@ -33,7 +34,8 @@ export class OnlineStateBridge {
 
     this.enabled = true;
     this.roomId = String(roomId || 'room').trim();
-    this.playerId = String(playerId || `player-${Math.random().toString(36).slice(2, 6)}`).trim();
+    // Player ID will be assigned by server, but keep a default for fallback
+    this.playerId = playerId || null;
     const isLocalServer =
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1';
@@ -60,7 +62,8 @@ export class OnlineStateBridge {
 
     this.socket.on('connect', () => {
       this.connected = true;
-      this.socket.emit('join-room', { roomId: this.roomId, playerId: this.playerId });
+      // Join room without playerId - server will assign it
+      this.socket.emit('join-room', { roomId: this.roomId, playerId: null });
     });
 
     this.socket.on('connect_error', () => {
@@ -70,6 +73,13 @@ export class OnlineStateBridge {
     this.socket.on('room-state', (roomState) => {
       this.roomState = roomState;
       this.onRoomState?.(roomState);
+    });
+
+    this.socket.on('player-assigned', (data) => {
+      this.playerId = data.playerId;
+      console.log('Player ID assigned by server:', this.playerId);
+      // Notify Game.js to update player identity
+      this.onPlayerAssigned?.(this.playerId);
     });
 
     this.socket.on('input-ack', (ack) => {

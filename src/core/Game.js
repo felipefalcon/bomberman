@@ -46,7 +46,6 @@ export class Game {
     const roomId = params.get('roomId') || params.get('room') || 'room';
     const seed = this._buildSeed(roomId);
     const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true' || params.get('roomId') !== null;
-    const playerId = params.get('playerId') || params.get('player') || undefined;
 
     GAME_CONFIG.RNG_SEED = seed;
     window.__ROOM_SEED__ = seed;
@@ -73,6 +72,11 @@ export class Game {
         }
       };
 
+      onlineBridge.onPlayerAssigned = (playerId) => {
+        console.log('Updating player identity to:', playerId);
+        this.components.player?.setPlayerIdentity?.(playerId);
+      };
+
       onlineBridge.onRoomState = (roomState) => {
         if (!roomState || !window.__ONLINE_ENABLED__) return;
         console.log('Room state received:', roomState.status, 'onlineMatchFinished:', this.onlineMatchFinished);
@@ -96,18 +100,15 @@ export class Game {
           }
           this._clearGameOverUI();
           
-          // Redirect to waiting room
+          // Redirect to waiting room - server will handle player assignment
           const urlParams = new URLSearchParams(window.location.search);
           const roomId = urlParams.get('roomId');
-          const playerId = urlParams.get('playerId');
           
-          console.log('Redirect params - roomId:', roomId, 'playerId:', playerId);
-          
-          if (roomId && playerId) {
-            window.location.href = `public/waiting-room.html?roomId=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(playerId)}`;
+          if (roomId) {
+            window.location.href = `public/waiting-room.html?roomId=${encodeURIComponent(roomId)}`;
           } else {
             // Fallback to lobby if params are missing
-            console.log('Missing params, redirecting to lobby');
+            console.log('Missing roomId, redirecting to lobby');
             window.location.href = 'public/lobby.html';
           }
         }
@@ -115,11 +116,13 @@ export class Game {
     }
 
     if (onlineEnabled && onlineBridge) {
-      onlineBridge.enable(roomId, playerId);
-      onlineBridge.playerId = playerId || onlineBridge.playerId;
+      onlineBridge.enable(roomId);
+      // Player ID will be assigned by server via player-assigned event
     }
 
-    this.components.player?.setPlayerIdentity?.(onlineBridge?.playerId || playerId || 'player-1');
+    // Player identity will be set when server assigns playerId via player-assigned event
+    // Default to player-1 until server assigns
+    this.components.player?.setPlayerIdentity?.(onlineBridge?.playerId || 'player-1');
 
     onlineBridge?.applySnapshot?.({
       players: [
