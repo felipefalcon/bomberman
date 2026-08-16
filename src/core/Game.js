@@ -42,13 +42,20 @@ export class Game {
       },
     });
 
+    // Check if forced offline mode
+    const forceOffline = window.__OFFLINE_MODE__ === true;
+    
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get('roomId') || params.get('room') || 'room';
-    const seed = this._buildSeed(roomId);
-    const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true' || params.get('roomId') !== null;
+    const onlineEnabled = forceOffline ? false : (params.get('online') === '1' || params.get('online') === 'true' || params.get('roomId') !== null);
 
-    GAME_CONFIG.RNG_SEED = seed;
-    window.__ROOM_SEED__ = seed;
+    // Only reset seed if not in forced offline mode (seed already set in offline-main.js)
+    if (!forceOffline) {
+      const seed = this._buildSeed(roomId);
+      GAME_CONFIG.RNG_SEED = seed;
+      window.__ROOM_SEED__ = seed;
+    }
+    
     window.__ONLINE_ENABLED__ = onlineEnabled;
 
     // Initialize game components
@@ -134,6 +141,9 @@ export class Game {
       ],
     });
     this.gameLoop.start(this.app);
+    
+    // Initialize HUD with player state
+    this._refreshHUD();
     
     // Setup additional event listeners
     this._setupEventListeners();
@@ -350,6 +360,9 @@ export class Game {
       this.components.managers.input.clear();
     }
     
+    // Stop game loop instead of ticker to allow rendering to continue
+    this.gameLoop?.stop?.();
+    
     const gameOver = new PIXI.BitmapText({
       text: 'Game Over',
       style: {
@@ -363,7 +376,6 @@ export class Game {
     gameOver.x = (this.components.tileSize * this.components.map.cols) / 2;
     gameOver.y = (this.components.tileSize * this.components.map.rows) / 2;
     this.components.gameContainer.addChild(gameOver);
-    this.app.ticker.stop();
   }
 
   /**

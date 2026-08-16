@@ -6,7 +6,7 @@ import { loadBlockTexture } from '../loaders/blockLoader.js';
 import { loadPillarTexture } from '../loaders/pillarLoader.js';
 
 export class TileMap {
-  constructor(app, tileSize = GAME_CONFIG.TILE_SIZE, cols = GAME_CONFIG.MAP_COLS, rows = GAME_CONFIG.MAP_ROWS, seed = GAME_CONFIG.RNG_SEED) {
+  constructor(app, tileSize = GAME_CONFIG.TILE_SIZE, cols = GAME_CONFIG.MAP_COLS, rows = GAME_CONFIG.MAP_ROWS, seed = GAME_CONFIG.RNG_SEED, matchNonce = 0) {
     this.app = app;
     this.tileSize = tileSize;
     this.cols = cols;
@@ -19,6 +19,8 @@ export class TileMap {
     this.pillarTexture = null;
     this.debugMode = false;
     this.spriteMap = new Map(); // Track block/pillar sprites by tile position
+    this.seed = seed;
+    this.matchNonce = matchNonce;
     this.random = createSeededRandom(seed);
 
     this._initPromise = this._init();
@@ -57,19 +59,36 @@ export class TileMap {
       for (let x = 0; x < this.cols; x++) {
         let t = TILE_TYPES.FLOOR;
         const isBorder = x === 0 || y === 0 || x === this.cols - 1 || y === this.rows - 1;
-        const isStartSafe = (x === 1 && y === 1) || (x === 2 && y === 1) || (x === 1 && y === 2)
-          || (x === this.cols - 2 && y === this.rows - 2)
-          || (x === this.cols - 3 && y === this.rows - 2)
-          || (x === this.cols - 2 && y === this.rows - 3);
+        const isStartSafe = this.isSpawnSafeTile(x, y);
         const isClassicPillar = !isBorder && !isStartSafe && x % 2 === 0 && y % 2 === 0;
-        const isClassicCrate = !isBorder && !isStartSafe && x % 2 === 1 && y % 2 === 1;
 
         if (isBorder) {
           t = TILE_TYPES.WALL;
         } else if (isClassicPillar) {
           t = TILE_TYPES.WALL;
-        } else if (isClassicCrate && this.random() < GAME_CONFIG.MAP_DESTRUCTIBLE_CHANCE) {
-          t = TILE_TYPES.DESTRUCTIBLE;
+        } else if (!isStartSafe) {
+          // Use the same logic as the server for destructible tiles
+          const regionX = Math.floor(x / 3);
+          const regionY = Math.floor(y / 3);
+          const regionNoise = this.getTileRandomValue(x, y, 'region');
+          const localNoise = this.getTileRandomValue(x, y, 'local');
+          const roll = this.getTileRandomValue(x, y, 'roll');
+
+          let chance = GAME_CONFIG.MAP_DESTRUCTIBLE_CHANCE * (0.52 + regionNoise * 0.68);
+
+          // Keep a subtle classic Bomberman feel without hard odd/odd lock.
+          if (x % 2 === 1 && y % 2 === 1) {
+            chance += 0.06;
+          } else {
+            chance -= 0.04;
+          }
+
+          chance += (localNoise - 0.5) * 0.12;
+          chance = Math.max(0.28, Math.min(0.82, chance));
+
+          if (roll < chance) {
+            t = TILE_TYPES.DESTRUCTIBLE;
+          }
         }
 
         // Use tileset/block/pillar texture if available, otherwise fallback to graphics
@@ -239,5 +258,28 @@ export class TileMap {
         }
       }
     }
+  }
+
+  isSpawnSafeTile(tx, ty) {
+    const zones = [
+      [1, 1],
+      [this.cols - 2, this.rows - 2],
+      [this.cols - 2, 1],
+      [1, this.rows - 2],
+    ];
+
+    return zones.some(([sx, sy]) => {
+      const dist = Math.abs(tx - sx) + Math.abs(ty - sy);
+      return dist <= 1;
+    });
+  }
+
+  getTileRandomValue(tx, ty, channel = 'default') {
+    const seedInput = `${this.seed}:${this.matchNonce}:${tx},${ty}:${channel}`;
+    const seedHash = String(seedInput)
+      .split('')
+      .reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) >>> 0, 0);
+    const state = (seedHash * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
   }
 }
