@@ -1,9 +1,9 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bomberman - PixiJS</title>
+    <title>Bomberman - Modo Offline</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
@@ -28,15 +28,9 @@
   <body>
     <div id="game"></div>
     <script>
-      // Verifica se o jogador está acessando diretamente via URL
-      // Se não tiver roomId, redireciona para o lobby
-      const urlParams = new URLSearchParams(window.location.search);
-      const roomId = urlParams.get('roomId');
-
-      if (!roomId) {
-        window.location.href = 'lobby.html';
-      }
+      console.log('HTML loaded successfully');
+      console.log('Script tag found, loading module...');
     </script>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="./src/offline-main.js"></script>
   </body>
 </html>

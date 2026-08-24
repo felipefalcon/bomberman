@@ -328,19 +328,22 @@
       let currentPlayerId = null;
       let isHost = false;
       let refreshInterval = null;
+      let hasJoinedRoom = false;
 
       // Get URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       const roomId = urlParams.get('roomId');
-      const playerId = urlParams.get('playerId');
+      const isCreator = urlParams.get('isCreator') === 'true';
+      const password = sessionStorage.getItem('roomPassword') || null;
 
-      if (!roomId || !playerId) {
+      if (!roomId) {
         showError('Parâmetros da sala não encontrados. Redirecionando para o lobby...');
         setTimeout(() => {
           window.location.href = 'lobby.html';
         }, 2000);
       } else {
-        currentPlayerId = playerId; // Use the playerId assigned by server
+        // Server will assign player ID
+        currentPlayerId = null;
         connectSocket();
       }
 
@@ -352,11 +355,15 @@
         const socketUrl = isLocalServer ? 'http://localhost:3001' : undefined;
 
         socket = io(socketUrl, {
-          transports: ['websocket'],
+          transports: ['websocket', 'polling'], // Allow both transports for better compatibility
           reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 120000, // 120 seconds timeout
         });
 
         socket.on('connect', () => {
+          // Always call join-room - server will handle player assignment and reconnection
           joinRoom();
         });
 
@@ -372,6 +379,14 @@
 
         socket.on('room-error', (error) => {
           showError(error.message);
+        });
+
+        socket.on('player-assigned', (data) => {
+          currentPlayerId = data.playerId;
+          console.log(`Player ID atualizado: ${data.playerId}`);
+          
+          // Force room details refresh to update player list
+          socket.emit('get-room-details', { roomId });
         });
 
         socket.on('game-starting', (data) => {
@@ -396,10 +411,17 @@
       }
 
       function joinRoom() {
+        // Always call join-room to ensure socket is in the room
+        // Server will handle reconnection logic
+        const password = sessionStorage.getItem('roomPassword') || null;
         socket.emit('join-room', {
           roomId,
-          playerId: currentPlayerId
+          playerId: null, // Let server assign player ID
+          password: password
         });
+        
+        // Clear password from sessionStorage after use
+        sessionStorage.removeItem('roomPassword');
         
         // Request room details
         socket.emit('get-room-details', { roomId });
@@ -589,9 +611,9 @@
             clearInterval(countdownInterval);
             countdownEl.textContent = 'GO!';
             
-            // Redirect to game
+            // Redirect to game - server will provide player ID
             setTimeout(() => {
-              window.location.href = `index.html?roomId=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(currentPlayerId)}`;
+              window.location.href = `index.html?roomId=${encodeURIComponent(roomId)}`;
             }, 500);
           }
         }, 1000);
@@ -617,6 +639,10 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+      }
+
+      function log(message) {
+        console.log(message);
       }
     </script>
   </body>

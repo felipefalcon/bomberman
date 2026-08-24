@@ -42,14 +42,20 @@ export class Game {
       },
     });
 
+    // Check if forced offline mode
+    const forceOffline = window.__OFFLINE_MODE__ === true;
+    
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get('roomId') || params.get('room') || 'room';
-    const seed = this._buildSeed(roomId);
-    const onlineEnabled = params.get('online') === '1' || params.get('online') === 'true' || params.get('roomId') !== null;
-    const playerId = params.get('playerId') || params.get('player') || undefined;
+    const onlineEnabled = forceOffline ? false : (params.get('online') === '1' || params.get('online') === 'true' || params.get('roomId') !== null);
 
-    GAME_CONFIG.RNG_SEED = seed;
-    window.__ROOM_SEED__ = seed;
+    // Only reset seed if not in forced offline mode (seed already set in offline-main.js)
+    if (!forceOffline) {
+      const seed = this._buildSeed(roomId);
+      GAME_CONFIG.RNG_SEED = seed;
+      window.__ROOM_SEED__ = seed;
+    }
+    
     window.__ONLINE_ENABLED__ = onlineEnabled;
 
     // Initialize game components
@@ -67,10 +73,20 @@ export class Game {
         this.gameLoop?._renderRemotePlayers?.(snapshot.players || [], snapshot.tick);
         this.gameLoop?._syncOnlineWorld?.(snapshot, 1);
         this._handleOnlineMatchFinished(snapshot);
+        // Update return to lobby countdown
+        if (this.gameOverUI?.returnHint && snapshot?.returnToLobbySeconds !== undefined) {
+          this.gameOverUI.returnHint.text = `Voltando para a sala em ${snapshot.returnToLobbySeconds}s...`;
+        }
+      };
+
+      onlineBridge.onPlayerAssigned = (playerId) => {
+        console.log('Updating player identity to:', playerId);
+        this.components.player?.setPlayerIdentity?.(playerId);
       };
 
       onlineBridge.onRoomState = (roomState) => {
         if (!roomState || !window.__ONLINE_ENABLED__) return;
+        console.log('Room state received:', roomState.status, 'onlineMatchFinished:', this.onlineMatchFinished);
         const gameState = this.components?.managers?.gameState;
         this.components?.managers?.hud?.setRoomPlayers?.(roomState.players || []);
         if (gameState?.setOnlineCountdown) {
@@ -81,15 +97,39 @@ export class Game {
             gameState.clearOnlineCountdown();
           }
         }
+        // Handle return to lobby countdown
+        if (roomState?.status === 'waiting' && this.onlineMatchFinished) {
+          console.log('Room returned to waiting state, redirecting to waiting-room.html');
+          this.onlineMatchFinished = false;
+          if (gameState) {
+            gameState.isGameOver = false;
+            gameState.isPaused = false;
+          }
+          this._clearGameOverUI();
+          
+          // Redirect to waiting room - server will handle player assignment
+          const urlParams = new URLSearchParams(window.location.search);
+          const roomId = urlParams.get('roomId');
+          
+          if (roomId) {
+            window.location.href = `public/waiting-room.html?roomId=${encodeURIComponent(roomId)}`;
+          } else {
+            // Fallback to lobby if params are missing
+            console.log('Missing roomId, redirecting to lobby');
+            window.location.href = 'public/lobby.html';
+          }
+        }
       };
     }
 
     if (onlineEnabled && onlineBridge) {
-      onlineBridge.enable(roomId, playerId);
-      onlineBridge.playerId = playerId || onlineBridge.playerId;
+      onlineBridge.enable(roomId);
+      // Player ID will be assigned by server via player-assigned event
     }
 
-    this.components.player?.setPlayerIdentity?.(onlineBridge?.playerId || playerId || 'player-1');
+    // Player identity will be set when server assigns playerId via player-assigned event
+    // Default to player-1 until server assigns
+    this.components.player?.setPlayerIdentity?.(onlineBridge?.playerId || 'player-1');
 
     onlineBridge?.applySnapshot?.({
       players: [
@@ -101,6 +141,9 @@ export class Game {
       ],
     });
     this.gameLoop.start(this.app);
+    
+    // Initialize HUD with player state
+    this._refreshHUD();
     
     // Setup additional event listeners
     this._setupEventListeners();
@@ -199,8 +242,8 @@ export class Game {
     subtitle.y = centerY + 10;
     this.components.gameContainer.addChild(subtitle);
 
-    const reloadHint = new PIXI.BitmapText({
-      text: 'Recarregue a pagina para nova partida',
+    const returnHint = new PIXI.BitmapText({
+      text: `Voltando para a sala em ${snapshot?.returnToLobbySeconds || 8}s...`,
       style: {
         fontFamily: 'HUDFont',
         fontSize: 7,
@@ -209,9 +252,28 @@ export class Game {
       anchor: 0.5,
       roundPixels: true,
     });
-    reloadHint.x = centerX;
-    reloadHint.y = centerY + 26;
-    this.components.gameContainer.addChild(reloadHint);
+    returnHint.x = centerX;
+    returnHint.y = centerY + 26;
+    this.components.gameContainer.addChild(returnHint);
+
+    // Store references to remove later
+    this.gameOverUI = { title, subtitle, returnHint };
+  }
+
+  _clearGameOverUI() {
+    if (this.gameOverUI) {
+      const { title, subtitle, returnHint } = this.gameOverUI;
+      if (title && this.components.gameContainer.children.includes(title)) {
+        this.components.gameContainer.removeChild(title);
+      }
+      if (subtitle && this.components.gameContainer.children.includes(subtitle)) {
+        this.components.gameContainer.removeChild(subtitle);
+      }
+      if (returnHint && this.components.gameContainer.children.includes(returnHint)) {
+        this.components.gameContainer.removeChild(returnHint);
+      }
+      this.gameOverUI = null;
+    }
   }
 
   /**
@@ -298,6 +360,9 @@ export class Game {
       this.components.managers.input.clear();
     }
     
+    // Stop game loop instead of ticker to allow rendering to continue
+    this.gameLoop?.stop?.();
+    
     const gameOver = new PIXI.BitmapText({
       text: 'Game Over',
       style: {
@@ -311,7 +376,6 @@ export class Game {
     gameOver.x = (this.components.tileSize * this.components.map.cols) / 2;
     gameOver.y = (this.components.tileSize * this.components.map.rows) / 2;
     this.components.gameContainer.addChild(gameOver);
-    this.app.ticker.stop();
   }
 
   /**
